@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Upload Data File</title>
+    <style>
+      body { font-family: sans-serif; margin: 2em; }
+      .flash { background: #cee5f5; padding: 1em; border: 1px solid #aacbe2; }
+    </style>
+  </head>
+  <body>
+    <h1>Upload a Data File for Analysis</h1>
+    <p>Accepted file types: .txt, .csv, .xlsx</p>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class=flash>
+        {% for message in messages %}
+          <p>{{ message }}</p>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    <form method=post enctype=multipart/form-data>
+      <input type=file name=file>
+      <input type=submit value=Upload>
+    </form>
+  </body>
+</html>
