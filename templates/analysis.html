@@ -11,10 +11,18 @@
         th, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; }
         th { background-color: #f2f2f2; }
         pre { background: #f5f5f5; padding: 1em; border: 1px solid #ddd; }
+        .plot-container img { max-width: 100%; height: auto; margin-bottom: 1em; }
     </style>
 </head>
 <body>
     <h1>Analysis for {{ filename }}</h1>
+
+    <h2>Graphical Analysis</h2>
+    <div class="plot-container">
+    {% for plot in analysis.plots %}
+        <img src="data:image/png;base64,{{ plot }}">
+    {% endfor %}
+    </div>
 
     <h2>First 5 Rows</h2>
     {{ analysis.head | safe }}
@@ -22,8 +30,11 @@
     <h2>Data Description</h2>
     {{ analysis.description | safe }}
     
+    {% if analysis.missing_values %}
     <h2>Missing Values</h2>
+    <p>The following columns have missing data:</p>
     {{ analysis.missing_values | safe }}
+    {% endif %}
 
     <h2>Dataframe Info</h2>
     <pre>{{ analysis.info }}</pre>
