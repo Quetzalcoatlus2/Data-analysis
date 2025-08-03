@@ -5,3 +5,6 @@ scikit-learn
 numpy
 werkzeug
 matplotlib
+google-generativeai
+statsmodels
+python-dotenv
