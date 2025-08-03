@@ -4,3 +4,4 @@ openpyxl
 scikit-learn
 numpy
 werkzeug
+matplotlib

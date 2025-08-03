@@ -1,0 +1,37 @@
+[
+  {
+    "device_id": "plant_sensor_01",
+    "timestamp": "2025-07-30T10:00:00Z",
+    "air_temp_c": 26.3,
+    "soil_moisture_pct": 42.5,
+    "co2_ppm": 512
+  },
+  {
+    "device_id": "plant_sensor_01",
+    "timestamp": "2025-07-30T10:01:00Z",
+    "air_temp_c": 26.5,
+    "soil_moisture_pct": 42.1,
+    "co2_ppm": 519
+  },
+  {
+    "device_id": "plant_sensor_01",
+    "timestamp": "2025-07-30T10:02:00Z",
+    "air_temp_c": 26.6,
+    "soil_moisture_pct": 41.9,
+    "co2_ppm": 523
+  },
+  {
+    "device_id": "plant_sensor_01",
+    "timestamp": "2025-07-30T10:03:00Z",
+    "air_temp_c": 26.8,
+    "soil_moisture_pct": 41.7,
+    "co2_ppm": 527
+  },
+  {
+    "device_id": "plant_sensor_01",
+    "timestamp": "2025-07-30T10:04:00Z",
+    "air_temp_c": 27.0,
+    "soil_moisture_pct": 41.4,
+    "co2_ppm": 531
+  }
+]
