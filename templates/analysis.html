@@ -10,14 +10,65 @@
         table { border-collapse: collapse; margin-bottom: 1em; }
         th, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; }
         th { background-color: #f2f2f2; }
-        pre { background: #f5f5f5; padding: 1em; border: 1px solid #ddd; }
-        .plot-container img { max-width: 100%; height: auto; margin-bottom: 1em; }
+        pre { background: #f5f5f5; padding: 1em; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; }
+        .plot-container img { max-width: 100%; height: auto; margin-bottom: 1em; border: 1px solid #ddd; }
+        .ai-summary { background-color: #eef7ff; border-left: 5px solid #2196F3; padding: 1em; margin-bottom: 2em; }
     </style>
 </head>
 <body>
     <h1>Analysis for {{ filename }}</h1>
 
-    <h2>Graphical Analysis</h2>
+    <!-- This is the section that displays the AI summary -->
+    <h2>AI-Powered Summary & Conclusions</h2>
+    <div class="ai-summary">
+        <pre>{{ analysis.ai_summary }}</pre>
+    </div>
+
+    <!-- New section for asking questions -->
+    <h2>Ask a Follow-up Question</h2>
+    <form method="post" action="{{ url_for('analyze_file', filename=filename) }}">
+        <textarea name="question" rows="3" style="width: 100%;" placeholder="e.g., What is the average value for the temperature_c column?"></textarea>
+        <br>
+        <input type="submit" value="Ask">
+    </form>
+
+    <!-- New section to display the answer -->
+    {% if analysis.user_question %}
+    <div style="margin-top: 2em;">
+        <h3>Your Question:</h3>
+        <p><em>{{ analysis.user_question }}</em></p>
+        <h3>AI Answer:</h3>
+        <div class="ai-summary">
+            <pre>{{ analysis.ai_answer }}</pre>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if analysis.forecast_plots %}
+    <h2>Prognostics / Forecasting</h2>
+    <div class="plot-container">
+    {% for plot in analysis.forecast_plots %}
+        <img src="data:image/png;base64,{{ plot }}">
+    {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if analysis.anomalies %}
+    <h2>Anomaly Detection Summary</h2>
+    <p>The following columns contained unusual data points (anomalies):</p>
+    <ul>
+    {% for column, summary in analysis.anomalies.items() %}
+        <li>
+            <strong>{{ column }}:</strong> 
+            Found {{ summary.count }} anomalies.
+            Values ranged from {{ "%.2f"|format(summary.min_value) }} to {{ "%.2f"|format(summary.max_value) }}.
+            The average anomalous value was {{ "%.2f"|format(summary.mean_value) }}.
+        </li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+
+    <h2>Trend Analysis</h2>
     <div class="plot-container">
     {% for plot in analysis.plots %}
         <img src="data:image/png;base64,{{ plot }}">

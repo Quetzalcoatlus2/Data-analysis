@@ -19,21 +19,18 @@ from sklearn.ensemble import IsolationForest
 from statsmodels.tsa.arima.model import ARIMA
 import warnings
 
-
-print(f"--- Key found: {os.getenv('GOOGLE_API_KEY')} ---")
-
 # Suppress harmless warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# --- AI Configuration ---
-# The key is read from the environment variable GOOGLE_API_KEY
+# --- AI Configuration with Debugging ---
+print("--- 1. Attempting to configure AI... ---")
 try:
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    # --- Change this line again to the latest model ---
-    model = genai.GenerativeModel('gemini-1.5-pro-latest') 
+    model = genai.GenerativeModel('models/gemini-2.0-flash-lite') 
     AI_ENABLED = True
+    print("--- 2. AI configured successfully. ---")
 except Exception as e:
-    print(f"Warning: Google Gemini client could not be initialized. AI features will be disabled. Error: {e}")
+    print(f"--- [CRITICAL] AI configuration FAILED. AI is DISABLED. Error: {e} ---")
     model = None
     AI_ENABLED = False
 
@@ -53,10 +50,13 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_ai_summary(dataframe_description):
+    print("--- 3. Calling get_ai_summary function... ---")
     if not AI_ENABLED or model is None:
-        return "AI analysis is disabled. Please check your Google API key."
+        print("--- 4. AI is disabled, returning early from get_ai_summary. Check step 2. ---")
+        return "AI analysis is disabled. Please check your Google API key and terminal for configuration errors."
     
     try:
+        print("--- 5. Preparing to call Google API... ---")
         prompt = f"""
         You are a data analyst. Based on the following statistical description of a dataset, 
         provide a brief summary and highlight potential insights, trends, or anomalies.
@@ -68,21 +68,51 @@ def get_ai_summary(dataframe_description):
         """
         
         response = model.generate_content(prompt)
+        print("--- 6. Google API call successful. ---")
 
-        # --- New: Check for safety blocks ---
         if not response.parts:
-            # This happens if the content is blocked.
             block_reason = response.prompt_feedback.block_reason.name
             error_message = f"AI analysis was blocked by the content filter. Reason: {block_reason}"
-            print(f"--- {error_message} ---") # Print to terminal
-            return error_message # Show on webpage
+            print(f"--- 7a. {error_message} ---")
+            return error_message
 
+        print("--- 7b. Successfully got AI summary. ---")
         return response.text
         
     except Exception as e:
-        # --- New: Print the full error to the terminal ---
-        print(f"--- An exception occurred during the API call: {e} ---")
+        print(f"--- [CRITICAL] An exception occurred during the API call: {e} ---")
         return f"An error occurred during AI analysis. Check the terminal for more details. Error: {e}"
+
+def get_ai_answer(dataframe, question):
+    """Generates a specific answer to a user's question about the dataframe."""
+    if not AI_ENABLED or model is None:
+        return "AI analysis is disabled."
+    
+    # Give the AI context with the dataframe's structure and a summary
+    df_head = dataframe.head().to_string()
+    df_description = dataframe.describe().to_string()
+
+    try:
+        prompt = f"""
+        You are a helpful data analyst. A user has a specific question about a dataset.
+        Use the following information to answer the question.
+
+        Data Summary:
+        {df_description}
+
+        First 5 rows of the dataset:
+        {df_head}
+
+        User's Question: "{question}"
+
+        Your Answer:
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"An error occurred while answering the question: {e}"
+
 
 def generate_plot(data, title, xlabel, ylabel, forecast_data=None):
     """Helper function to generate and encode a plot."""
@@ -120,7 +150,7 @@ def upload_file():
             return redirect(url_for('analyze_file', filename=filename))
     return render_template('index.html')
 
-@app.route('/analyze/<filename>')
+@app.route('/analyze/<filename>', methods=['GET', 'POST'])
 def analyze_file(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     
@@ -146,6 +176,14 @@ def analyze_file(filename):
             flash('Unsupported file type')
             return redirect(url_for('upload_file'))
 
+        # --- Handle follow-up questions ---
+        user_question = None
+        ai_answer = None
+        if request.method == 'POST':
+            user_question = request.form.get('question')
+            if user_question:
+                ai_answer = get_ai_answer(df, user_question)
+
         # --- Data Analysis & Plotting ---
         plots = []
         forecast_plots = []
@@ -160,8 +198,16 @@ def analyze_file(filename):
             model_iso = IsolationForest(contamination='auto', random_state=42)
             df['anomaly'] = model_iso.fit_predict(df[[column]])
             anomalies = df[df['anomaly'] == -1]
+            
+            # --- New: Generate a summary instead of a table ---
             if not anomalies.empty:
-                anomalies_found[column] = anomalies[[column]].to_html()
+                anomalies_found[column] = {
+                    'count': len(anomalies),
+                    'min_value': anomalies[column].min(),
+                    'max_value': anomalies[column].max(),
+                    'mean_value': anomalies[column].mean()
+                }
+            
             df.drop('anomaly', axis=1, inplace=True)
 
             # --- Forecasting (Prognostics) ---
@@ -200,7 +246,9 @@ def analyze_file(filename):
             'plots': plots,
             'forecast_plots': forecast_plots,
             'anomalies': anomalies_found,
-            'ai_summary': ai_summary
+            'ai_summary': ai_summary,
+            'user_question': user_question,
+            'ai_answer': ai_answer
         }
         
         return render_template('analysis.html', analysis=analysis, filename=filename)
