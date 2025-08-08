@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 print("--- 1. Attempting to configure AI... ---")
 try:
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    model = genai.GenerativeModel('models/gemini-2.0-flash-lite') 
+    model = genai.GenerativeModel('models/gemini-2.5-pro') 
     AI_ENABLED = True
     print("--- 2. AI configured successfully. ---")
 except Exception as e:
@@ -44,6 +44,8 @@ app.config['SECRET_KEY'] = 'supersecretkey' # Change this in a real application
 
 # Ensure the upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -133,6 +135,53 @@ def generate_plot(data, title, xlabel, ylabel, forecast_data=None):
     plt.close(fig)
     return image_base64
 
+def read_csv_fallback(path, **kwargs):
+    last_err = None
+    for enc in SUPPORTED_ENCODINGS:
+        try:
+            return pd.read_csv(path, encoding=enc, **kwargs)
+        except UnicodeDecodeError as e:
+            last_err = e
+            continue
+        except Exception as e:
+            # If it's not a decode error, re-raise
+            raise
+    # Final lenient attempt for pandas>=2: replace undecodable bytes
+    try:
+        return pd.read_csv(path, encoding="utf-8", encoding_errors="replace", **kwargs)
+    except TypeError:
+        pass
+    if last_err:
+        raise last_err
+    raise UnicodeDecodeError("unknown", b"", 0, 1, "Unable to decode with common encodings")
+
+def read_json_fallback(path):
+    last_err = None
+    for enc in SUPPORTED_ENCODINGS:
+        try:
+            with open(path, "r", encoding=enc, errors="strict") as f:
+                return pd.read_json(f, orient="records")
+        except UnicodeDecodeError as e:
+            last_err = e
+            continue
+        except ValueError:
+            # Try JSON Lines if normal JSON fails
+            try:
+                with open(path, "r", encoding=enc, errors="strict") as f:
+                    return pd.read_json(f, lines=True)
+            except Exception:
+                continue
+    # Final lenient attempt
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return pd.read_json(f, orient="records")
+    except ValueError:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return pd.read_json(f, lines=True)
+    if last_err:
+        raise last_err
+    raise UnicodeDecodeError("unknown", b"", 0, 1, "Unable to decode JSON with common encodings")
+
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
@@ -155,13 +204,13 @@ def analyze_file(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     
     try:
-        # Improved file reading to handle timestamps
+        # Improved file reading to handle timestamps and non-UTF8 encodings
         if filename.endswith('.csv'):
-            df = pd.read_csv(filepath, index_col=0, parse_dates=True)
+            df = read_csv_fallback(filepath, index_col=0, parse_dates=True)
         elif filename.endswith('.xlsx'):
             df = pd.read_excel(filepath, index_col=0, parse_dates=True)
         elif filename.endswith('.json'):
-            df = pd.read_json(filepath, orient='records')
+            df = read_json_fallback(filepath)
             for col in ['timestamp', 'date', 'time']:
                 if col in df.columns:
                     try:
@@ -171,7 +220,7 @@ def analyze_file(filename):
                         pass
                     break
         elif filename.endswith('.txt'):
-            df = pd.read_csv(filepath, sep=',', index_col=0, parse_dates=True) 
+            df = read_csv_fallback(filepath, sep=',', index_col=0, parse_dates=True)
         else:
             flash('Unsupported file type')
             return redirect(url_for('upload_file'))
