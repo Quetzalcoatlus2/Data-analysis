@@ -17,33 +17,30 @@
 </head>
 <body>
     <h2>Analysis for {{ display_name }}</h2>
-<form method="post">
-  <input type="hidden" name="display" value="{{ display_name }}">
-  <!-- question input + submit -->
-</form>
 
-    <!-- This is the section that displays the AI summary -->
+    <!-- AI summary as HTML -->
     <h2>AI-Powered Summary & Conclusions</h2>
     <div class="ai-summary">
-        <pre>{{ analysis.ai_summary }}</pre>
+        {{ analysis.ai_summary | safe }}
     </div>
 
-    <!-- New section for asking questions -->
+    <!-- Follow-up question -->
     <h2>Ask a Follow-up Question</h2>
     <form method="post" action="{{ url_for('analyze_file', filename=filename) }}">
+        <input type="hidden" name="display" value="{{ display_name }}">
         <textarea name="question" rows="3" style="width: 100%;" placeholder="e.g., What is the average value for the temperature_c column?"></textarea>
         <br>
         <input type="submit" value="Ask">
     </form>
 
-    <!-- New section to display the answer -->
+    <!-- AI answer as HTML -->
     {% if analysis.user_question %}
     <div style="margin-top: 2em;">
         <h3>Your Question:</h3>
         <p><em>{{ analysis.user_question }}</em></p>
         <h3>AI Answer:</h3>
         <div class="ai-summary">
-            <pre>{{ analysis.ai_answer }}</pre>
+            {{ analysis.ai_answer | safe }}
         </div>
     </div>
     {% endif %}

@@ -93,6 +93,11 @@ def get_ai_summary(dataframe_description):
         The user is interested in conclusions, prognostics, and anomalies.
         Keep your analysis concise and easy to understand.
 
+        Strict formatting instructions:
+        - Output strictly as an HTML snippet (no <html> or <body> tags).
+        - Use <h3>, <p>, <ul><li>, and <strong> for structure.
+        - Do NOT use Markdown symbols like #, *, or ```; no code fences.
+
         Data Description:
         {dataframe_description}
         """
@@ -133,15 +138,16 @@ def get_ai_answer(dataframe, question):
         First 5 rows of the dataset:
         {df_head}
 
-        User's Question: "{question}"
+        Answer the user's question strictly as an HTML snippet (no <html> or <body> tags).
+        Use <h4>, <p>, <ul><li>, and <strong>. Do NOT use Markdown symbols.
 
-        Your Answer:
+        User's Question: "{question}"
         """
         
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"An error occurred while answering the question: {e}"
+        return f"<p>Error while answering the question: {e}</p>"
 
 
 def generate_plot(data, title, xlabel, ylabel, forecast_data=None):
