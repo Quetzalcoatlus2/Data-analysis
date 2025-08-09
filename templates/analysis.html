@@ -16,7 +16,11 @@
     </style>
 </head>
 <body>
-    <h1>Analysis for {{ filename }}</h1>
+    <h2>Analysis for {{ display_name }}</h2>
+<form method="post">
+  <input type="hidden" name="display" value="{{ display_name }}">
+  <!-- question input + submit -->
+</form>
 
     <!-- This is the section that displays the AI summary -->
     <h2>AI-Powered Summary & Conclusions</h2>
