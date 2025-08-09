@@ -52,6 +52,8 @@ app.config['UPLOAD_RETENTION_DAYS'] = None  # <— set to an int (e.g., 14) to a
 # Add this right after the configs:
 DATAFRAME_CACHE = {}              # key: hashed filename -> DataFrame
 NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  # <— add
+app.config['AI_FULL_UPLOAD_MAX_MB'] = 5  # only upload full file if <= 5 MB
+AI_FILE_MAP = {}  # key: hashed filename -> genai uploaded file handle
 
 def _load_name_map():
     global ORIGINAL_NAME_MAP
@@ -149,6 +151,54 @@ def get_ai_answer(dataframe, question):
     except Exception as e:
         return f"<p>Error while answering the question: {e}</p>"
 
+def get_ai_summary_with_file(df, file_asset=None):
+    if not AI_ENABLED or model is None:
+        return "AI analysis is disabled."
+    # concise stats context (kept) + prefer attaching the full file if available
+    df_description = df.describe().to_string()
+    prompt = f"""
+    You are a data analyst. Provide a concise HTML snippet with insights, trends, and anomalies.
+    Use <h3>, <p>, <ul><li>, <strong>. No Markdown.
+
+    Data Description:
+    {df_description}
+    """
+    try:
+        if file_asset:
+            # Send the actual CSV file + instructions
+            resp = model.generate_content([file_asset, prompt])
+        else:
+            resp = model.generate_content(prompt)
+        return resp.text
+    except Exception as e:
+        return f"<p>Error during AI summary: {e}</p>"
+
+def get_ai_answer_with_file(df, question, file_asset=None):
+    if not AI_ENABLED or model is None:
+        return "AI analysis is disabled."
+    df_head = df.head().to_string()
+    df_description = df.describe().to_string()
+    prompt = f"""
+    You are a helpful data analyst. Answer as an HTML snippet (no <html>/<body>).
+    Use <h4>, <p>, <ul><li>, <strong>. No Markdown.
+
+    Context:
+    Data Summary:
+    {df_description}
+
+    First 5 rows:
+    {df_head}
+
+    Question: "{question}"
+    """
+    try:
+        if file_asset:
+            resp = model.generate_content([file_asset, prompt])
+        else:
+            resp = model.generate_content(prompt)
+        return resp.text
+    except Exception as e:
+        return f"<p>Error while answering the question: {e}</p>"
 
 def generate_plot(data, title, xlabel, ylabel, forecast_data=None):
     """Helper function to generate and encode a plot."""
@@ -278,8 +328,14 @@ def upload_file():
                 else:
                     os.replace(temp_path, final_path)
 
-                # 4) Optional retention cleanup
-                _cleanup_uploads_if_configured()
+                # 4) Optional: upload full CSV to AI if within size cap
+                try:
+                    size_bytes = os.path.getsize(final_path)
+                    if size_bytes <= app.config['AI_FULL_UPLOAD_MAX_MB'] * 1024 * 1024:
+                        uploaded = genai.upload_file(path=final_path, mime_type="text/csv", display_name=orig_name)
+                        AI_FILE_MAP[storage_name] = uploaded
+                except Exception as e:
+                    print(f"AI file upload skipped: {e}")
 
                 # 5) Redirect with the original filename for display only
                 return redirect(url_for('analyze_file', filename=storage_name, display=orig_name))
@@ -342,7 +398,7 @@ def analyze_file(filename):
         if request.method == 'POST':
             user_question = request.form.get('question')
             if user_question:
-                ai_answer = get_ai_answer(df, user_question)
+                ai_answer = get_ai_answer_with_file(df, user_question, file_asset)
 
         # --- Data Analysis & Plotting ---
         plots = []
@@ -391,8 +447,9 @@ def analyze_file(filename):
             missing_values_html = missing_values_filtered.to_frame('missing_count').to_html()
 
         # AI Summary
+        file_asset = AI_FILE_MAP.get(filename)
         description_for_ai = df.describe().to_string()
-        ai_summary = get_ai_summary(description_for_ai)
+        ai_summary = get_ai_summary_with_file(df, file_asset)
 
         analysis = {
             'head': df.head().to_html(),
