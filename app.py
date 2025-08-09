@@ -2,6 +2,8 @@ import os
 import io
 import base64
 from flask import Flask, request, render_template, redirect, url_for, flash
+
+from datetime import datetime, timedelta
 import pandas as pd
 from werkzeug.utils import secure_filename
 
@@ -18,6 +20,9 @@ import google.generativeai as genai
 from sklearn.ensemble import IsolationForest
 from statsmodels.tsa.arima.model import ARIMA
 import warnings
+import hashlib
+import uuid
+import json  # <— add
 
 # Suppress harmless warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -40,10 +45,33 @@ ALLOWED_EXTENSIONS = {'txt', 'csv', 'xlsx', 'json'}
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['SECRET_KEY'] = 'supersecretkey' # Change this in a real application
+app.config['SECRET_KEY'] = 'supersecretkey'  # Change this in a real application
+app.config['DELETE_UPLOADED_AFTER_PROCESSING'] = True  # <— immediate delete after reading
+app.config['UPLOAD_RETENTION_DAYS'] = None  # <— set to an int (e.g., 14) to auto-delete old files
 
-# Ensure the upload folder exists
+# Add this right after the configs:
+DATAFRAME_CACHE = {}              # key: hashed filename -> DataFrame
+NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  # <— add
+
+def _load_name_map():
+    global ORIGINAL_NAME_MAP
+    try:
+        if os.path.exists(NAME_MAP_PATH):
+            with open(NAME_MAP_PATH, "r", encoding="utf-8") as f:
+                ORIGINAL_NAME_MAP = json.load(f)
+    except Exception as e:
+        print(f"Name map load warning: {e}")
+
+def _save_name_map():
+    try:
+        with open(NAME_MAP_PATH, "w", encoding="utf-8") as f:
+            json.dump(ORIGINAL_NAME_MAP, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Name map save warning: {e}")
+
+# Ensure folders and load map at startup
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+_load_name_map()
 
 SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
 
@@ -182,6 +210,28 @@ def read_json_fallback(path):
         raise last_err
     raise UnicodeDecodeError("unknown", b"", 0, 1, "Unable to decode JSON with common encodings")
 
+def _cleanup_uploads_if_configured():
+    days = app.config.get('UPLOAD_RETENTION_DAYS')
+    if not days:
+        return
+    cutoff = datetime.now() - timedelta(days=days)
+    try:
+        for name in os.listdir(UPLOAD_FOLDER):
+            path = os.path.join(UPLOAD_FOLDER, name)
+            if not os.path.isfile(path):
+                continue
+            # only manage known data files
+            if not any(name.lower().endswith(f".{ext}") for ext in ALLOWED_EXTENSIONS):
+                continue
+            mtime = datetime.fromtimestamp(os.path.getmtime(path))
+            if mtime < cutoff:
+                try:
+                    os.remove(path)
+                except Exception as e:
+                    print(f"Cleanup warning: {e}")
+    except Exception as e:
+        print(f"Cleanup scan failed: {e}")
+
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
@@ -193,37 +243,92 @@ def upload_file():
             flash('No selected file')
             return redirect(request.url)
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            return redirect(url_for('analyze_file', filename=filename))
+            orig_name = secure_filename(file.filename)
+            _, ext = os.path.splitext(orig_name)
+            ext = ext.lower()
+
+            # 1) Save to a temp file once (avoid re-reading the stream)
+            temp_name = f"tmp_{uuid.uuid4().hex}{ext}"
+            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_name)
+            file.save(temp_path)
+
+            try:
+                # 2) Hash the saved temp file
+                hasher = hashlib.sha1()
+                with open(temp_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):  # 1 MB chunks
+                        hasher.update(chunk)
+                digest = hasher.hexdigest()
+
+                # 3) Dedup by content hash
+                storage_name = f"{digest}{ext}"
+                final_path = os.path.join(app.config['UPLOAD_FOLDER'], storage_name)
+
+                if os.path.exists(final_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception as e:
+                        print(f"Warning: could not remove temp file {temp_path}: {e}")
+                else:
+                    os.replace(temp_path, final_path)
+
+                # 4) Optional retention cleanup
+                _cleanup_uploads_if_configured()
+
+                # 5) Redirect with the original filename for display only
+                return redirect(url_for('analyze_file', filename=storage_name, display=orig_name))
+            except Exception as e:
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except Exception:
+                    pass
+                flash(f"Upload failed: {e}")
+                return redirect(request.url)
     return render_template('index.html')
 
 @app.route('/analyze/<filename>', methods=['GET', 'POST'])
 def analyze_file(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
+    # Prefer original display name; survive GET/POST and no-query refreshes
+    display_name = request.args.get('display') or request.form.get('display') or filename
+
     try:
-        # Improved file reading to handle timestamps and non-UTF8 encodings
-        if filename.endswith('.csv'):
-            df = read_csv_fallback(filepath, index_col=0, parse_dates=True)
-        elif filename.endswith('.xlsx'):
-            df = pd.read_excel(filepath, index_col=0, parse_dates=True)
-        elif filename.endswith('.json'):
-            df = read_json_fallback(filepath)
-            for col in ['timestamp', 'date', 'time']:
-                if col in df.columns:
-                    try:
-                        df[col] = pd.to_datetime(df[col])
-                        df.set_index(col, inplace=True)
-                    except Exception:
-                        pass
-                    break
-        elif filename.endswith('.txt'):
-            df = read_csv_fallback(filepath, sep=',', index_col=0, parse_dates=True)
-        else:
-            flash('Unsupported file type')
-            return redirect(url_for('upload_file'))
+        # 1) Get df from cache if available to avoid re-reading deleted files
+        df = DATAFRAME_CACHE.get(filename)
+
+        # 2) If not cached, read from disk, then cache and optionally delete file immediately
+        if df is None:
+            # Improved file reading to handle timestamps and non-UTF8 encodings
+            if filename.endswith('.csv'):
+                df = read_csv_fallback(filepath, index_col=0, parse_dates=True)
+            elif filename.endswith('.xlsx'):
+                df = pd.read_excel(filepath, index_col=0, parse_dates=True)
+            elif filename.endswith('.json'):
+                df = read_json_fallback(filepath)
+                for col in ['timestamp', 'date', 'time']:
+                    if col in df.columns:
+                        try:
+                            df[col] = pd.to_datetime(df[col])
+                            df.set_index(col, inplace=True)
+                        except Exception:
+                            pass
+                        break
+            elif filename.endswith('.txt'):
+                df = read_csv_fallback(filepath, sep=',', index_col=0, parse_dates=True)
+            else:
+                flash('Unsupported file type')
+                return redirect(url_for('upload_file'))
+
+            # Cache for follow-up questions
+            DATAFRAME_CACHE[filename] = df
+
+            # Delete the stored hashed file immediately after successful parse (if enabled)
+            if app.config.get('DELETE_UPLOADED_AFTER_PROCESSING', False):
+                try:
+                    os.remove(filepath)
+                except Exception as e:
+                    print(f"Warning: could not delete uploaded file {filepath}: {e}")
 
         # --- Handle follow-up questions ---
         user_question = None
@@ -239,16 +344,15 @@ def analyze_file(filename):
         anomalies_found = {}
         numeric_cols = df.select_dtypes(include='number').columns
         is_timeseries = isinstance(df.index, pd.DatetimeIndex)
-        
+
         for column in numeric_cols:
             plots.append(generate_plot(df[column], f'Trend for {column}', 'Timestamp' if is_timeseries else 'Index', column))
 
-            # --- Anomaly Detection ---
+            # Anomaly Detection
             model_iso = IsolationForest(contamination='auto', random_state=42)
             df['anomaly'] = model_iso.fit_predict(df[[column]])
             anomalies = df[df['anomaly'] == -1]
-            
-            # --- New: Generate a summary instead of a table ---
+
             if not anomalies.empty:
                 anomalies_found[column] = {
                     'count': len(anomalies),
@@ -256,10 +360,9 @@ def analyze_file(filename):
                     'max_value': anomalies[column].max(),
                     'mean_value': anomalies[column].mean()
                 }
-            
             df.drop('anomaly', axis=1, inplace=True)
 
-            # --- Forecasting (Prognostics) ---
+            # Forecasting
             if is_timeseries and len(df[column]) >= 10:
                 try:
                     model_arima = ARIMA(df[column], order=(5,1,0)).fit()
@@ -270,23 +373,21 @@ def analyze_file(filename):
                 except Exception as e:
                     print(f"Could not generate forecast for {column}: {e}")
 
-        # --- Correctly capture DataFrame info ---
+        # Capture DataFrame info and missing values
         buf = io.StringIO()
         df.info(buf=buf)
         info_string = buf.getvalue()
 
-        # --- Correctly calculate and format missing values ---
         missing_values_data = df.isnull().sum()
         missing_values_filtered = missing_values_data[missing_values_data > 0]
         missing_values_html = None
         if not missing_values_filtered.empty:
             missing_values_html = missing_values_filtered.to_frame('missing_count').to_html()
 
-        # --- Get AI Summary ---
+        # AI Summary
         description_for_ai = df.describe().to_string()
         ai_summary = get_ai_summary(description_for_ai)
 
-        # --- Final Analysis Package ---
         analysis = {
             'head': df.head().to_html(),
             'description': df.describe().to_html(),
@@ -299,8 +400,8 @@ def analyze_file(filename):
             'user_question': user_question,
             'ai_answer': ai_answer
         }
-        
-        return render_template('analysis.html', analysis=analysis, filename=filename)
+
+        return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
 
     except Exception as e:
         flash(f"An error occurred while analyzing the file: {e}")
