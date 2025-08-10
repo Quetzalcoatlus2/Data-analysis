@@ -23,6 +23,11 @@
     <div class="ai-summary">
         {{ analysis.ai_summary | safe }}
     </div>
+    <p>
+      <button type="button" onclick="downloadElementHtml('ai-summary', 'ai_summary.html')">
+        Download AI Summary (HTML)
+      </button>
+    </p>
 
     <!-- Follow-up question -->
     <h2>Ask a Follow-up Question</h2>
@@ -42,46 +47,89 @@
         <div class="ai-summary">
             {{ analysis.ai_answer | safe }}
         </div>
+        <p>
+          <button type="button" onclick="downloadElementHtml('ai-answer', 'ai_answer.html')">
+            Download AI Answer (HTML)
+          </button>
+        </p>
     </div>
     {% endif %}
 
     {% if analysis.forecast_plots %}
     <h2>Prognostics / Forecasting</h2>
-    <div class="plot-container">
+    <h3>Forecasts</h3>
     {% for plot in analysis.forecast_plots %}
-        <img src="data:image/png;base64,{{ plot }}">
+      <div class="plot-container">
+        <img src="data:image/png;base64,{{ plot }}" alt="Forecast {{ loop.index }}">
+        <p>
+          <a href="data:image/png;base64,{{ plot }}" download="forecast-{{ loop.index }}.png">
+            Download PNG
+          </a>
+        </p>
+      </div>
     {% endfor %}
-    </div>
     {% endif %}
 
     {% if analysis.anomalies %}
     <h2>Anomaly Detection Summary</h2>
     <p>The following columns contained unusual data points (anomalies):</p>
-    <ul>
+    <div class="anomalies-summary">
     {% for column, summary in analysis.anomalies.items() %}
-        <li>
-            <strong>{{ column }}:</strong> 
-            Found {{ summary.count }} anomalies.
+      <div class="anomaly">
+        <h4>{{ column }}</h4>
+        <p>
+          Found {{ summary.count }} anomalies.
+          {% if summary.min_value is defined and summary.max_value is defined %}
             Values ranged from {{ "%.2f"|format(summary.min_value) }} to {{ "%.2f"|format(summary.max_value) }}.
-            The average anomalous value was {{ "%.2f"|format(summary.mean_value) }}.
-        </li>
+          {% endif %}
+        </p>
+        {% if summary.indices %}
+          <details>
+            <summary>Show anomaly indices (first {{ summary.indices|length }})</summary>
+            <pre>{{ summary.indices }}</pre>
+          </details>
+        {% endif %}
+      </div>
     {% endfor %}
-    </ul>
+    </div>
     {% endif %}
 
     <h2>Trend Analysis</h2>
-    <div class="plot-container">
-    {% for plot in analysis.plots %}
-        <img src="data:image/png;base64,{{ plot }}">
-    {% endfor %}
+    {% if analysis.plots %}
+      <h3>Trends</h3>
+      {% for plot in analysis.plots %}
+        <div class="plot-container">
+          <img src="data:image/png;base64,{{ plot }}" alt="Trend {{ loop.index }}">
+          <p>
+            <a href="data:image/png;base64,{{ plot }}" download="trend-{{ loop.index }}.png">
+              Download PNG
+            </a>
+          </p>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <h2>Data Overview</h2>
+    <h3>Data Head</h3>
+    <div id="table-head">
+      {{ analysis.head | safe }}
     </div>
+    <p>
+      <button type="button" onclick="downloadElementHtml('table-head', 'data_head.html')">
+        Download Head (HTML)
+      </button>
+    </p>
 
-    <h2>First 5 Rows</h2>
-    {{ analysis.head | safe }}
+    <h3>Description</h3>
+    <div id="table-description">
+      {{ analysis.description | safe }}
+    </div>
+    <p>
+      <button type="button" onclick="downloadElementHtml('table-description', 'description.html')">
+        Download Description (HTML)
+      </button>
+    </p>
 
-    <h2>Data Description</h2>
-    {{ analysis.description | safe }}
-    
     {% if analysis.missing_values %}
     <h2>Missing Values</h2>
     <p>The following columns have missing data:</p>
@@ -92,5 +140,22 @@
     <pre>{{ analysis.info }}</pre>
 
     <a href="{{ url_for('upload_file') }}">Upload another file</a>
+
+    <!-- Add this script once, near the end of the file, before </body> -->
+    <script>
+      function downloadElementHtml(elementId, filename) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        const blob = new Blob([el.innerHTML], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'download.html';
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+      }
+    </script>
 </body>
 </html>

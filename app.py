@@ -29,33 +29,93 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing  # add
 # Suppress harmless warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# --- AI Configuration with Debugging ---
-print("--- 1. Attempting to configure AI... ---")
-try:
-    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    model = genai.GenerativeModel('models/gemini-2.5-pro') 
-    AI_ENABLED = True
-    print("--- 2. AI configured successfully. ---")
-except Exception as e:
-    print(f"--- [CRITICAL] AI configuration FAILED. AI is DISABLED. Error: {e} ---")
-    model = None
-    AI_ENABLED = False
-
 # Configuration
 UPLOAD_FOLDER = 'datasets'
 ALLOWED_EXTENSIONS = {'txt', 'csv', 'xlsx', 'json'}
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['SECRET_KEY'] = 'supersecretkey'  # Change this in a real application
-app.config['DELETE_UPLOADED_AFTER_PROCESSING'] = True  # <— immediate delete after reading
-app.config['UPLOAD_RETENTION_DAYS'] = None  # <— set to an int (e.g., 14) to auto-delete old files
+# New: dedicated subfolder for hashed uploads
+app.config['UPLOADS_SUBDIR'] = os.getenv("UPLOADS_SUBDIR", "uploaded")
+app.config['UPLOADS_DIR'] = os.path.join(app.config['UPLOAD_FOLDER'], app.config['UPLOADS_SUBDIR'])
+app.config['SECRET_KEY'] = os.getenv("SECRET_KEY") or "dev-secret-change-me"
+# Enable immediate deletion by default; override with .env
+app.config['DELETE_UPLOADED_AFTER_PROCESSING'] = os.getenv("DELETE_UPLOADED_AFTER_PROCESSING", "true").strip().lower() in ("1", "true", "yes", "on")
+# Optional retention cleanup window (set in .env to auto-clean stragglers)
+if "UPLOAD_RETENTION_DAYS" in os.environ:
+    try:
+        app.config['UPLOAD_RETENTION_DAYS'] = int(os.getenv("UPLOAD_RETENTION_DAYS"))
+    except Exception:
+        app.logger.warning("Invalid UPLOAD_RETENTION_DAYS; ignoring")
+
+import logging
+import re
+from logging.handlers import RotatingFileHandler
+import time  # add
+
+# Optional: disable CLI coloring globally (helps Werkzeug/Click)
+os.environ.setdefault("NO_COLOR", "1")
+
+class StripAnsiFormatter(logging.Formatter):
+    _ansi = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+    def format(self, record):
+        s = super().format(record)
+        return self._ansi.sub('', s)
+
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# File handler (rotating) with ANSI stripping
+file_handler = RotatingFileHandler("app.log", maxBytes=2_000_000, backupCount=3)
+file_handler.setLevel(log_level)
+file_handler.setFormatter(StripAnsiFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+
+# Console handler (stdout) for on-screen logs
+console_handler = logging.StreamHandler()
+console_handler.setLevel(log_level)
+console_handler.setFormatter(logging.Formatter("%(message)s"))  # simple, readable in terminal
+
+# Attach once
+for h in (file_handler, console_handler):
+    if not any(type(x) is type(h) for x in app.logger.handlers):
+        app.logger.addHandler(h)
+
+app.logger.setLevel(log_level)
+
+# Also forward Werkzeug logs to both handlers
+werk = logging.getLogger("werkzeug")
+werk.setLevel(log_level)
+for h in (file_handler, console_handler):
+    if not any(type(x) is type(h) for x in werk.handlers):
+        werk.addHandler(h)
+
+# --- AI Configuration with Debugging ---  (moved below logging)
+app.logger.info("Attempting to configure AI...")
+try:
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    model = genai.GenerativeModel('models/gemini-2.5-pro')
+    AI_ENABLED = True
+    app.logger.info("AI configured successfully.")
+except Exception:
+    app.logger.exception("AI configuration failed")
+    model = None
+    AI_ENABLED = False
 
 # Add this right after the configs:
 DATAFRAME_CACHE = {}              # key: hashed filename -> DataFrame
 NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  # <— add
 app.config['AI_FULL_UPLOAD_MAX_MB'] = 5  # only upload full file if <= 5 MB
 AI_FILE_MAP = {}  # key: hashed filename -> genai uploaded file handle
+ORIGINAL_NAME_MAP = {}  # ensure default global exists even if name-map file is absent
+
+# Ensure rotating file handler is attached (avoid duplicates)
+if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
+    app.logger.addHandler(file_handler)
+
+# also capture werkzeug (request) logs into the same file
+werk = logging.getLogger("werkzeug")
+werk.setLevel(log_level)
+if not any(isinstance(h, RotatingFileHandler) for h in werk.handlers):
+    werk.addHandler(file_handler)
 
 def _load_name_map():
     global ORIGINAL_NAME_MAP
@@ -64,33 +124,49 @@ def _load_name_map():
             with open(NAME_MAP_PATH, "r", encoding="utf-8") as f:
                 ORIGINAL_NAME_MAP = json.load(f)
     except Exception as e:
-        print(f"Name map load warning: {e}")
+        app.logger.warning("Name map load warning: %s", e)
 
 def _save_name_map():
     try:
         with open(NAME_MAP_PATH, "w", encoding="utf-8") as f:
             json.dump(ORIGINAL_NAME_MAP, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"Name map save warning: {e}")
+        app.logger.warning("Name map save warning: %s", e)
+
+def _safe_delete(path, retries=3, delay=0.2):
+    """Delete a file with small retries to tolerate transient locks (e.g., OneDrive/AV)."""
+    for i in range(retries):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            return True
+        except Exception as e:
+            app.logger.warning("Delete failed (%s), attempt %d/%d: %s", path, i + 1, retries, e)
+            time.sleep(delay)
+    return False
 
 # Ensure folders and load map at startup
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(app.config['UPLOADS_DIR'], exist_ok=True)  # ensure uploads subfolder exists
 _load_name_map()
 
 SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
+
+# Only treat 40-hex digest filenames as app-managed uploads
+HASHED_UPLOAD_RE = re.compile(r'^[a-f0-9]{40}\.(txt|csv|xlsx|json)$', re.IGNORECASE)
 
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_ai_summary(dataframe_description):
-    print("--- 3. Calling get_ai_summary function... ---")
+    app.logger.debug("Calling get_ai_summary")
     if not AI_ENABLED or model is None:
-        print("--- 4. AI is disabled, returning early from get_ai_summary. Check step 2. ---")
+        app.logger.debug("AI disabled; skipping get_ai_summary")
         return "AI analysis is disabled. Please check your Google API key and terminal for configuration errors."
     
     try:
-        print("--- 5. Preparing to call Google API... ---")
+        app.logger.debug("Preparing to call Google API for summary")
         prompt = f"""
         You are a data analyst. Based on the following statistical description of a dataset, 
         provide a brief summary and highlight potential insights, trends, or anomalies.
@@ -105,21 +181,19 @@ def get_ai_summary(dataframe_description):
         Data Description:
         {dataframe_description}
         """
-        
         response = model.generate_content(prompt)
-        print("--- 6. Google API call successful. ---")
+        app.logger.debug("AI summary call successful")
 
         if not response.parts:
             block_reason = response.prompt_feedback.block_reason.name
-            error_message = f"AI analysis was blocked by the content filter. Reason: {block_reason}"
-            print(f"--- 7a. {error_message} ---")
-            return error_message
+            app.logger.warning("AI analysis blocked: %s", block_reason)
+            return f"AI analysis was blocked by the content filter. Reason: {block_reason}"
 
-        print("--- 7b. Successfully got AI summary. ---")
+        app.logger.debug("Successfully got AI summary")
         return response.text
         
     except Exception as e:
-        print(f"--- [CRITICAL] An exception occurred during the API call: {e} ---")
+        app.logger.exception("AI summary call failed")
         return f"An error occurred during AI analysis. Check the terminal for more details. Error: {e}"
 
 def get_ai_answer(dataframe, question):
@@ -443,22 +517,25 @@ def _cleanup_uploads_if_configured():
     if not days:
         return
     cutoff = datetime.now() - timedelta(days=days)
+    uploads_dir = app.config.get('UPLOADS_DIR', UPLOAD_FOLDER)
     try:
-        for name in os.listdir(UPLOAD_FOLDER):
-            path = os.path.join(UPLOAD_FOLDER, name)
+        if not os.path.isdir(uploads_dir):
+            return
+        for name in os.listdir(uploads_dir):
+            path = os.path.join(uploads_dir, name)
             if not os.path.isfile(path):
                 continue
-            # only manage known data files
-            if not any(name.lower().endswith(f".{ext}") for ext in ALLOWED_EXTENSIONS):
+            # Only delete app-hashed uploads; leave user files alone
+            if not HASHED_UPLOAD_RE.match(name):
                 continue
             mtime = datetime.fromtimestamp(os.path.getmtime(path))
             if mtime < cutoff:
                 try:
                     os.remove(path)
                 except Exception as e:
-                    print(f"Cleanup warning: {e}")
+                    app.logger.warning("Cleanup warning: %s", e)
     except Exception as e:
-        print(f"Cleanup scan failed: {e}")
+        app.logger.warning("Cleanup scan failed: %s", e)
 
 # Detect if a forecast is too linear (nearly a straight line)
 def _is_too_linear(series_like):
@@ -525,6 +602,33 @@ def _bootstrap_natural_path(series, steps, window=None, base_slope=None, n_sampl
     conf_df.columns = ['lower', 'upper']
     return median_series, conf_df
 
+def detect_anomalies(series: pd.Series, contamination=0.02):
+    y = series.dropna().astype(float).values.reshape(-1, 1)
+    if len(y) < 20:
+        return pd.Index([]), pd.Series(dtype=float)
+    try:
+        iso = IsolationForest(n_estimators=200, contamination=contamination, random_state=42)
+        scores = iso.fit_predict(y)  # -1 = anomaly
+        anomalies = series.dropna().index[np.where(scores == -1)[0]]
+        return anomalies, pd.Series(iso.decision_function(y), index=series.dropna().index)
+    except Exception:
+        return pd.Index([]), pd.Series(dtype=float)
+
+def normalize_timeseries(series: pd.Series):
+    s = series.dropna()
+    if not isinstance(s.index, pd.DatetimeIndex) or s.empty:
+        return s
+    freq = s.index.freq or pd.infer_freq(s.index)
+    if freq is None:
+        # fallback to median delta
+        diffs = pd.Series(s.index).diff().dropna()
+        step = diffs.median() if not diffs.empty else pd.Timedelta(days=1)
+        freq = pd.tseries.frequencies.to_offset(step)
+    s = s.asfreq(freq)
+    # small-gap interpolation only
+    s = s.interpolate(method='time', limit=3, limit_direction='both')
+    return s
+
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
@@ -542,7 +646,7 @@ def upload_file():
 
             # 1) Save to a temp file once (avoid re-reading the stream)
             temp_name = f"tmp_{uuid.uuid4().hex}{ext}"
-            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_name)
+            temp_path = os.path.join(app.config['UPLOADS_DIR'], temp_name)  # CHANGED
             file.save(temp_path)
 
             try:
@@ -555,13 +659,13 @@ def upload_file():
 
                 # 3) Dedup by content hash
                 storage_name = f"{digest}{ext}"
-                final_path = os.path.join(app.config['UPLOAD_FOLDER'], storage_name)
+                final_path = os.path.join(app.config['UPLOADS_DIR'], storage_name)  # CHANGED
 
                 if os.path.exists(final_path):
                     try:
                         os.remove(temp_path)
                     except Exception as e:
-                        print(f"Warning: could not remove temp file {temp_path}: {e}")
+                        app.logger.warning("Could not remove temp file %s: %s", temp_path, e)
                 else:
                     os.replace(temp_path, final_path)
 
@@ -572,11 +676,12 @@ def upload_file():
                         uploaded = genai.upload_file(path=final_path, mime_type="text/csv", display_name=orig_name)
                         AI_FILE_MAP[storage_name] = uploaded
                 except Exception as e:
-                    print(f"AI file upload skipped: {e}")
+                    app.logger.info("AI file upload skipped: %s", e)
 
                 # 5) Redirect with the original filename for display only
                 return redirect(url_for('analyze_file', filename=storage_name, display=orig_name))
             except Exception as e:
+                app.logger.exception("Upload failed")
                 try:
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
@@ -588,8 +693,13 @@ def upload_file():
 
 @app.route('/analyze/<filename>', methods=['GET', 'POST'])
 def analyze_file(filename):
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    filepath = os.path.join(app.config['UPLOADS_DIR'], filename)  # CHANGED
     display_name = request.args.get('display') or request.form.get('display') or filename
+
+    # New: handle missing file up-front
+    if not os.path.exists(filepath) and filename not in DATAFRAME_CACHE:
+        flash("The uploaded file is no longer available. Please re-upload it.")
+        return redirect(url_for('upload_file'))
 
     try:
         df = DATAFRAME_CACHE.get(filename)
@@ -619,12 +729,16 @@ def analyze_file(filename):
             # Cache for follow-up questions
             DATAFRAME_CACHE[filename] = df
 
-            # Delete the stored hashed file immediately after successful parse (if enabled)
-            if app.config.get('DELETE_UPLOADED_AFTER_PROCESSING', False):
-                try:
-                    os.remove(filepath)
-                except Exception as e:
-                    print(f"Warning: could not delete uploaded file {filepath}: {e}")
+        # NEW: delete only app-hashed files from uploads dir, never user originals
+        if (
+            app.config.get('DELETE_UPLOADED_AFTER_PROCESSING', False)
+            and HASHED_UPLOAD_RE.match(os.path.basename(filepath))
+            and os.path.exists(filepath)
+        ):
+            _safe_delete(filepath)
+
+        # Optional: opportunistic cleanup for old files if retention is set
+        _cleanup_uploads_if_configured()
 
         # DEFINE file_asset BEFORE any use (fixes possible NameError)
         file_asset = AI_FILE_MAP.get(filename)
@@ -674,7 +788,7 @@ def analyze_file(filename):
                         conf_df = pd.concat([lower, upper], axis=1)
                         conf_df.columns = ['lower', 'upper']
                     except Exception as e_hw:
-                        print(f"Holt-Winters (damped) failed for {column}: {e_hw}")
+                        app.logger.warning("Holt-Winters (damped) failed for %s: %s", column, e_hw)
 
                     # 2) If HW nearly flat, use robust recent-slope forecast
                     need_slope = False
@@ -699,7 +813,7 @@ def analyze_file(filename):
                                 n_samples=200, q_low=0.1, q_high=0.9
                             )
                     except Exception as e_nat:
-                        print(f"Naturalization failed for {column}: {e_nat}")
+                        app.logger.warning("Naturalization failed for %s: %s", column, e_nat)
 
                     # 4) Final fallback: ARIMA with time trend; still naturalize if straight
                     if fc_mean is None:
@@ -722,7 +836,7 @@ def analyze_file(filename):
                                     n_samples=200, q_low=0.1, q_high=0.9
                                 )
                         except Exception as e_nat2:
-                            print(f"ARIMA naturalization failed for {column}: {e_nat2}")
+                            app.logger.warning("ARIMA naturalization failed for %s: %s", column, e_nat2)
 
                     forecast_plots.append(
                         generate_forecast_plot(
@@ -731,7 +845,29 @@ def analyze_file(filename):
                         )
                     )
                 except Exception as e:
-                    print(f"Could not generate forecast for {column}: {e}")
+                    app.logger.warning("Could not generate forecast for %s: %s", column, e)
+
+            # Detect anomalies in the series
+            an_idx, an_score = detect_anomalies(series)
+            if len(an_idx):
+                try:
+                    # align indices safely, then compute min/max of anomalous values
+                    aligned_idx = series.index.intersection(an_idx)
+                    an_values = series.loc[aligned_idx].astype(float)
+                    min_v = float(np.nanmin(an_values.values))
+                    max_v = float(np.nanmax(an_values.values))
+                    anomalies_found[column] = {
+                        "count": int(len(aligned_idx)),
+                        "min_value": min_v,
+                        "max_value": max_v,
+                        "indices": [str(i) for i in aligned_idx[:50]]  # cap for display
+                    }
+                except Exception:
+                    anomalies_found[column] = {
+                        "count": int(len(an_idx)),
+                        "indices": [str(i) for i in an_idx[:50]]
+                    }
+
         # Capture DataFrame info and missing values
         buf = io.StringIO()
         df.info(buf=buf)

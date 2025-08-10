@@ -1,0 +1,106 @@
+2025-08-09 22:00:31,534 INFO app: Attempting to configure AI...
+2025-08-09 22:00:31,536 INFO app: AI configured successfully.
+2025-08-09 22:00:31,614 INFO werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-08-09 22:00:31,615 INFO werkzeug: [33mPress CTRL+C to quit[0m
+2025-08-09 22:00:31,619 INFO werkzeug:  * Restarting with stat
+2025-08-09 22:00:38,279 INFO app: Attempting to configure AI...
+2025-08-09 22:00:38,280 INFO app: AI configured successfully.
+2025-08-09 22:00:38,303 WARNING werkzeug:  * Debugger is active!
+2025-08-09 22:00:38,317 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-09 22:00:55,881 INFO werkzeug: 127.0.0.1 - - [09/Aug/2025 22:00:55] "GET / HTTP/1.1" 200 -
+2025-08-09 22:01:23,016 INFO werkzeug: 127.0.0.1 - - [09/Aug/2025 22:01:23] "[32mPOST / HTTP/1.1[0m" 302 -
+2025-08-09 22:01:52,550 INFO werkzeug: 127.0.0.1 - - [09/Aug/2025 22:01:52] "GET /analyze/dffafbfc73205fa2d874066cc8983d33c43e9a38.csv?display=9._Sales-Data-Analysis.csv HTTP/1.1" 200 -
+2025-08-09 22:05:32,452 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-09 22:05:36,567 INFO werkzeug:  * Restarting with stat
+2025-08-09 22:05:47,773 INFO app: Attempting to configure AI...
+2025-08-09 22:05:47,774 INFO app: AI configured successfully.
+2025-08-09 22:05:47,812 WARNING werkzeug:  * Debugger is active!
+2025-08-09 22:05:47,821 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-09 22:08:26,351 INFO app: Attempting to configure AI...
+2025-08-09 22:08:26,352 INFO app: AI configured successfully.
+2025-08-09 22:08:26,421 INFO werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-08-09 22:08:26,422 INFO werkzeug: [33mPress CTRL+C to quit[0m
+2025-08-09 22:08:26,425 INFO werkzeug:  * Restarting with stat
+2025-08-09 22:08:33,068 INFO app: Attempting to configure AI...
+2025-08-09 22:08:33,069 INFO app: AI configured successfully.
+2025-08-09 22:08:33,088 WARNING werkzeug:  * Debugger is active!
+2025-08-09 22:08:33,091 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-09 22:08:38,786 INFO werkzeug: 127.0.0.1 - - [09/Aug/2025 22:08:38] "GET / HTTP/1.1" 200 -
+2025-08-09 22:09:11,243 INFO werkzeug: 127.0.0.1 - - [09/Aug/2025 22:09:11] "[32mPOST / HTTP/1.1[0m" 302 -
+2025-08-09 22:09:51,732 INFO werkzeug: 127.0.0.1 - - [09/Aug/2025 22:09:51] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-10 14:20:03,312 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:20:10,106 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:20:57,350 INFO app: Attempting to configure AI...
+2025-08-10 14:20:57,351 INFO app: AI configured successfully.
+2025-08-10 14:37:03,634 INFO app: Attempting to configure AI...
+2025-08-10 14:37:03,637 INFO app: AI configured successfully.
+2025-08-10 14:37:03,770 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-10 14:37:03,770 INFO werkzeug: Press CTRL+C to quit
+2025-08-10 14:37:03,774 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:37:11,346 INFO app: Attempting to configure AI...
+2025-08-10 14:37:11,347 INFO app: AI configured successfully.
+2025-08-10 14:37:11,376 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:37:11,409 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:37:11,931 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:37:11] "GET / HTTP/1.1" 200 -
+2025-08-10 14:37:30,290 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:37:30] "POST / HTTP/1.1" 302 -
+2025-08-10 14:38:13,596 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:38:13] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-10 14:42:43,321 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:42:52,412 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:43:09,085 INFO app: Attempting to configure AI...
+2025-08-10 14:43:09,086 INFO app: AI configured successfully.
+2025-08-10 14:43:09,133 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:43:09,155 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:43:12,405 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:43:13,189 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:43:25,319 INFO app: Attempting to configure AI...
+2025-08-10 14:43:25,320 INFO app: AI configured successfully.
+2025-08-10 14:43:25,356 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:43:25,364 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:43:40,583 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:43:43,029 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:43:52,291 INFO app: Attempting to configure AI...
+2025-08-10 14:43:52,292 INFO app: AI configured successfully.
+2025-08-10 14:43:52,321 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:43:52,326 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:46:17,546 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:46:21,741 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:46:38,429 INFO app: Attempting to configure AI...
+2025-08-10 14:46:38,430 INFO app: AI configured successfully.
+2025-08-10 14:46:38,481 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:46:38,497 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:47:39,441 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:47:47,744 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:48:06,585 INFO app: Attempting to configure AI...
+2025-08-10 14:48:06,585 INFO app: AI configured successfully.
+2025-08-10 14:48:06,623 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:48:06,638 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:51:21,213 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:51:22,362 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:51:38,426 INFO app: Attempting to configure AI...
+2025-08-10 14:51:38,428 INFO app: AI configured successfully.
+2025-08-10 14:51:38,473 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:51:38,490 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:51:47,502 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:51:48,352 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:52:01,530 INFO app: Attempting to configure AI...
+2025-08-10 14:52:01,531 INFO app: AI configured successfully.
+2025-08-10 14:52:01,575 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:52:01,588 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:52:27,205 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:52:27,989 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:52:39,732 INFO app: Attempting to configure AI...
+2025-08-10 14:52:39,734 INFO app: AI configured successfully.
+2025-08-10 14:52:39,778 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:52:39,788 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:52:57,088 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 14:52:58,905 INFO werkzeug:  * Restarting with stat
+2025-08-10 14:53:11,180 INFO app: Attempting to configure AI...
+2025-08-10 14:53:11,181 INFO app: AI configured successfully.
+2025-08-10 14:53:11,212 WARNING werkzeug:  * Debugger is active!
+2025-08-10 14:53:11,217 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 14:54:21,651 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:54:21] "GET / HTTP/1.1" 200 -
+2025-08-10 14:54:36,206 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:54:36] "POST / HTTP/1.1" 302 -
+2025-08-10 14:55:25,418 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:55:25] "GET /analyze/45407a7d1e377bfdc3143202f07d012efd58a98a.csv?display=final_dataset.csv HTTP/1.1" 200 -

@@ -8,3 +8,6 @@ matplotlib
 google-generativeai
 statsmodels
 python-dotenv
+ruff
+mypy
+pytest
