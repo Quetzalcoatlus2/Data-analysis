@@ -1,213 +1,203 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Data Analysis Results</title>
-    <style>
-        body { font-family: sans-serif; margin: 2em; }
-        h2 { border-bottom: 2px solid #eee; padding-bottom: 0.5em; }
-        table { border-collapse: collapse; margin-bottom: 1em; }
-        th, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; }
-        th { background-color: #f2f2f2; }
-        pre { background: #f5f5f5; padding: 1em; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; }
-        .plot-container img { max-width: 100%; height: auto; margin-bottom: 1em; border: 1px solid #ddd; }
-        .ai-summary { background-color: #eef7ff; border-left: 5px solid #2196F3; padding: 1em; margin-bottom: 2em; }
-    </style>
+  <meta charset="utf-8">
+  <title>Analysis – {{ display_name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
+    .row { display:flex; gap:1rem; flex-wrap:wrap; }
+    .col { flex: 1 1 520px; min-width: 320px; }
+    .card { border:1px solid #ddd; border-radius:8px; padding:1rem; margin-bottom:1rem; }
+    .chart { width:100%; height:420px; }
+    .controls { display:flex; gap:1rem; align-items: center; flex-wrap: wrap; }
+    label { margin-right:.5rem; }
+    table { border-collapse: collapse; }
+    th, td { border:1px solid #ddd; padding:.25rem .5rem; }
+  </style>
 </head>
 <body>
-    <h2>Analysis for {{ display_name }}</h2>
+  <div class="card">
+    <div class="controls">
+      <form method="post">
+        <input type="hidden" name="display" value="{{ display_name }}">
+        <label>Forecast horizon
+          <input type="number" name="forecast_horizon" min="10" max="240" value="{{ analysis.controls.forecast_horizon }}">
+        </label>
+        <label>Contamination
+          <input type="number" step="0.001" min="0.001" max="0.2" name="contamination" value="{{ analysis.controls.contamination }}">
+        </label>
+        <button type="submit">Re-run</button>
+      </form>
 
-    <!-- AI summary as HTML -->
-    <h2>AI-Powered Summary & Conclusions</h2>
-    <!-- Provide the uploaded display name to JS (used for prefixes) -->
-    <script>
-      window.downloadBaseName = "{{ display_name|e }}";
-    </script>
-
-    <!-- AI Summary -->
-    <h3>AI Summary</h3>
-    <div id="ai-summary">
-      {{ analysis.ai_summary|safe }}
+      <form method="post" style="margin-left:auto">
+        <input type="hidden" name="display" value="{{ display_name }}">
+        <label style="margin-right:.5rem">Ask AI</label>
+        <input type="text" name="question" placeholder="Your question…" style="min-width:260px">
+        <button type="submit">Ask</button>
+      </form>
     </div>
-    <div style="margin-top:8px;">
-      <button type="button" onclick="downloadHtml('#ai-summary', 'ai_summary')">
-        Download AI summary
-      </button>
+  </div>
+
+  <div class="row">
+    <div class="col card">
+      <h3>AI summary</h3>
+      <div id="ai-summary">{{ analysis.ai_summary | safe }}</div>
     </div>
-
-    <!-- Ask a Follow-up Question (moved here, directly after summary) -->
-    <h2>Ask a Follow-up Question</h2>
-    <form method="post" action="{{ url_for('analyze_file', filename=filename) }}">
-      <input type="hidden" name="display" value="{{ display_name }}">
-      <textarea name="question" rows="3" style="width: 100%;" placeholder="e.g., What is the average value for the temperature_c column?"></textarea>
-      <br>
-      <input type="submit" value="Ask">
-    </form>
-
-    {% if analysis.user_question %}
-    <div style="margin-top: 2em;">
-      <h3>Your Question:</h3>
-      <p><em>{{ analysis.user_question }}</em></p>
-      <h3>AI Answer:</h3>
-      <div id="ai-answer" class="ai-summary">
-        {{ analysis.ai_answer | safe }}
-      </div>
-      <p>
-        <button type="button" onclick="downloadElementHtml('ai-answer', 'ai_answer.html')">
-          Download AI Answer (HTML)
-        </button>
-      </p>
+    {% if analysis.ai_answer %}
+    <div class="col card">
+      <h3>AI answer</h3>
+      <div id="ai-answer">{{ analysis.ai_answer | safe }}</div>
     </div>
     {% endif %}
+  </div>
 
-    <!-- Trend Plots (single section) -->
-    {% if analysis.plots %}
-      <h3>Trend Plots</h3>
-      {% for p in analysis.plots %}
-        <div class="plot">
-          <img id="trend-img-{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
-          <div>
-            <button type="button"
-                    onclick="downloadDataUrl(document.getElementById('trend-img-{{ loop.index0 }}').src, sanitizeBaseName('{{ p.title }}'))">
-              Download {{ p.title }}
-            </button>
-          </div>
-        </div>
-      {% endfor %}
-    {% endif %}
+  <div class="card">
+    <h3>Interactive charts</h3>
+    <div id="charts"></div>
+  </div>
 
-    <!-- Forecast Plots (single section) -->
-    {% if analysis.forecast_plots %}
-      <h3>Forecast Plots</h3>
-      {% for p in analysis.forecast_plots %}
-        <div class="plot">
-          <img id="forecast-img-{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
-          <div>
-            <button type="button"
-                    onclick="downloadDataUrl(document.getElementById('forecast-img-{{ loop.index0 }}').src, sanitizeBaseName('{{ p.title }}'))">
-              Download {{ p.title }}
-            </button>
-          </div>
-        </div>
-      {% endfor %}
-    {% endif %}
-
-    {% if analysis.anomalies %}
-    <h2>Anomaly Detection Summary</h2>
-    <p>The following columns contained unusual data points (anomalies):</p>
-    <div class="anomalies-summary">
-      {% for column, summary in analysis.anomalies.items() %}
-      <div class="anomaly">
-        <h4>{{ column }}</h4>
-        <p>
-          Found {{ summary.count }} anomalies.
-          {% if summary.min_value is defined and summary.max_value is defined %}
-            Values ranged from {{ "%.2f"|format(summary.min_value) }} to {{ "%.2f"|format(summary.max_value) }}.
-          {% endif %}
-        </p>
-        {% if summary.indices %}
-          <details>
-            <summary>Show anomaly indices (first {{ summary.indices|length }})</summary>
-            <pre>{{ summary.indices }}</pre>
-          </details>
-        {% endif %}
-      </div>
-      {% endfor %}
+  <div class="card">
+    <h3>Compare two columns</h3>
+    <div class="controls">
+      <label>A
+        <select id="cmpA"></select>
+      </label>
+      <label>B
+        <select id="cmpB"></select>
+      </label>
+      <button id="cmpGo">Plot</button>
     </div>
-    {% endif %}
+    <div id="cmpChart" class="chart"></div>
+  </div>
 
-    <h2>Data Overview</h2>
-    <h3>Data Head</h3>
-    <div id="table-head">
+  <div class="row">
+    <div class="col card">
+      <h3>Distributions</h3>
+      <div id="dists"></div>
+    </div>
+    <div class="col card">
+      <h3>Correlation</h3>
+      <div id="corr" class="chart"></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col card">
+      <h3>Head</h3>
       {{ analysis.head | safe }}
     </div>
-    <p>
-      <button type="button" onclick="downloadElementHtml('table-head', 'data_head.html')">
-        Download Head (HTML)
-      </button>
-    </p>
-
-    <h3>Description</h3>
-    <div id="table-description">
+    <div class="col card">
+      <h3>Describe</h3>
       {{ analysis.description | safe }}
     </div>
-    <p>
-      <button type="button" onclick="downloadElementHtml('table-description', 'description.html')">
-        Download Description (HTML)
-      </button>
-    </p>
+  </div>
 
-    {% if analysis.missing_values %}
-    <h2>Missing Values</h2>
-    <p>The following columns have missing data:</p>
+  {% if analysis.missing_values %}
+  <div class="card">
+    <h3>Missing values</h3>
     {{ analysis.missing_values | safe }}
-    {% endif %}
+  </div>
+  {% endif %}
 
-    <h2>Dataframe Info</h2>
-    <pre>{{ analysis.info }}</pre>
+  <div class="card">
+    <h3>Static trend & forecast images</h3>
+    <div class="row">
+      {% for p in analysis.plots %}
+      <div class="col">
+        <h4>{{ p.title }}</h4>
+        <img src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
+      </div>
+      {% endfor %}
+    </div>
+    <div class="row">
+      {% for p in analysis.forecast_plots %}
+      <div class="col">
+        <h4>{{ p.title }}</h4>
+        <img src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
+      </div>
+      {% endfor %}
+    </div>
+  </div>
 
-    <a href="{{ url_for('upload_file') }}">Upload another file</a>
+  <script id="data-payload" type="application/json">{{ analysis.interactive | tojson }}</script>
+  <script id="data-columns" type="application/json">{{ analysis.columns | tojson }}</script>
+  <script id="data-corr" type="application/json">{{ analysis.corr | tojson }}</script>
 
-    <!-- Helpers (single set; removed duplicates) -->
-    <script>
-      function sanitizeBaseName(s) {
-        return (s || 'file')
-          .replace(/\.[^.]+$/, '')
-          .replace(/[^A-Za-z0-9._-]+/g, '_')
-          .slice(0, 120);
-      }
-      function withBase(name) {
-        const base = sanitizeBaseName(window.downloadBaseName);
-        return base ? `${base}__${name}` : name;
-      }
-      function ensureExt(name, ext) {
-        return name.toLowerCase().endsWith(ext) ? name : name.replace(/\.[^.]+$/, '') + ext;
-      }
-      function downloadHtml(selector, name) {
-        try {
-          const el = document.querySelector(selector);
-          if (!el) { alert('Content not found.'); return; }
-          const content = '<!DOCTYPE html><meta charset="utf-8">' + el.innerHTML;
-          const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = ensureExt(withBase(name || 'section'), '.html');
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 0);
-        } catch (e) {
-          console.error('Download failed:', e);
-        }
-      }
-      function downloadElementHtml(elementId, filename) {
-        const el = document.getElementById(elementId);
-        if (!el) return;
-        const blob = new Blob([el.innerHTML], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = ensureExt(withBase(filename || 'download'), '.html');
-        document.body.appendChild(a);
-        a.click();
-        URL.revokeObjectURL(url);
-        a.remove();
-      }
-      function downloadDataUrl(dataUrl, name) {
-        try {
-          const a = document.createElement('a');
-          a.href = dataUrl;
-          const isPng = (dataUrl || '').startsWith('data:image/png');
-          a.download = ensureExt(withBase(name || 'image'), isPng ? '.png' : '.bin');
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        } catch (e) {
-          console.error('Download failed:', e);
-        }
-      }
-    </script>
+  <script>
+    const payload = JSON.parse(document.getElementById('data-payload').textContent);
+    const columns = JSON.parse(document.getElementById('data-columns').textContent);
+    const corr = JSON.parse(document.getElementById('data-corr').textContent);
+
+    // Render per-column interactive charts
+    const chartsRoot = document.getElementById('charts');
+    payload.forEach((it, idx) => {
+      const host = document.createElement('div');
+      host.className = 'chart';
+      host.id = 'chart_' + idx;
+      chartsRoot.appendChild(host);
+      Plotly.newPlot(host, it.traces, it.layout, {displayModeBar: true, responsive: true});
+    });
+
+    // Compare two columns (overlay of interactive history only)
+    const selectA = document.getElementById('cmpA');
+    const selectB = document.getElementById('cmpB');
+    columns.forEach(c => {
+      const o1 = document.createElement('option'); o1.value = c; o1.textContent = c; selectA.appendChild(o1);
+      const o2 = document.createElement('option'); o2.value = c; o2.textContent = c; selectB.appendChild(o2);
+    });
+    if (columns.length) { selectA.value = columns[0]; selectB.value = columns[Math.min(1, columns.length-1)] }
+
+    function findSeries(col){
+      return payload.find(p => p.column === col);
+    }
+
+    document.getElementById('cmpGo').addEventListener('click', () => {
+      const a = findSeries(selectA.value);
+      const b = findSeries(selectB.value);
+      const traces = [];
+      if (a) traces.push({...a.traces[0], name: a.column});
+      if (b) traces.push({...b.traces[0], name: b.column, yaxis: 'y2', line:{color:'orangered', width:2}});
+      const layout = {
+        title: {text: 'Compare ' + selectA.value + ' vs ' + selectB.value, x: 0.02},
+        xaxis: {title: 'Index/Timestamp'},
+        yaxis: {title: selectA.value, showgrid: true},
+        yaxis2: {title: selectB.value, overlaying: 'y', side: 'right', showgrid: false},
+        legend: {orientation: 'h'}, margin: {l:40,r:40,t:40,b:40}
+      };
+      Plotly.newPlot('cmpChart', traces, layout, {displayModeBar:true, responsive:true});
+    });
+
+    // Distributions (histograms) using client-side binning for speed
+    const dists = document.getElementById('dists');
+    payload.forEach((it, idx) => {
+      const host = document.createElement('div');
+      host.className = 'chart';
+      host.id = 'dist_' + idx;
+      dists.appendChild(host);
+      const vals = it.distribution.values;
+      if (!vals || !vals.length) return;
+      Plotly.newPlot(host, [{
+        type: 'histogram', name: it.column, x: vals, marker: {color: 'rgba(31,119,180,0.7)'}
+      }], {
+        title: {text: 'Distribution: ' + it.column, x: 0.02},
+        bargap: 0.05, margin:{l:40,r:10,t:40,b:40}
+      }, {displayModeBar:false, responsive:true});
+    });
+
+    // Correlation heatmap
+    if (corr && corr.z && corr.z.length) {
+      Plotly.newPlot('corr', [{
+        type: 'heatmap',
+        z: corr.z, x: corr.x, y: corr.y,
+        colorscale: 'RdBu', reversescale: true,
+        zmid: 0
+      }], {
+        title: {text: 'Correlation (numeric columns)', x: 0.02},
+        margin:{l:80,r:10,t:40,b:80}
+      }, {displayModeBar:false, responsive:true});
+    }
+  </script>
 </body>
 </html>

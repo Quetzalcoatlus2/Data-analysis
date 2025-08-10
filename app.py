@@ -29,6 +29,18 @@ import uuid
 import json  # <— add
 import numpy as np  # add
 from statsmodels.tsa.holtwinters import ExponentialSmoothing  # add
+from collections import OrderedDict  # add
+
+# Optional security/rate limiting (enabled via env)
+try:
+    from flask_limiter import Limiter  # add
+    from flask_limiter.util import get_remote_address  # add
+except Exception:
+    Limiter = None
+try:
+    from flask_talisman import Talisman  # add
+except Exception:
+    Talisman = None
 
 # Suppress harmless warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -51,6 +63,12 @@ if "UPLOAD_RETENTION_DAYS" in os.environ:
         app.config['UPLOAD_RETENTION_DAYS'] = int(os.getenv("UPLOAD_RETENTION_DAYS"))
     except Exception:
         app.logger.warning("Invalid UPLOAD_RETENTION_DAYS; ignoring")
+
+# Defaults for cache and analysis settings
+app.config.setdefault('MAX_CACHE_ITEMS', int(os.getenv("MAX_CACHE_ITEMS", "6")))
+app.config.setdefault('DEFAULT_FORECAST_STEPS', int(os.getenv("DEFAULT_FORECAST_STEPS", "30")))
+app.config.setdefault('DEFAULT_CONTAMINATION', float(os.getenv("DEFAULT_CONTAMINATION", "0.02")))
+app.config.setdefault('PLOTLY_TAIL', int(os.getenv("PLOTLY_TAIL", "800")))
 
 import logging
 import re
@@ -104,8 +122,25 @@ except Exception:
     model = None
     AI_ENABLED = False
 
-# Add this right after the configs:
-DATAFRAME_CACHE = {}              # key: hashed filename -> DataFrame
+# Replace plain dict with tiny LRU using OrderedDict
+class TinyLRU(OrderedDict):
+    def __init__(self, max_items=6):
+        super().__init__()
+        self.max_items = max_items
+    def get(self, key, default=None):
+        if key in self:
+            val = super().pop(key)
+            super().__setitem__(key, val)  # move to end (recently used)
+            return val
+        return default
+    def set(self, key, value):
+        if key in self:
+            super().pop(key)
+        super().__setitem__(key, value)
+        while len(self) > self.max_items:
+            self.popitem(last=False)
+
+DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'])  # key: hashed filename -> DataFrame
 NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  # <— add
 app.config['AI_FULL_UPLOAD_MAX_MB'] = 5  # only upload full file if <= 5 MB
 AI_FILE_MAP = {}  # key: hashed filename -> genai uploaded file handle
@@ -281,24 +316,17 @@ def get_ai_answer_with_file(df, question, file_asset=None):
     except Exception as e:
         return f"<p>Error while answering the question: {e}</p>"
 
-def generate_plot(data, title, xlabel, ylabel, forecast_data=None):
-    """Helper function to generate and encode a plot."""
+def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None):
     fig, ax = plt.subplots(figsize=(10, 4))
-    data.plot(ax=ax, label='Historical Data')
-    if forecast_data is not None:
-        forecast_data.plot(ax=ax, label='Forecast', linestyle='--')
+    data.plot(ax=ax, label='History', color='tab:blue', lw=2)
+    if anomalies_idx is not None and len(anomalies_idx):
+        aligned = data.loc[data.index.intersection(anomalies_idx)]
+        ax.scatter(aligned.index, aligned.values, color='red', s=18, zorder=5, label='Anomaly')
     ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.legend()
-    ax.grid(True)
-    
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight')
-    buf.seek(0)
-    image_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    plt.close(fig)
-    return image_base64
+    ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+    ax.legend(); ax.grid(True, alpha=0.3)
+    buf = io.BytesIO(); fig.savefig(buf, format='png', bbox_inches='tight'); buf.seek(0)
+    img = base64.b64encode(buf.read()).decode('utf-8'); plt.close(fig); return img
 
 # ADD: helpers to build a proper future index and a clearer forecast plot
 def _infer_future_index(idx, steps):
@@ -635,6 +663,7 @@ def normalize_timeseries(series: pd.Series):
     return s
 
 @app.route('/', methods=['GET', 'POST'])
+# Optional rate limit on uploads
 def upload_file():
     if request.method == 'POST':
         if 'file' not in request.files:
@@ -696,10 +725,30 @@ def upload_file():
                 return redirect(request.url)
     return render_template('index.html')
 
+# Add a helper to safely parse numeric args
+def _get_arg_float(name, default):
+    try:
+        v = request.args.get(name) or request.form.get(name)
+        return float(v) if v is not None and v != "" else default
+    except Exception:
+        return default
+
+def _get_arg_int(name, default):
+    try:
+        v = request.args.get(name) or request.form.get(name)
+        return int(float(v)) if v is not None and v != "" else default
+    except Exception:
+        return default
+
 @app.route('/analyze/<filename>', methods=['GET', 'POST'])
+# Optional rate limit on analyze
 def analyze_file(filename):
-    filepath = os.path.join(app.config['UPLOADS_DIR'], filename)  # CHANGED
+    filepath = os.path.join(app.config['UPLOADS_DIR'], filename)
     display_name = request.args.get('display') or request.form.get('display') or filename
+
+    # New: read user controls (with defaults)
+    user_steps = _get_arg_int("forecast_horizon", app.config['DEFAULT_FORECAST_STEPS'])
+    user_contam = _get_arg_float("contamination", app.config['DEFAULT_CONTAMINATION'])
 
     # New: handle missing file up-front
     if not os.path.exists(filepath) and filename not in DATAFRAME_CACHE:
@@ -708,7 +757,6 @@ def analyze_file(filename):
 
     try:
         df = DATAFRAME_CACHE.get(filename)
-
         if df is None:
             # Improved file reading to handle timestamps and non-UTF8 encodings
             if filename.endswith('.csv'):
@@ -732,7 +780,7 @@ def analyze_file(filename):
                 return redirect(url_for('upload_file'))
 
             # Cache for follow-up questions
-            DATAFRAME_CACHE[filename] = df
+            DATAFRAME_CACHE.set(filename, df)
 
         # NEW: delete only app-hashed files from uploads dir, never user originals
         if (
@@ -750,11 +798,12 @@ def analyze_file(filename):
 
         # --- Handle follow-up questions ---
         user_question = None
-        ai_answer = None
-        if request.method == 'POST':
-            user_question = request.form.get('question')
-            if user_question:
-                ai_answer = get_ai_answer_with_file(df, user_question, file_asset)
+        # --- Data Analysis & Plotting ---
+        analysis = {}
+        plots = []
+        forecast_plots = []
+        anomalies_found = {}
+        ai_answer = get_ai_answer_with_file(df, user_question, file_asset)
 
         # --- Data Analysis & Plotting ---
         plots = []
@@ -763,40 +812,68 @@ def analyze_file(filename):
         numeric_cols = df.select_dtypes(include='number').columns
         is_timeseries = isinstance(df.index, pd.DatetimeIndex)
 
+        # Precompute correlation for advanced view
+        corr_payload = None
+        try:
+            corr_df = df.select_dtypes(include='number').corr()
+            corr_payload = {
+                "z": corr_df.values.tolist(),
+                "x": corr_df.columns.tolist(),
+                "y": corr_df.index.tolist(),
+            } if not corr_df.empty else None
+        except Exception:
+            corr_payload = None
+
+        # Interactive traces container
+        interactive = []  # one item per numeric column
+        TAIL = int(app.config['PLOTLY_TAIL'])
+
         for column in numeric_cols:
             series = df[column].dropna()
             if series.empty:
                 continue
 
-            # Trend plot with title object
+            # Downsample tail for interactivity
+            s_tail = series.tail(TAIL)
+            x_hist = [str(i) for i in s_tail.index]
+            y_hist = [float(v) for v in s_tail.values]
+
+            # Static trend image (kept)
             title_trend = f"Trend for {column}"
             plots.append({
-                "img": generate_plot(
-                    series,
-                    title_trend,
-                    'Timestamp' if is_timeseries else 'Index',
-                    column
-                ),
+                "img": generate_plot(series, title_trend, 'Timestamp' if is_timeseries else 'Index', column),
                 "title": title_trend
             })
 
+            # Anomalies
+            an_idx, an_score = detect_anomalies(series, contamination=user_contam)
+            if len(an_idx):
+                aligned_idx = series.index.intersection(an_idx)
+                an_values = series.loc[aligned_idx].astype(float)
+                anomalies_found[column] = {
+                    "count": int(len(aligned_idx)),
+                    "min_value": float(np.nanmin(an_values.values)),
+                    "max_value": float(np.nanmax(an_values.values)),
+                    "indices": [str(i) for i in aligned_idx[:50]]
+                }
+
+            # Compute forecast (reuse existing robust pipeline) with user_steps
+            fc_x = fc_y = ci_lower = ci_upper = split_x = None
             if is_timeseries and len(series) >= 10:
                 try:
-                    steps = max(20, min(60, len(series) // 5))
+                    steps = max(10, min(240, user_steps))
                     conf_df = None
                     fc_mean = None
 
-                    # 1) Holt (damped trend, no seasonality)
+                    # Holt-Winters damped
                     try:
                         hw = ExponentialSmoothing(
                             series, trend='add', damped_trend=True, seasonal=None,
                             initialization_method='estimated'
                         ).fit(optimized=True)
-
                         fc_vals = hw.forecast(steps)
                         future_idx = _infer_future_index(series.index, steps)
                         fc_mean = pd.Series(fc_vals.values, index=future_idx)
-
                         resid_std = float(np.nanstd(getattr(hw, 'resid', series - hw.fittedvalues), ddof=1))
                         lower = fc_mean - 1.96 * resid_std
                         upper = fc_mean + 1.96 * resid_std
@@ -805,7 +882,7 @@ def analyze_file(filename):
                     except Exception as e_hw:
                         app.logger.warning("Holt-Winters (damped) failed for %s: %s", column, e_hw)
 
-                    # 2) If HW nearly flat, use robust recent-slope forecast
+                    # Need slope fallback?
                     need_slope = False
                     if fc_mean is not None:
                         recent = series.tail(min(len(series), 300)).values
@@ -819,7 +896,7 @@ def analyze_file(filename):
                     if fc_mean is None or need_slope:
                         fc_mean, conf_df = _recent_slope_forecast(series, steps, window=min(len(series), 200), damping=None)
 
-                    # 3) Naturalize if the forecast is still too straight
+                    # Naturalize if too straight
                     try:
                         base_slope_est = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
                         if _is_too_linear(fc_mean):
@@ -830,68 +907,104 @@ def analyze_file(filename):
                     except Exception as e_nat:
                         app.logger.warning("Naturalization failed for %s: %s", column, e_nat)
 
-                    # 4) Final fallback: ARIMA with time trend; still naturalize if straight
-                    if fc_mean is None:
-                        model_arima = ARIMA(series, order=(0, 1, 1), trend='t',
-                                            enforce_stationarity=False, enforce_invertibility=False).fit()
-                        fc = model_arima.get_forecast(steps=steps)
-                        future_idx = _infer_future_index(series.index, steps)
-                        fc_mean = pd.Series(fc.predicted_mean.values, index=future_idx)
-                        conf_df = fc.conf_int()
-                        try:
-                            conf_df.index = future_idx
-                        except Exception:
-                            pass
-                        # naturalize if too linear
-                        try:
-                            if _is_too_linear(fc_mean):
-                                base_slope_est = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
-                                fc_mean, conf_df = _bootstrap_natural_path(
-                                    series, steps, window=min(len(series), 200), base_slope=base_slope_est,
-                                    n_samples=200, q_low=0.1, q_high=0.9
-                                )
-                        except Exception as e_nat2:
-                            app.logger.warning("ARIMA naturalization failed for %s: %s", column, e_nat2)
+                    # Build arrays for interactive forecast
+                    split_x = str(series.index[-1])
+                    fc_x = [str(i) for i in fc_mean.index]
+                    fc_y = [float(v) for v in fc_mean.values]
+                    if conf_df is not None:
+                        ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
+                        ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
 
-                    # Forecast plot with title object
+                    # Keep static forecast image too
                     title_fc = f"Forecast for {column}"
                     forecast_plots.append({
-                        "img": generate_forecast_plot(
-                            series,
-                            fc_mean,
-                            title_fc,
-                            'Timestamp',
-                            column,
-                            conf_int=conf_df,
-                            history_tail=300
-                        ),
+                        "img": generate_forecast_plot(series, fc_mean, title_fc, 'Timestamp', column, conf_int=conf_df, history_tail=300),
                         "title": title_fc
                     })
                 except Exception as e:
                     app.logger.warning("Could not generate forecast for %s: %s", column, e)
 
-            # Detect anomalies in the series
-            an_idx, an_score = detect_anomalies(series)
-            if len(an_idx):
-                try:
-                    # align indices safely, then compute min/max of anomalous values
-                    aligned_idx = series.index.intersection(an_idx)
-                    an_values = series.loc[aligned_idx].astype(float)
-                    min_v = float(np.nanmin(an_values.values))
-                    max_v = float(np.nanmax(an_values.values))
-                    anomalies_found[column] = {
-                        "count": int(len(aligned_idx)),
-                        "min_value": min_v,
-                        "max_value": max_v,
-                        "indices": [str(i) for i in aligned_idx[:50]]  # cap for display
-                    }
-                except Exception:
-                    anomalies_found[column] = {
-                        "count": int(len(an_idx)),
-                        "indices": [str(i) for i in an_idx[:50]]
-                    }
+            # Build interactive traces
+            traces = [
+                {
+                    "type": "scatter",
+                    "mode": "lines",
+                    "name": "History",
+                    "x": x_hist,
+                    "y": y_hist,
+                    "line": {"color": "rgb(31,119,180)", "width": 2}
+                }
+            ]
 
-        # Capture DataFrame info and missing values
+            # Anomaly markers (subset to tail window)
+            if len(an_idx):
+                an_tail = [i for i in an_idx if i in s_tail.index]
+                if an_tail:
+                    traces.append({
+                        "type": "scatter",
+                        "mode": "markers",
+                        "name": "Anomaly",
+                        "x": [str(i) for i in an_tail],
+                        "y": [float(series.loc[i]) for i in an_tail],
+                        "marker": {"color": "red", "size": 7, "symbol": "x"}
+                    })
+
+            # Forecast trace + CI
+            if fc_x and fc_y:
+                traces.append({
+                    "type": "scatter",
+                    "mode": "lines+markers",
+                    "name": "Forecast",
+                    "x": fc_x,
+                    "y": fc_y,
+                    "line": {"color": "orangered", "width": 3, "dash": "dash"},
+                    "marker": {"size": 4}
+                })
+                if ci_lower and ci_upper:
+                    traces.append({
+                        "type": "scatter",
+                        "name": "95% CI",
+                        "x": fc_x + fc_x[::-1],
+                        "y": ci_upper + ci_lower[::-1],
+                        "fill": "toself",
+                        "fillcolor": "rgba(255,69,0,0.2)",
+                        "line": {"color": "rgba(255,69,0,0)"},
+                        "hoverinfo": "skip",
+                        "showlegend": True
+                    })
+
+            layout = {
+                "title": {"text": f"{column} (interactive)", "x": 0.02},
+                "xaxis": {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True},
+                "yaxis": {"title": column, "showgrid": True},
+                "shapes": [] if not split_x else [{
+                    "type": "line",
+                    "xref": "x", "yref": "paper",
+                    "x0": split_x, "x1": split_x, "y0": 0, "y1": 1,
+                    "line": {"color": "gray", "width": 1, "dash": "dot"}
+                }],
+                "legend": {"orientation": "h"},
+                "margin": {"l": 40, "r": 10, "t": 40, "b": 40},
+            }
+
+            # Distribution (hist) for this column (simple JS binning)
+            dist = {"name": column, "values": [float(v) for v in series.dropna().tail(5000).values]}
+
+            interactive.append({
+                "column": column,
+                "traces": traces,
+                "layout": layout,
+                "distribution": dist
+            })
+
+        # AI summary (keep as-is)
+        ai_summary = get_ai_summary_with_file(df, file_asset)
+        AI_SUMMARY_CACHE[filename] = ai_summary
+
+        # Provide a list of columns for compare mode
+        col_list = [c for c in numeric_cols]
+
+        # Keep original info capture
         buf = io.StringIO()
         df.info(buf=buf)
         info_string = buf.getvalue()
@@ -902,14 +1015,8 @@ def analyze_file(filename):
         if not missing_values_filtered.empty:
             missing_values_html = missing_values_filtered.to_frame('missing_count').to_html()
 
-        # AI Summary (prefer full-file asset if present)
-        ai_summary = get_ai_summary_with_file(df, file_asset)
-
-        AI_SUMMARY_CACHE[filename] = ai_summary
-
-        analysis = {
-            'head': df.head().to_html(),
-            'description': df.describe().to_html(),
+        # Build final analysis dict
+        analysis.update({
             'info': info_string,
             'missing_values': missing_values_html,
             'plots': plots,
@@ -917,8 +1024,17 @@ def analyze_file(filename):
             'anomalies': anomalies_found,
             'ai_summary': ai_summary,
             'user_question': user_question,
-            'ai_answer': ai_answer
-        }
+            'ai_answer': ai_answer,
+            # New interactive payloads
+            'interactive': interactive,
+            'corr': corr_payload,
+            'columns': col_list,
+            # Echo user controls so template can show them
+            'controls': {
+                'forecast_horizon': user_steps,
+                'contamination': user_contam
+            }
+        })
 
         return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
 

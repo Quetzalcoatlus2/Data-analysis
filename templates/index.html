@@ -1,29 +1,38 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Upload Data File</title>
-    <style>
-      body { font-family: sans-serif; margin: 2em; }
-      .flash { background: #cee5f5; padding: 1em; border: 1px solid #aacbe2; }
-    </style>
-  </head>
-  <body>
-    <h1>Upload a Data File for Analysis</h1>
-    <p>Accepted file types: .txt, .csv, .xlsx, .json</p>
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class=flash>
-        {% for message in messages %}
-          <p>{{ message }}</p>
-        {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-    <form method=post enctype=multipart/form-data>
-      <input type=file name=file>
-      <input type=submit value=Upload>
+<head>
+  <meta charset="utf-8">
+  <title>Data Analysis – Upload</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; max-width: 720px; }
+    label { display:block; margin-top: .75rem; }
+    input[type="range"] { width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Upload a dataset</h2>
+    <form method="post" enctype="multipart/form-data">
+      <label>Choose file
+        <input type="file" name="file" required />
+      </label>
+
+      <fieldset style="margin-top:1rem">
+        <legend>Options</legend>
+
+        <label>Forecast horizon (steps)
+          <input type="number" name="forecast_horizon" min="10" max="240" value="40" />
+        </label>
+
+        <label>Anomaly contamination (0.001–0.2)
+          <input type="number" step="0.001" min="0.001" max="0.2" name="contamination" value="0.02" />
+        </label>
+      </fieldset>
+
+      <button type="submit" style="margin-top:1rem">Analyze</button>
     </form>
-  </body>
+  </div>
+</body>
 </html>
