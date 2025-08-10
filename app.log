@@ -104,3 +104,95 @@
 2025-08-10 14:54:21,651 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:54:21] "GET / HTTP/1.1" 200 -
 2025-08-10 14:54:36,206 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:54:36] "POST / HTTP/1.1" 302 -
 2025-08-10 14:55:25,418 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 14:55:25] "GET /analyze/45407a7d1e377bfdc3143202f07d012efd58a98a.csv?display=final_dataset.csv HTTP/1.1" 200 -
+2025-08-10 15:00:19,921 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 15:00:25,416 INFO werkzeug:  * Restarting with stat
+2025-08-10 15:00:49,980 INFO app: Attempting to configure AI...
+2025-08-10 15:00:49,986 INFO app: AI configured successfully.
+2025-08-10 15:00:50,192 WARNING werkzeug:  * Debugger is active!
+2025-08-10 15:00:50,275 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 15:00:50,772 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:00:50] "GET /analyze/45407a7d1e377bfdc3143202f07d012efd58a98a.csv?display=final_dataset.csv HTTP/1.1" 302 -
+2025-08-10 15:00:51,109 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:00:51] "GET / HTTP/1.1" 200 -
+2025-08-10 15:01:05,249 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 15:01:06,778 INFO werkzeug:  * Restarting with stat
+2025-08-10 15:01:21,182 INFO app: Attempting to configure AI...
+2025-08-10 15:01:21,183 INFO app: AI configured successfully.
+2025-08-10 15:01:21,221 WARNING werkzeug:  * Debugger is active!
+2025-08-10 15:01:21,230 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 15:01:21,453 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:01:21] "GET / HTTP/1.1" 200 -
+2025-08-10 15:01:59,890 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:01:59] "POST / HTTP/1.1" 302 -
+2025-08-10 15:02:44,502 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:02:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 302 -
+2025-08-10 15:02:44,534 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:02:44] "GET / HTTP/1.1" 200 -
+2025-08-10 15:03:51,534 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 15:04:02,707 INFO werkzeug:  * Restarting with stat
+2025-08-10 15:04:13,964 INFO app: Attempting to configure AI...
+2025-08-10 15:04:13,965 INFO app: AI configured successfully.
+2025-08-10 15:04:14,050 WARNING werkzeug:  * Debugger is active!
+2025-08-10 15:04:14,066 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-10 15:04:27,897 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:04:27] "POST / HTTP/1.1" 302 -
+2025-08-10 15:05:15,319 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:05:15] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-10 15:05:27,280 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:05:27] "GET /download/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-10 15:07:56,370 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-10 15:08:01,651 INFO werkzeug:  * Restarting with stat
+2025-08-10 15:08:18,546 INFO app: Attempting to configure AI...
+2025-08-10 15:08:18,547 INFO app: AI configured successfully.
+2025-08-10 15:09:46,351 INFO app: Attempting to configure AI...
+2025-08-10 15:09:46,352 INFO app: AI configured successfully.
+2025-08-10 15:11:57,277 INFO app: Attempting to configure AI...
+2025-08-10 15:11:57,278 INFO app: AI configured successfully.
+2025-08-10 15:14:19,472 INFO app: Attempting to configure AI...
+2025-08-10 15:14:19,473 INFO app: AI configured successfully.
+2025-08-10 15:19:35,323 INFO app: Attempting to configure AI...
+2025-08-10 15:19:35,323 INFO app: AI configured successfully.
+2025-08-10 15:20:50,520 INFO app: Attempting to configure AI...
+2025-08-10 15:20:50,521 INFO app: AI configured successfully.
+2025-08-10 15:29:00,709 INFO app: Attempting to configure AI...
+2025-08-10 15:29:00,711 INFO app: AI configured successfully.
+2025-08-10 15:37:33,020 INFO app: Attempting to configure AI...
+2025-08-10 15:37:33,021 INFO app: AI configured successfully.
+2025-08-10 15:37:33,025 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-10 15:37:33,075 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-10 15:37:33,076 INFO werkzeug: Press CTRL+C to quit
+2025-08-10 15:37:40,807 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:37:40] "GET / HTTP/1.1" 200 -
+2025-08-10 15:37:58,308 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:37:58] "POST / HTTP/1.1" 302 -
+2025-08-10 15:38:43,021 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 15:38:43] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-10 16:00:53,269 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 16:00:53] "GET / HTTP/1.1" 200 -
+2025-08-10 16:01:16,799 INFO app: AI file upload skipped: <HttpError 400 when requesting https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta&key=AIzaSyDPZ75B8_nFv00L8FUl1GVnps7FXxP3hys returned "API key expired. Please renew the API key.". Details: "[{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]">
+2025-08-10 16:01:16,915 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 16:01:16] "POST / HTTP/1.1" 302 -
+2025-08-10 16:01:32,200 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 16:01:32] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-10 16:02:18,895 INFO app: Attempting to configure AI...
+2025-08-10 16:02:18,896 INFO app: AI configured successfully.
+2025-08-10 16:02:18,901 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-10 16:02:18,971 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-10 16:02:18,972 INFO werkzeug: Press CTRL+C to quit
+2025-08-10 16:02:49,804 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 16:02:49] "GET / HTTP/1.1" 200 -
+2025-08-10 16:03:01,365 INFO app: AI file upload skipped: <HttpError 400 when requesting https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta&key=AIzaSyDPZ75B8_nFv00L8FUl1GVnps7FXxP3hys returned "API key expired. Please renew the API key.". Details: "[{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]">
+2025-08-10 16:03:01,398 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 16:03:01] "POST / HTTP/1.1" 302 -
+2025-08-10 16:03:21,755 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 16:03:21] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-10 17:36:58,440 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:36:58] "GET / HTTP/1.1" 200 -
+2025-08-10 17:37:07,884 INFO app: AI file upload skipped: <HttpError 400 when requesting https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta&key=AIzaSyDPZ75B8_nFv00L8FUl1GVnps7FXxP3hys returned "API key expired. Please renew the API key.". Details: "[{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]">
+2025-08-10 17:37:07,912 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:37:07] "POST / HTTP/1.1" 302 -
+2025-08-10 17:37:13,352 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:37:13] "GET /analyze/a6c9261b601051601505ecf6cccd9bb5efae45ab.csv?display=Biomes.csv HTTP/1.1" 200 -
+2025-08-10 17:47:58,380 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:47:58] "GET / HTTP/1.1" 200 -
+2025-08-10 17:48:07,669 INFO app: AI file upload skipped: <HttpError 400 when requesting https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta&key=AIzaSyDPZ75B8_nFv00L8FUl1GVnps7FXxP3hys returned "API key expired. Please renew the API key.". Details: "[{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key expired. Please renew the API key.'}]">
+2025-08-10 17:48:07,700 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:48:07] "POST / HTTP/1.1" 302 -
+2025-08-10 17:48:25,618 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:48:25] "GET /analyze/e7fe0903eb4f11631d801d04e7013451a70c99cd.csv?display=StressLevelDataset.csv HTTP/1.1" 200 -
+2025-08-10 17:52:14,996 INFO app: Attempting to configure AI...
+2025-08-10 17:52:14,999 INFO app: AI configured successfully.
+2025-08-10 17:52:15,002 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-10 17:52:15,037 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-10 17:52:15,038 INFO werkzeug: Press CTRL+C to quit
+2025-08-10 17:52:40,536 INFO app: Attempting to configure AI...
+2025-08-10 17:52:40,537 INFO app: AI configured successfully.
+2025-08-10 17:52:40,543 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-10 17:52:40,572 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-10 17:52:40,573 INFO werkzeug: Press CTRL+C to quit
+2025-08-10 17:52:52,744 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:52:52] "GET / HTTP/1.1" 200 -
+2025-08-10 17:53:06,124 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:53:06] "POST / HTTP/1.1" 302 -
+2025-08-10 17:53:37,617 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:53:37] "GET /analyze/45407a7d1e377bfdc3143202f07d012efd58a98a.csv?display=final_dataset.csv HTTP/1.1" 200 -
+2025-08-10 17:54:28,358 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:54:28] "GET / HTTP/1.1" 200 -
+2025-08-10 17:54:45,488 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:54:45] "POST / HTTP/1.1" 302 -
+2025-08-10 17:55:27,110 INFO werkzeug: 127.0.0.1 - - [10/Aug/2025 17:55:27] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -

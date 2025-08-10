@@ -20,61 +20,84 @@
 
     <!-- AI summary as HTML -->
     <h2>AI-Powered Summary & Conclusions</h2>
-    <div class="ai-summary">
-        {{ analysis.ai_summary | safe }}
-    </div>
-    <p>
-      <button type="button" onclick="downloadElementHtml('ai-summary', 'ai_summary.html')">
-        Download AI Summary (HTML)
-      </button>
-    </p>
+    <!-- Provide the uploaded display name to JS (used for prefixes) -->
+    <script>
+      window.downloadBaseName = "{{ display_name|e }}";
+    </script>
 
-    <!-- Follow-up question -->
+    <!-- AI Summary -->
+    <h3>AI Summary</h3>
+    <div id="ai-summary">
+      {{ analysis.ai_summary|safe }}
+    </div>
+    <div style="margin-top:8px;">
+      <button type="button" onclick="downloadHtml('#ai-summary', 'ai_summary')">
+        Download AI summary
+      </button>
+    </div>
+
+    <!-- Ask a Follow-up Question (moved here, directly after summary) -->
     <h2>Ask a Follow-up Question</h2>
     <form method="post" action="{{ url_for('analyze_file', filename=filename) }}">
-        <input type="hidden" name="display" value="{{ display_name }}">
-        <textarea name="question" rows="3" style="width: 100%;" placeholder="e.g., What is the average value for the temperature_c column?"></textarea>
-        <br>
-        <input type="submit" value="Ask">
+      <input type="hidden" name="display" value="{{ display_name }}">
+      <textarea name="question" rows="3" style="width: 100%;" placeholder="e.g., What is the average value for the temperature_c column?"></textarea>
+      <br>
+      <input type="submit" value="Ask">
     </form>
 
-    <!-- AI answer as HTML -->
     {% if analysis.user_question %}
     <div style="margin-top: 2em;">
-        <h3>Your Question:</h3>
-        <p><em>{{ analysis.user_question }}</em></p>
-        <h3>AI Answer:</h3>
-        <div class="ai-summary">
-            {{ analysis.ai_answer | safe }}
-        </div>
-        <p>
-          <button type="button" onclick="downloadElementHtml('ai-answer', 'ai_answer.html')">
-            Download AI Answer (HTML)
-          </button>
-        </p>
+      <h3>Your Question:</h3>
+      <p><em>{{ analysis.user_question }}</em></p>
+      <h3>AI Answer:</h3>
+      <div id="ai-answer" class="ai-summary">
+        {{ analysis.ai_answer | safe }}
+      </div>
+      <p>
+        <button type="button" onclick="downloadElementHtml('ai-answer', 'ai_answer.html')">
+          Download AI Answer (HTML)
+        </button>
+      </p>
     </div>
     {% endif %}
 
+    <!-- Trend Plots (single section) -->
+    {% if analysis.plots %}
+      <h3>Trend Plots</h3>
+      {% for p in analysis.plots %}
+        <div class="plot">
+          <img id="trend-img-{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
+          <div>
+            <button type="button"
+                    onclick="downloadDataUrl(document.getElementById('trend-img-{{ loop.index0 }}').src, sanitizeBaseName('{{ p.title }}'))">
+              Download {{ p.title }}
+            </button>
+          </div>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <!-- Forecast Plots (single section) -->
     {% if analysis.forecast_plots %}
-    <h2>Prognostics / Forecasting</h2>
-    <h3>Forecasts</h3>
-    {% for plot in analysis.forecast_plots %}
-      <div class="plot-container">
-        <img src="data:image/png;base64,{{ plot }}" alt="Forecast {{ loop.index }}">
-        <p>
-          <a href="data:image/png;base64,{{ plot }}" download="forecast-{{ loop.index }}.png">
-            Download PNG
-          </a>
-        </p>
-      </div>
-    {% endfor %}
+      <h3>Forecast Plots</h3>
+      {% for p in analysis.forecast_plots %}
+        <div class="plot">
+          <img id="forecast-img-{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
+          <div>
+            <button type="button"
+                    onclick="downloadDataUrl(document.getElementById('forecast-img-{{ loop.index0 }}').src, sanitizeBaseName('{{ p.title }}'))">
+              Download {{ p.title }}
+            </button>
+          </div>
+        </div>
+      {% endfor %}
     {% endif %}
 
     {% if analysis.anomalies %}
     <h2>Anomaly Detection Summary</h2>
     <p>The following columns contained unusual data points (anomalies):</p>
     <div class="anomalies-summary">
-    {% for column, summary in analysis.anomalies.items() %}
+      {% for column, summary in analysis.anomalies.items() %}
       <div class="anomaly">
         <h4>{{ column }}</h4>
         <p>
@@ -90,23 +113,8 @@
           </details>
         {% endif %}
       </div>
-    {% endfor %}
-    </div>
-    {% endif %}
-
-    <h2>Trend Analysis</h2>
-    {% if analysis.plots %}
-      <h3>Trends</h3>
-      {% for plot in analysis.plots %}
-        <div class="plot-container">
-          <img src="data:image/png;base64,{{ plot }}" alt="Trend {{ loop.index }}">
-          <p>
-            <a href="data:image/png;base64,{{ plot }}" download="trend-{{ loop.index }}.png">
-              Download PNG
-            </a>
-          </p>
-        </div>
       {% endfor %}
+    </div>
     {% endif %}
 
     <h2>Data Overview</h2>
@@ -141,8 +149,39 @@
 
     <a href="{{ url_for('upload_file') }}">Upload another file</a>
 
-    <!-- Add this script once, near the end of the file, before </body> -->
+    <!-- Helpers (single set; removed duplicates) -->
     <script>
+      function sanitizeBaseName(s) {
+        return (s || 'file')
+          .replace(/\.[^.]+$/, '')
+          .replace(/[^A-Za-z0-9._-]+/g, '_')
+          .slice(0, 120);
+      }
+      function withBase(name) {
+        const base = sanitizeBaseName(window.downloadBaseName);
+        return base ? `${base}__${name}` : name;
+      }
+      function ensureExt(name, ext) {
+        return name.toLowerCase().endsWith(ext) ? name : name.replace(/\.[^.]+$/, '') + ext;
+      }
+      function downloadHtml(selector, name) {
+        try {
+          const el = document.querySelector(selector);
+          if (!el) { alert('Content not found.'); return; }
+          const content = '<!DOCTYPE html><meta charset="utf-8">' + el.innerHTML;
+          const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = ensureExt(withBase(name || 'section'), '.html');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+        } catch (e) {
+          console.error('Download failed:', e);
+        }
+      }
       function downloadElementHtml(elementId, filename) {
         const el = document.getElementById(elementId);
         if (!el) return;
@@ -150,11 +189,24 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename || 'download.html';
+        a.download = ensureExt(withBase(filename || 'download'), '.html');
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
         a.remove();
+      }
+      function downloadDataUrl(dataUrl, name) {
+        try {
+          const a = document.createElement('a');
+          a.href = dataUrl;
+          const isPng = (dataUrl || '').startsWith('data:image/png');
+          a.download = ensureExt(withBase(name || 'image'), isPng ? '.png' : '.bin');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } catch (e) {
+          console.error('Download failed:', e);
+        }
       }
     </script>
 </body>

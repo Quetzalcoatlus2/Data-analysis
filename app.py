@@ -8,8 +8,12 @@ import pandas as pd
 from werkzeug.utils import secure_filename
 
 # --- Add these two lines ---
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv(".env.public")   # committed, non-sensitive defaults
+    load_dotenv(".env")          # local, secrets override
+except Exception:
+    pass
 
 import matplotlib
 matplotlib.use('Agg')
@@ -106,6 +110,7 @@ NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  # <— add
 app.config['AI_FULL_UPLOAD_MAX_MB'] = 5  # only upload full file if <= 5 MB
 AI_FILE_MAP = {}  # key: hashed filename -> genai uploaded file handle
 ORIGINAL_NAME_MAP = {}  # ensure default global exists even if name-map file is absent
+AI_SUMMARY_CACHE = {}  # key: filename -> HTML snippet for server-side download
 
 # Ensure rotating file handler is attached (avoid duplicates)
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
@@ -763,7 +768,17 @@ def analyze_file(filename):
             if series.empty:
                 continue
 
-            plots.append(generate_plot(series, f'Trend for {column}', 'Timestamp' if is_timeseries else 'Index', column))
+            # Trend plot with title object
+            title_trend = f"Trend for {column}"
+            plots.append({
+                "img": generate_plot(
+                    series,
+                    title_trend,
+                    'Timestamp' if is_timeseries else 'Index',
+                    column
+                ),
+                "title": title_trend
+            })
 
             if is_timeseries and len(series) >= 10:
                 try:
@@ -838,12 +853,20 @@ def analyze_file(filename):
                         except Exception as e_nat2:
                             app.logger.warning("ARIMA naturalization failed for %s: %s", column, e_nat2)
 
-                    forecast_plots.append(
-                        generate_forecast_plot(
-                            series, fc_mean, f'Forecast for {column}',
-                            'Timestamp', column, conf_int=conf_df, history_tail=300
-                        )
-                    )
+                    # Forecast plot with title object
+                    title_fc = f"Forecast for {column}"
+                    forecast_plots.append({
+                        "img": generate_forecast_plot(
+                            series,
+                            fc_mean,
+                            title_fc,
+                            'Timestamp',
+                            column,
+                            conf_int=conf_df,
+                            history_tail=300
+                        ),
+                        "title": title_fc
+                    })
                 except Exception as e:
                     app.logger.warning("Could not generate forecast for %s: %s", column, e)
 
@@ -882,6 +905,8 @@ def analyze_file(filename):
         # AI Summary (prefer full-file asset if present)
         ai_summary = get_ai_summary_with_file(df, file_asset)
 
+        AI_SUMMARY_CACHE[filename] = ai_summary
+
         analysis = {
             'head': df.head().to_html(),
             'description': df.describe().to_html(),
@@ -901,5 +926,12 @@ def analyze_file(filename):
         flash(f"An error occurred while analyzing the file: {e}")
         return redirect(url_for('upload_file'))
 
+@app.route('/health', methods=['GET'])
+def health():
+    return "ok", 200
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "5000"))
+    app.logger.info(f"Starting server on http://{host}:{port}")
+    app.run(host=host, port=port, debug=False, use_reloader=False)
