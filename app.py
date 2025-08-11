@@ -1,7 +1,7 @@
 import os
 import io
 import base64
-from flask import Flask, request, render_template, redirect, url_for, flash
+from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request
 
 from datetime import datetime, timedelta
 import pandas as pd
@@ -30,6 +30,8 @@ import json  # <— add
 import numpy as np  # add
 from statsmodels.tsa.holtwinters import ExponentialSmoothing  # add
 from collections import OrderedDict  # add
+import re
+import html as htmllib  # add
 
 # Optional security/rate limiting (enabled via env)
 try:
@@ -199,6 +201,40 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def sanitize_ai_html(raw: str) -> str:
+    """Coerce Gemini output into a safe, clean HTML snippet.
+    - strips Markdown code fences (``` and ```html)
+    - unescapes &lt;...&gt; once if needed
+    - removes <html>/<body>, <script>/<style>, on* attributes, and 'javascript:' URLs
+    - if no HTML structure remains, wraps lines into <p>...</p>
+    """
+    if raw is None:
+        return "<p></p>"
+    s = str(raw)
+    # strip code fences (opening like ``` or ```html and closing ```)
+    s = re.sub(r'^\s*```(?:\w+)?\s*\n?', '', s, flags=re.I | re.M)
+    s = re.sub(r'\n?\s*```\s*$', '', s, flags=re.M)
+    s = s.replace("```", "")
+    # unescape HTML entities if looks escaped
+    if re.search(r'&lt;/?[a-zA-Z]', s):
+        try:
+            s = htmllib.unescape(s)
+        except Exception:
+            pass
+    # drop html/body wrappers
+    s = re.sub(r'</?\s*(html|body)[^>]*>', '', s, flags=re.I)
+    # drop script/style blocks
+    s = re.sub(r'<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>', '', s, flags=re.I | re.S)
+    # strip event handler attributes and javascript: URLs
+    s = re.sub(r'\s+on\w+\s*=\s*(".*?"|\'.*?\'|\w+)', '', s, flags=re.I)
+    s = re.sub(r'javascript\s*:', '', s, flags=re.I)
+    s = s.strip()
+    # if no recognizable HTML tags, wrap lines into paragraphs
+    if not re.search(r'</?(h[1-6]|p|ul|ol|li|strong|em|b|i|br|table|thead|tbody|tr|th|td|a)\b', s, re.I):
+        lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
+        s = "<p>" + "</p><p>".join(lines) + "</p>" if lines else "<p></p>"
+    return s
+
 def get_ai_summary(dataframe_description):
     app.logger.debug("Calling get_ai_summary")
     if not AI_ENABLED or model is None:
@@ -230,7 +266,7 @@ def get_ai_summary(dataframe_description):
             return f"AI analysis was blocked by the content filter. Reason: {block_reason}"
 
         app.logger.debug("Successfully got AI summary")
-        return response.text
+        return sanitize_ai_html(response.text)
         
     except Exception as e:
         app.logger.exception("AI summary call failed")
@@ -263,15 +299,15 @@ def get_ai_answer(dataframe, question):
         """
         
         response = model.generate_content(prompt)
-        return response.text
+        return sanitize_ai_html(response.text)
     except Exception as e:
         return f"<p>Error while answering the question: {e}</p>"
 
 def get_ai_summary_with_file(df, file_asset=None):
     if not AI_ENABLED or model is None:
         return "AI analysis is disabled."
-    # concise stats context (kept) + prefer attaching the full file if available
-    df_description = df.describe().to_string()
+    # concise stats context + prefer attaching the full file if available
+    df_description = describe_for_ai(df)
     prompt = f"""
     You are a data analyst. Provide a concise HTML snippet with insights, trends, and anomalies.
     Use <h3>, <p>, <ul><li>, <strong>. No Markdown.
@@ -281,11 +317,10 @@ def get_ai_summary_with_file(df, file_asset=None):
     """
     try:
         if file_asset:
-            # Send the actual CSV file + instructions
             resp = model.generate_content([file_asset, prompt])
         else:
             resp = model.generate_content(prompt)
-        return resp.text
+        return sanitize_ai_html(resp.text)
     except Exception as e:
         return f"<p>Error during AI summary: {e}</p>"
 
@@ -312,7 +347,7 @@ def get_ai_answer_with_file(df, question, file_asset=None):
             resp = model.generate_content([file_asset, prompt])
         else:
             resp = model.generate_content(prompt)
-        return resp.text
+        return sanitize_ai_html(resp.text)
     except Exception as e:
         return f"<p>Error while answering the question: {e}</p>"
 
@@ -713,7 +748,11 @@ def upload_file():
                     app.logger.info("AI file upload skipped: %s", e)
 
                 # 5) Redirect with the original filename for display only
-                return redirect(url_for('analyze_file', filename=storage_name, display=orig_name))
+                # forward user controls for immediate use
+                fh = request.form.get('forecast_horizon')
+                cont = request.form.get('contamination')
+                return redirect(url_for('analyze_file', filename=storage_name, display=orig_name,
+                                        forecast_horizon=fh, contamination=cont))
             except Exception as e:
                 app.logger.exception("Upload failed")
                 try:
@@ -725,18 +764,122 @@ def upload_file():
                 return redirect(request.url)
     return render_template('index.html')
 
-# Add a helper to safely parse numeric args
+# Place near other read_* helpers
+def read_excel_smart(path: str):
+    """Read the first non-empty sheet; try to infer header and index."""
+    try:
+        # use context manager to avoid file locking on Windows/OneDrive
+        with pd.ExcelFile(path) as xls:
+            for sheet in xls.sheet_names:
+                try:
+                    # first attempt: normal header
+                    df = pd.read_excel(xls, sheet_name=sheet, header=0)
+                    df = df.dropna(how='all').dropna(axis=1, how='all')
+                    if df is not None and df.shape[1] > 0:
+                        # try to set a good index
+                        for cand in ['timestamp', 'date', 'time']:
+                            if cand in df.columns:
+                                with pd.option_context('mode.chained_assignment', None):
+                                    try:
+                                        df[cand] = pd.to_datetime(df[cand], errors='ignore')
+                                    except Exception:
+                                        pass
+                                try:
+                                    df = df.set_index(cand)
+                                except Exception:
+                                    pass
+                                break
+                        else:
+                            # if first column looks datetime, use it
+                            first_col = df.columns[0]
+                            try:
+                                maybe_dt = pd.to_datetime(df[first_col], errors='coerce')
+                                if maybe_dt.notna().sum() >= max(3, int(len(df) * 0.3)):
+                                    df = df.set_index(first_col)
+                            except Exception:
+                                pass
+                        return df
+                    # second attempt: no header, treat first row as header
+                    df2 = pd.read_excel(xls, sheet_name=sheet, header=None)
+                    df2 = df2.dropna(how='all').dropna(axis=1, how='all')
+                    if df2 is not None and df2.shape[1] > 0:
+                        header_row = df2.index[df2.notna().any(axis=1)][0] if not df2.empty else 0
+                        df2.columns = df2.iloc[header_row]
+                        df2 = df2.drop(df2.index[:header_row + 1])
+                        df2 = df2.loc[:, ~df2.columns.isna()]
+                        for cand in ['timestamp', 'date', 'time']:
+                            if cand in df2.columns:
+                                try:
+                                    df2[cand] = pd.to_datetime(df2[cand], errors='ignore')
+                                    df2 = df2.set_index(cand)
+                                except Exception:
+                                    pass
+                                break
+                        return df2
+                except Exception:
+                    continue
+        # nothing usable
+        return pd.DataFrame()
+    except Exception as e:
+        # Fallback to default read_excel if ExcelFile fails
+        try:
+            return pd.read_excel(path)
+        except Exception:
+            raise e
+
+def safe_df_head_html(df: pd.DataFrame) -> str:
+    try:
+        if df is None or df.shape[1] == 0:
+            return "<p>No columns detected in the uploaded file.</p>"
+        return df.head().to_html()
+    except Exception:
+        return "<p>Could not render head()</p>"
+
+def safe_df_description_html(df: pd.DataFrame) -> str:
+    try:
+        if df is None or df.shape[1] == 0:
+            # show dtypes or placeholder
+            return (df.dtypes.to_frame('dtype').to_html()
+                    if df is not None and isinstance(df, pd.DataFrame) else "<p>No data.</p>")
+        # include='all' is more forgiving; handle pandas versions without datetime_is_numeric
+        try:
+            desc = df.describe(include='all')
+        except Exception:
+            desc = df.select_dtypes(include='number').describe()
+        return desc.to_html()
+    except Exception:
+        try:
+            return df.dtypes.to_frame('dtype').to_html()
+        except Exception:
+            return "<p>Could not build description.</p>"
+
+def describe_for_ai(df: pd.DataFrame) -> str:
+    """Plain-text summary for AI prompts; never raises."""
+    try:
+        if df is None or df.shape[1] == 0:
+            return f"Empty or headerless table. Shape: {getattr(df, 'shape', None)}"
+        try:
+            desc = df.describe(include='all')
+        except Exception:
+            desc = df.select_dtypes(include='number').describe()
+        return str(desc)
+    except Exception:
+        try:
+            return "Columns and dtypes:\n" + str(df.dtypes)
+        except Exception:
+            return "No structured information available."
+
 def _get_arg_float(name, default):
     try:
         v = request.args.get(name) or request.form.get(name)
-        return float(v) if v is not None and v != "" else default
+        return float(v) if v not in (None, "") else default
     except Exception:
         return default
 
 def _get_arg_int(name, default):
     try:
         v = request.args.get(name) or request.form.get(name)
-        return int(float(v)) if v is not None and v != "" else default
+        return int(float(v)) if v not in (None, "") else default
     except Exception:
         return default
 
@@ -746,9 +889,11 @@ def analyze_file(filename):
     filepath = os.path.join(app.config['UPLOADS_DIR'], filename)
     display_name = request.args.get('display') or request.form.get('display') or filename
 
-    # New: read user controls (with defaults)
-    user_steps = _get_arg_int("forecast_horizon", app.config['DEFAULT_FORECAST_STEPS'])
-    user_contam = _get_arg_float("contamination", app.config['DEFAULT_CONTAMINATION'])
+    # User controls with sensible defaults
+    default_steps = int(os.getenv("DEFAULT_FORECAST_STEPS", "40"))
+    default_contam = float(os.getenv("DEFAULT_CONTAMINATION", "0.02"))
+    user_steps = _get_arg_int("forecast_horizon", default_steps)
+    user_contam = _get_arg_float("contamination", default_contam)
 
     # New: handle missing file up-front
     if not os.path.exists(filepath) and filename not in DATAFRAME_CACHE:
@@ -762,7 +907,7 @@ def analyze_file(filename):
             if filename.endswith('.csv'):
                 df = read_csv_fallback(filepath, index_col=0, parse_dates=True)
             elif filename.endswith('.xlsx'):
-                df = pd.read_excel(filepath, index_col=0, parse_dates=True)
+                df = read_excel_smart(filepath)
             elif filename.endswith('.json'):
                 df = read_json_fallback(filepath)
                 for col in ['timestamp', 'date', 'time']:
@@ -796,26 +941,28 @@ def analyze_file(filename):
         # DEFINE file_asset BEFORE any use (fixes possible NameError)
         file_asset = AI_FILE_MAP.get(filename)
 
-        # --- Handle follow-up questions ---
+        # --- Handle follow-up questions (only when provided) ---
         user_question = None
+        ai_answer = None
+        if request.method == 'POST':
+            user_question = request.form.get('question')
+            if user_question:
+                ai_answer = get_ai_answer_with_file(df, user_question, file_asset)
+
         # --- Data Analysis & Plotting ---
         analysis = {}
         plots = []
         forecast_plots = []
         anomalies_found = {}
-        ai_answer = get_ai_answer_with_file(df, user_question, file_asset)
-
-        # --- Data Analysis & Plotting ---
-        plots = []
-        forecast_plots = []
-        anomalies_found = {}
-        numeric_cols = df.select_dtypes(include='number').columns
         is_timeseries = isinstance(df.index, pd.DatetimeIndex)
+        used_cols = []  # columns that actually yielded numeric data
 
         # Precompute correlation for advanced view
         corr_payload = None
         try:
-            corr_df = df.select_dtypes(include='number').corr()
+            # try to coerce object columns to numeric for correlation
+            df_num = df.apply(pd.to_numeric, errors='coerce')
+            corr_df = df_num.select_dtypes(include='number').corr()
             corr_payload = {
                 "z": corr_df.values.tolist(),
                 "x": corr_df.columns.tolist(),
@@ -824,47 +971,40 @@ def analyze_file(filename):
         except Exception:
             corr_payload = None
 
-        # Interactive traces container
-        interactive = []  # one item per numeric column
-        TAIL = int(app.config['PLOTLY_TAIL'])
-
-        for column in numeric_cols:
-            series = df[column].dropna()
+        interactive = []  # payload for Plotly charts
+        PLOTLY_TAIL = int(os.getenv("PLOTLY_TAIL", "800"))
+        for column in df.columns:
+            # Coerce series to numeric where possible
+            series_raw = df[column]
+            try:
+                series = pd.to_numeric(series_raw, errors='coerce').dropna()
+            except Exception:
+                series = pd.Series(dtype=float)
             if series.empty:
                 continue
+            used_cols.append(column)
 
-            # Downsample tail for interactivity
-            s_tail = series.tail(TAIL)
-            x_hist = [str(i) for i in s_tail.index]
-            y_hist = [float(v) for v in s_tail.values]
+            # Detect anomalies first so we can overlay on both static and interactive
+            an_idx, an_score = detect_anomalies(series, contamination=user_contam)
 
-            # Static trend image (kept)
+            # Static trend with anomalies overlay
             title_trend = f"Trend for {column}"
             plots.append({
-                "img": generate_plot(series, title_trend, 'Timestamp' if is_timeseries else 'Index', column),
+                "img": generate_plot(
+                    series,
+                    title_trend,
+                    'Timestamp' if is_timeseries else 'Index',
+                    column,
+                    anomalies_idx=an_idx
+                ),
                 "title": title_trend
             })
 
-            # Anomalies
-            an_idx, an_score = detect_anomalies(series, contamination=user_contam)
-            if len(an_idx):
-                aligned_idx = series.index.intersection(an_idx)
-                an_values = series.loc[aligned_idx].astype(float)
-                anomalies_found[column] = {
-                    "count": int(len(aligned_idx)),
-                    "min_value": float(np.nanmin(an_values.values)),
-                    "max_value": float(np.nanmax(an_values.values)),
-                    "indices": [str(i) for i in aligned_idx[:50]]
-                }
-
-            # Compute forecast (reuse existing robust pipeline) with user_steps
-            fc_x = fc_y = ci_lower = ci_upper = split_x = None
             if is_timeseries and len(series) >= 10:
                 try:
                     steps = max(10, min(240, user_steps))
                     conf_df = None
                     fc_mean = None
-
                     # Holt-Winters damped
                     try:
                         hw = ExponentialSmoothing(
@@ -881,7 +1021,6 @@ def analyze_file(filename):
                         conf_df.columns = ['lower', 'upper']
                     except Exception as e_hw:
                         app.logger.warning("Holt-Winters (damped) failed for %s: %s", column, e_hw)
-
                     # Need slope fallback?
                     need_slope = False
                     if fc_mean is not None:
@@ -892,10 +1031,8 @@ def analyze_file(filename):
                         flat_by_range = np.allclose(fc_mean.values, fc_mean.values[0], rtol=1e-3, atol=1e-6)
                         flat_by_slope = (recent_step > 0 and abs(slope_fc) < 0.25 * recent_step)
                         need_slope = flat_by_range or flat_by_slope
-
                     if fc_mean is None or need_slope:
                         fc_mean, conf_df = _recent_slope_forecast(series, steps, window=min(len(series), 200), damping=None)
-
                     # Naturalize if too straight
                     try:
                         base_slope_est = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
@@ -918,105 +1055,135 @@ def analyze_file(filename):
                     # Keep static forecast image too
                     title_fc = f"Forecast for {column}"
                     forecast_plots.append({
-                        "img": generate_forecast_plot(series, fc_mean, title_fc, 'Timestamp', column, conf_int=conf_df, history_tail=300),
+                        "img": generate_forecast_plot(
+                            series,
+                            fc_mean,
+                            title_fc,
+                            'Timestamp',
+                            column,
+                            conf_int=conf_df,
+                            history_tail=300
+                        ),
                         "title": title_fc
                     })
                 except Exception as e:
                     app.logger.warning("Could not generate forecast for %s: %s", column, e)
 
-            # Build interactive traces
-            traces = [
-                {
-                    "type": "scatter",
-                    "mode": "lines",
-                    "name": "History",
-                    "x": x_hist,
-                    "y": y_hist,
-                    "line": {"color": "rgb(31,119,180)", "width": 2}
-                }
-            ]
+            # Record anomaly summary (already computed)
+            if len(an_idx):
+                try:
+                    aligned_idx = series.index.intersection(an_idx)
+                    an_values = series.loc[aligned_idx].astype(float)
+                    min_v = float(np.nanmin(an_values.values))
+                    max_v = float(np.nanmax(an_values.values))
+                    anomalies_found[column] = {
+                        "count": int(len(aligned_idx)),
+                        "min_value": min_v,
+                        "max_value": max_v,
+                        "indices": [str(i) for i in aligned_idx[:50]]
+                    }
+                except Exception:
+                    anomalies_found[column] = {
+                        "count": int(len(an_idx)),
+                        "indices": [str(i) for i in an_idx[:50]]
+                    }
 
-            # Anomaly markers (subset to tail window)
+            # ----- Interactive traces -----
+            s_tail = series.tail(PLOTLY_TAIL)
+            x_hist = [str(i) for i in s_tail.index]
+            y_hist = [float(v) for v in s_tail.values]
+            traces = [{
+                "type": "scatter", "mode": "lines",
+                "name": "History", "x": x_hist, "y": y_hist,
+                "line": {"color": "rgb(31,119,180)", "width": 2}
+            }]
+            # anomalies in tail
             if len(an_idx):
                 an_tail = [i for i in an_idx if i in s_tail.index]
                 if an_tail:
                     traces.append({
-                        "type": "scatter",
-                        "mode": "markers",
+                        "type": "scatter", "mode": "markers",
                         "name": "Anomaly",
                         "x": [str(i) for i in an_tail],
                         "y": [float(series.loc[i]) for i in an_tail],
                         "marker": {"color": "red", "size": 7, "symbol": "x"}
                     })
-
-            # Forecast trace + CI
-            if fc_x and fc_y:
-                traces.append({
-                    "type": "scatter",
-                    "mode": "lines+markers",
-                    "name": "Forecast",
-                    "x": fc_x,
-                    "y": fc_y,
-                    "line": {"color": "orangered", "width": 3, "dash": "dash"},
-                    "marker": {"size": 4}
-                })
-                if ci_lower and ci_upper:
+            # forecast for interactive
+            fc_x = fc_y = ci_lower = ci_upper = split_x = None
+            if is_timeseries and len(series) >= 10:
+                try:
+                    steps_i = max(10, min(240, user_steps))
+                    fc_mean_i, conf_df_i = _recent_slope_forecast(series, steps_i, window=min(len(series), 200), damping=None)
+                    try:
+                        base_slope_est = float((fc_mean_i.iloc[-1] - fc_mean_i.iloc[0]) / max(1, len(fc_mean_i) - 1))
+                        if _is_too_linear(fc_mean_i):
+                            fc_mean_i, conf_df_i = _bootstrap_natural_path(
+                                series, steps_i, window=min(len(series), 200), base_slope=base_slope_est,
+                                n_samples=200, q_low=0.1, q_high=0.9
+                            )
+                    except Exception:
+                        pass
+                    split_x = str(series.index[-1])
+                    fc_x = [str(i) for i in fc_mean_i.index]
+                    fc_y = [float(v) for v in fc_mean_i.values]
+                    if conf_df_i is not None and not conf_df_i.empty:
+                        ci_lower = [float(v) for v in conf_df_i.iloc[:, 0].values]
+                        ci_upper = [float(v) for v in conf_df_i.iloc[:, 1].values]
                     traces.append({
-                        "type": "scatter",
-                        "name": "95% CI",
-                        "x": fc_x + fc_x[::-1],
-                        "y": ci_upper + ci_lower[::-1],
-                        "fill": "toself",
-                        "fillcolor": "rgba(255,69,0,0.2)",
-                        "line": {"color": "rgba(255,69,0,0)"},
-                        "hoverinfo": "skip",
-                        "showlegend": True
+                        "type": "scatter", "mode": "lines+markers",
+                        "name": "Forecast", "x": fc_x, "y": fc_y,
+                        "line": {"color": "orangered", "width": 3, "dash": "dash"},
+                        "marker": {"size": 4}
                     })
-
+                    if ci_lower and ci_upper:
+                        traces.append({
+                            "type": "scatter", "name": "95% CI",
+                            "x": fc_x + fc_x[::-1],
+                            "y": ci_upper + ci_lower[::-1],
+                            "fill": "toself",
+                            "fillcolor": "rgba(255,69,0,0.2)",
+                            "line": {"color": "rgba(255,69,0,0)"},
+                            "hoverinfo": "skip",
+                            "showlegend": True
+                        })
+                except Exception:
+                    pass
             layout = {
                 "title": {"text": f"{column} (interactive)", "x": 0.02},
                 "xaxis": {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True},
                 "yaxis": {"title": column, "showgrid": True},
                 "shapes": [] if not split_x else [{
-                    "type": "line",
-                    "xref": "x", "yref": "paper",
+                    "type": "line", "xref": "x", "yref": "paper",
                     "x0": split_x, "x1": split_x, "y0": 0, "y1": 1,
                     "line": {"color": "gray", "width": 1, "dash": "dot"}
                 }],
                 "legend": {"orientation": "h"},
-                "margin": {"l": 40, "r": 10, "t": 40, "b": 40},
+                "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
             }
-
-            # Distribution (hist) for this column (simple JS binning)
             dist = {"name": column, "values": [float(v) for v in series.dropna().tail(5000).values]}
+            interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
 
-            interactive.append({
-                "column": column,
-                "traces": traces,
-                "layout": layout,
-                "distribution": dist
-            })
-
-        # AI summary (keep as-is)
-        ai_summary = get_ai_summary_with_file(df, file_asset)
-        AI_SUMMARY_CACHE[filename] = ai_summary
-
-        # Provide a list of columns for compare mode
-        col_list = [c for c in numeric_cols]
-
-        # Keep original info capture
+        # Compute info(), missing values, and AI summary safely
         buf = io.StringIO()
-        df.info(buf=buf)
-        info_string = buf.getvalue()
+        try:
+            df.info(buf=buf)
+            info_string = buf.getvalue()
+        except Exception:
+            info_string = "Unable to render DataFrame info()."
 
-        missing_values_data = df.isnull().sum()
-        missing_values_filtered = missing_values_data[missing_values_data > 0]
-        missing_values_html = None
-        if not missing_values_filtered.empty:
-            missing_values_html = missing_values_filtered.to_frame('missing_count').to_html()
+        try:
+            mv = df.isnull().sum()
+            mvf = mv[mv > 0]
+            missing_values_html = mvf.to_frame('missing_count').to_html() if not mvf.empty else None
+        except Exception:
+            missing_values_html = None
 
-        # Build final analysis dict
+        ai_summary = get_ai_summary_with_file(df, file_asset)
+
+        # Build final analysis dict (use used_cols instead of raw numeric_cols)
         analysis.update({
+            'head': safe_df_head_html(df),
+            'description': safe_df_description_html(df),
             'info': info_string,
             'missing_values': missing_values_html,
             'plots': plots,
@@ -1025,16 +1192,35 @@ def analyze_file(filename):
             'ai_summary': ai_summary,
             'user_question': user_question,
             'ai_answer': ai_answer,
-            # New interactive payloads
+            # Interactive payloads expected by the template
             'interactive': interactive,
+            'columns': used_cols,
             'corr': corr_payload,
-            'columns': col_list,
-            # Echo user controls so template can show them
             'controls': {
                 'forecast_horizon': user_steps,
                 'contamination': user_contam
             }
         })
+
+        # Schedule deletion of the hashed upload only if the response is successful
+        if (
+            app.config.get('DELETE_UPLOADED_AFTER_PROCESSING', False)
+            and HASHED_UPLOAD_RE.match(os.path.basename(filepath))
+            and os.path.exists(filepath)
+        ):
+            @after_this_request
+            def _delete_hashed_file(response):
+                try:
+                    # delete only on success to avoid "lost file on failure"
+                    if 200 <= response.status_code < 300:
+                        ok = _safe_delete(filepath)
+                        if not ok:
+                            app.logger.info("Deferred deletion skipped (could not delete): %s", filepath)
+                    else:
+                        app.logger.info("Deferred deletion skipped due to non-2xx response: %s", response.status_code)
+                except Exception as e:
+                    app.logger.warning("Deferred deletion error: %s", e)
+                return response
 
         return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
 

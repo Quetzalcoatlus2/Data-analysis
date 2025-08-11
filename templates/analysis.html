@@ -5,6 +5,8 @@
   <title>Analysis – {{ display_name }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <!-- fallback -->
+  <script>window.Plotly||document.write('<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.35.2/plotly.min.js"><\/script>')</script>
   <style>
     body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
     .row { display:flex; gap:1rem; flex-wrap:wrap; }
@@ -121,24 +123,42 @@
     </div>
   </div>
 
+  <!-- keep your CDN + fallback scripts -->
   <script id="data-payload" type="application/json">{{ analysis.interactive | tojson }}</script>
   <script id="data-columns" type="application/json">{{ analysis.columns | tojson }}</script>
   <script id="data-corr" type="application/json">{{ analysis.corr | tojson }}</script>
-
   <script>
-    const payload = JSON.parse(document.getElementById('data-payload').textContent);
-    const columns = JSON.parse(document.getElementById('data-columns').textContent);
-    const corr = JSON.parse(document.getElementById('data-corr').textContent);
-
-    // Render per-column interactive charts
+    // Basic diagnostics to surface issues beyond the extension warning
+    if (!window.Plotly) {
+      console.error('Plotly failed to load. Check network/CSP or CDN.');
+    }
     const chartsRoot = document.getElementById('charts');
-    payload.forEach((it, idx) => {
-      const host = document.createElement('div');
-      host.className = 'chart';
-      host.id = 'chart_' + idx;
-      chartsRoot.appendChild(host);
-      Plotly.newPlot(host, it.traces, it.layout, {displayModeBar: true, responsive: true});
-    });
+
+    let payload = null, columns = null, corr = null;
+    try {
+      payload = JSON.parse(document.getElementById('data-payload').textContent);
+      columns = JSON.parse(document.getElementById('data-columns').textContent);
+      corr = JSON.parse(document.getElementById('data-corr').textContent);
+    } catch (e) {
+      console.error('Failed to parse interactive payload:', e);
+    }
+
+    if (!Array.isArray(payload) || payload.length === 0) {
+      chartsRoot.innerHTML = '<p style="opacity:.8">No interactive data available (no numeric-like columns detected). Try increasing contamination or ensure numeric columns are parseable.</p>';
+    } else {
+      // Render per-column interactive charts
+      payload.forEach((it, idx) => {
+        const host = document.createElement('div');
+        host.className = 'chart';
+        host.id = 'chart_' + idx;
+        chartsRoot.appendChild(host);
+        try {
+          Plotly.newPlot(host, it.traces, it.layout, {displayModeBar: true, responsive: true});
+        } catch (e) {
+          console.error('Plotly render error for', it, e);
+        }
+      });
+    }
 
     // Compare two columns (overlay of interactive history only)
     const selectA = document.getElementById('cmpA');
