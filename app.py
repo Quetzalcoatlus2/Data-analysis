@@ -871,14 +871,18 @@ def describe_for_ai(df: pd.DataFrame) -> str:
 
 def _get_arg_float(name, default):
     try:
-        v = request.args.get(name) or request.form.get(name)
+        v = (request.form.get(name) if request.method == 'POST' else None)
+        if v in (None, ""):
+            v = request.args.get(name)
         return float(v) if v not in (None, "") else default
     except Exception:
         return default
 
 def _get_arg_int(name, default):
     try:
-        v = request.args.get(name) or request.form.get(name)
+        v = (request.form.get(name) if request.method == 'POST' else None)
+        if v in (None, ""):
+            v = request.args.get(name)
         return int(float(v)) if v not in (None, "") else default
     except Exception:
         return default

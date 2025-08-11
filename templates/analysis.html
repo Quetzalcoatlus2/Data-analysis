@@ -35,6 +35,9 @@
 
       <form method="post" style="margin-left:auto">
         <input type="hidden" name="display" value="{{ display_name }}">
+        <!-- preserve current analysis controls so a POST from this form doesn't revert them -->
+        <input type="hidden" name="forecast_horizon" value="{{ analysis.controls.forecast_horizon }}">
+        <input type="hidden" name="contamination" value="{{ analysis.controls.contamination }}">
         <label style="margin-right:.5rem">Ask AI</label>
         <input type="text" name="question" placeholder="Your question…" style="min-width:260px">
         <button type="submit">Ask</button>
