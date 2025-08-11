@@ -32,6 +32,7 @@ from statsmodels.tsa.holtwinters import ExponentialSmoothing  # add
 from collections import OrderedDict  # add
 import re
 import html as htmllib  # add
+import math  # add
 
 # Optional security/rate limiting (enabled via env)
 try:
@@ -697,6 +698,62 @@ def normalize_timeseries(series: pd.Series):
     s = s.interpolate(method='time', limit=3, limit_direction='both')
     return s
 
+def _try_parse_numeric_series(s: pd.Series) -> pd.Series:
+    """Best-effort conversion of object-like numeric strings to floats.
+    Handles thousands separators, comma-decimals, percents, and stray units."""
+    if not isinstance(s, pd.Series):
+        return pd.to_numeric(s, errors='coerce')
+
+    # fast path
+    out = pd.to_numeric(s, errors='coerce')
+    na_ratio = out.isna().mean()
+
+    if na_ratio <= 0.25:
+        return out
+
+    # as string for cleanup attempts
+    ss = s.astype(str).str.strip()
+
+    # remember percent
+    has_pct = ss.str.contains(r'%', regex=True, na=False)
+
+    # remove obvious units/symbols except digits, comma, dot, sign
+    cleaned = ss.str.replace(r'[^0-9,.\-+eE]', ' ', regex=True).str.replace(r'\s+', '', regex=True)
+
+    # Heuristic: if more commas than dots overall, treat comma as decimal
+    comma_cnt = cleaned.str.count(',').sum()
+    dot_cnt = cleaned.str.count(r'\.').sum()
+    if comma_cnt > dot_cnt:
+        # EU style: dots likely thousands separators; remove dots, change comma to dot
+        attempt = cleaned.str.replace(r'\.', '', regex=True).str.replace(',', '.', regex=False)
+    else:
+        # US style: remove commas as thousands separators
+        attempt = cleaned.str.replace(',', '', regex=False)
+
+    out2 = pd.to_numeric(attempt, errors='coerce')
+
+    # Apply percent scaling where appropriate
+    if has_pct.any():
+        # Only scale entries that originally had %
+        out2 = out2.where(~has_pct, out2 / 100.0)
+
+    if out2.notna().sum() >= out.notna().sum():
+        return out2
+    return out
+
+def coerce_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply robust numeric parsing to object-like columns; keep native numerics as-is."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    res = {}
+    for col in df.columns:
+        ser = df[col]
+        if pd.api.types.is_numeric_dtype(ser):
+            res[col] = ser.astype(float)
+        else:
+            res[col] = _try_parse_numeric_series(ser)
+    return pd.DataFrame(res, index=df.index)
+
 @app.route('/', methods=['GET', 'POST'])
 # Optional rate limit on uploads
 def upload_file():
@@ -964,15 +1021,39 @@ def analyze_file(filename):
         # Precompute correlation for advanced view
         corr_payload = None
         try:
-            # try to coerce object columns to numeric for correlation
-            df_num = df.apply(pd.to_numeric, errors='coerce')
-            corr_df = df_num.select_dtypes(include='number').corr()
-            corr_payload = {
-                "z": corr_df.values.tolist(),
-                "x": corr_df.columns.tolist(),
-                "y": corr_df.index.tolist(),
-            } if not corr_df.empty else None
-        except Exception:
+            # robust numeric coercion (handles comma-decimals, percents, units)
+            df_num = coerce_numeric_df(df)
+
+            # filter to numeric columns with enough data and non-constant
+            sel = df_num.select_dtypes(include='number')
+            if not sel.empty:
+                # drop columns with too few non-nulls
+                sel = sel.loc[:, sel.count() >= 3]
+                # drop near-constant columns
+                try:
+                    sel = sel.loc[:, sel.std(skipna=True) > 0]
+                except Exception:
+                    # fallback if std fails
+                    nunique = sel.nunique(dropna=True)
+                    sel = sel.loc[:, nunique > 1]
+
+            if sel.shape[1] >= 2:
+                corr_df = sel.corr(method='spearman', min_periods=3)
+                # drop rows/cols that are all NaN
+                corr_df = corr_df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+                # ensure at least 2x2 left
+                if corr_df.shape[0] >= 2 and corr_df.shape[1] >= 2:
+                    corr_payload = {
+                        "z": corr_df.values.tolist(),
+                        "x": corr_df.columns.tolist(),
+                        "y": corr_df.index.tolist(),
+                    }
+                else:
+                    corr_payload = None
+            else:
+                corr_payload = None
+        except Exception as e:
+            app.logger.info("Correlation build skipped: %s", e)
             corr_payload = None
 
         interactive = []  # payload for Plotly charts
