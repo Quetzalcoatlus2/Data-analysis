@@ -1182,7 +1182,25 @@ def analyze_file(filename):
         except Exception:
             missing_values_html = None
 
-        ai_summary = get_ai_summary_with_file(df, file_asset)
+        # Replace this line:
+        # ai_summary = get_ai_summary_with_file(df, file_asset)
+
+        # With this cached/skip-on-POST logic:
+        ai_summary = AI_SUMMARY_CACHE.get(filename)
+        if ai_summary is None:
+            # Only generate on initial GET to avoid rate limits on re-runs/questions
+            if request.method == 'GET' and AI_ENABLED and model is not None:
+                try:
+                    generated = get_ai_summary_with_file(df, file_asset)
+                    ai_summary = generated
+                    # cache whatever we got (even an error string) to avoid repeated calls under rate limits
+                    AI_SUMMARY_CACHE[filename] = generated
+                except Exception as _e:
+                    # fallback message if generation fails unexpectedly
+                    ai_summary = "<p>AI summary temporarily unavailable.</p>"
+            else:
+                # POST or AI disabled: reuse cached if any; otherwise neutral message
+                ai_summary = "<p>AI summary will appear after initial analysis loads.</p>"
 
         # Build final analysis dict (use used_cols instead of raw numeric_cols)
         analysis.update({
