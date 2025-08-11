@@ -18,8 +18,247 @@
     table { border-collapse: collapse; }
     th, td { border:1px solid #ddd; padding:.25rem .5rem; }
   </style>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --card: #f8fafc;
+      --border: #e2e8f0;
+      --accent: #0ea5e9;
+      --button-text: #ffffff;
+    }
+    :root[data-theme="dark"] {
+      --bg: #0b1220;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --card: #111827;
+      --border: #1f2937;
+      --accent: #38bdf8;
+      --button-text: #0b1220;
+    }
+    
+    html, body { background: var(--bg); color: var(--text); }
+    .topbar { display:flex; align-items:center; gap:10px; padding:10px 0; }
+    .spacer { flex: 1; }
+    .btn {
+      display:inline-block; padding:8px 12px; border:1px solid var(--border);
+      background: var(--accent); color: var(--button-text);
+      border-radius:6px; text-decoration:none; cursor:pointer;
+    }
+    .btn.secondary { background: transparent; color: var(--text); }
+    .card { background: var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; }
+    input[type="file"], input[type="number"], input[type="text"], button {
+      color: var(--text); background: var(--bg); border:1px solid var(--border);
+      border-radius:6px; padding:8px;
+    }
+    label { color: var(--muted); }
+    /* REMOVE the following line: */
+    /* .js-plotly-plot .plotly .main-svg { background: var(--card) !important; } */
+  </style>
+  <style>
+    /* keep your existing CSS vars */
+    /* Ensure the SVG background matches the card for both themes */
+    /* REMOVE the following line: */
+    /* .js-plotly-plot .plotly .main-svg { background: var(--card) !important; } */
+  </style>
+
+  <meta name="color-scheme" content="light dark">
+
+  <script>
+    (function() {
+      const saved = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      window.toggleTheme = function() {
+        const cur = document.documentElement.getAttribute('data-theme') || 'light';
+        const next = cur === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        const btn = document.getElementById('themeToggle');
+        if (btn) btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
+        // Add this:
+        if (window.rethemeExistingPlots) window.rethemeExistingPlots();
+      };
+      window.addEventListener('DOMContentLoaded', function() {
+        const btn = document.getElementById('themeToggle');
+        if (btn) btn.textContent = (localStorage.getItem('theme') || 'light') === 'light' ? 'Dark mode' : 'Light mode';
+        if (window.rethemeExistingPlots) window.rethemeExistingPlots(); // initial sync for DR
+      });
+    })();
+  </script>
+
+  <!-- Replace your getThemeColors() function with this stronger version -->
+  <script>
+    function getThemeColors() {
+      const siteTheme = document.documentElement.getAttribute('data-theme') || 'light';
+
+      if (siteTheme === 'dark') {
+        return {
+          paper: '#111827',   // card
+          plot:  '#111827',
+          text:  '#e5e7eb',
+          grid:  '#334155',
+          accent:'#38bdf8'
+        };
+      } else {
+        return {
+          paper: '#ffffff',
+          plot:  '#ffffff',
+          text:  '#0f172a',
+          grid:  '#cbd5e1',
+          accent:'#0ea5e9'
+        };
+      }
+    }
+
+    function getPalette() {
+      // High-contrast palette that works in both themes
+      return ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#17becf','#e377c2','#8c564b','#bcbd22','#7f7f7f'];
+    }
+
+    function themedLayout(base) {
+      const t = getThemeColors();
+      const merged = Object.assign({
+        paper_bgcolor: t.paper,
+        plot_bgcolor: t.plot,
+        font: { color: t.text },
+        legend: { bgcolor: t.paper, font: { color: t.text } },
+        xaxis: {
+          showgrid: true,
+          gridcolor: t.grid, zerolinecolor: t.grid, linecolor: t.grid,
+          tickfont: { color: t.text }, title: { font: { color: t.text } }
+        },
+        yaxis: {
+          showgrid: true,
+          gridcolor: t.grid, zerolinecolor: t.grid, linecolor: t.grid,
+          tickfont: { color: t.text }, title: { font: { color: t.text } }
+        },
+        margin: { l: 40, r: 10, t: 40, b: 40 }
+      }, base || {});
+      if (base && base.xaxis && base.xaxis.title && base.xaxis.title.text) merged.xaxis.title.text = base.xaxis.title.text;
+      if (base && base.yaxis && base.yaxis.title && base.yaxis.title.text) merged.yaxis.title.text = base.yaxis.title.text;
+      return merged;
+    }
+  </script>
+
+  <!-- Replace your renderPlot function with this one -->
+  <script>
+    function renderPlot(host, traces, layout, config) {
+      const el = (typeof host === 'string') ? document.getElementById(host) : host;
+      if (!el) return;
+      const cfg = Object.assign({ displayModeBar: true, responsive: true }, config || {});
+      const t = getThemeColors();
+      const palette = getPalette();
+
+      const themedTraces = (traces || []).map((tr, i) => {
+        const c = JSON.parse(JSON.stringify(tr || {}));
+        const nextColor = palette[i % palette.length];
+
+        // Default opacity for safety
+        if (typeof c.opacity !== 'number') c.opacity = 1;
+
+        if (c.type === 'scatter' || !c.type) {
+          if (!c.line) c.line = {};
+          if (!c.line.color) c.line.color = (c.name === 'Anomaly') ? '#ef4444' : nextColor;
+          c.line.width = Math.max(c.line.width || 2, 2);
+          if (c.mode && c.mode.indexOf('markers') >= 0) {
+            if (!c.marker) c.marker = {};
+            if (!c.marker.color) c.marker.color = c.line.color;
+            c.marker.size = Math.max(c.marker.size || 5, 5);
+            if (!c.marker.line) c.marker.line = { width: 0 };
+          }
+        } else if (c.type === 'bar' || c.type === 'histogram') {
+          if (!c.marker) c.marker = {};
+          if (!c.marker.color) c.marker.color = (i === 0 ? t.accent : nextColor);
+          if (!c.marker.line) c.marker.line = { color: t.grid, width: 0 };
+          if (typeof c.opacity !== 'number') c.opacity = 0.95;
+        } else if (c.type === 'heatmap') {
+          if (!c.colorscale) c.colorscale = 'RdBu';
+          if (typeof c.zmin === 'undefined') c.zmin = -1;
+          if (typeof c.zmax === 'undefined') c.zmax = 1;
+          c.showscale = true;
+          c.colorbar = c.colorbar || {};
+          c.colorbar.tickfont = Object.assign({ color: t.text }, c.colorbar.tickfont || {});
+          c.colorbar.title = Object.assign({ text: (c.colorbar.title && c.colorbar.title.text) || 'ρ', font: { color: t.text } }, c.colorbar.title || {});
+        }
+        return c;
+      });
+
+      return Plotly.newPlot(el, themedTraces, themedLayout(layout || {}), cfg);
+    }
+  </script>
+
+  <script>
+    function rethemeExistingPlots() {
+      const t = getThemeColors();
+      document.querySelectorAll('.js-plotly-plot').forEach(div => {
+        Plotly.relayout(div, {
+          paper_bgcolor: t.paper,
+          plot_bgcolor: t.plot,
+          'font.color': t.text,
+          'xaxis.gridcolor': t.grid,
+          'xaxis.linecolor': t.grid,
+          'xaxis.zerolinecolor': t.grid,
+          'xaxis.tickfont.color': t.text,
+          'xaxis.title.font.color': t.text,
+          'yaxis.gridcolor': t.grid,
+          'yaxis.linecolor': t.grid,
+          'yaxis.zerolinecolor': t.grid,
+          'yaxis.tickfont.color': t.text,
+          'yaxis.title.font.color': t.text,
+          'legend.bgcolor': t.paper,
+          'legend.font.color': t.text
+        }).catch(()=>{});
+        try {
+          const data = div.data || [];
+          const heatIdx = data.map((tr, i) => tr.type === 'heatmap' ? i : null).filter(i => i !== null);
+          if (heatIdx.length) {
+            Plotly.restyle(div, {
+              'colorbar.tickfont.color': t.text,
+              'colorbar.title.font.color': t.text
+            }, heatIdx);
+          }
+        } catch (e) {}
+      });
+    }
+
+    window.renderPlot = renderPlot;
+    window.rethemeExistingPlots = rethemeExistingPlots;
+  </script>
+
+  <!-- Add after your existing style blocks in <head> -->
+  <style>
+    .chart { width: 100%; height: 420px; min-height: 320px; }
+  </style>
+
+  <script>
+    window.addEventListener('load', function() {
+      if (window.rethemeExistingPlots) window.rethemeExistingPlots();
+    });
+  </script>
+
 </head>
 <body>
+  <div class="topbar">
+    <h2 style="margin:0;">Analysis – {{ display_name }}</h2>
+    <div class="spacer"></div>
+
+    <!-- New: Quick upload of a new dataset directly from analysis page -->
+    <form method="post" action="{{ url_for('upload_file') }}" enctype="multipart/form-data" style="display:flex; align-items:center; gap:8px;">
+      <input type="file" name="file" accept=".csv,.xlsx,.json,.txt">
+      <!-- Preserve current preferred defaults when uploading -->
+      <input type="hidden" name="forecast_horizon" value="{{ analysis.controls.forecast_horizon }}">
+      <input type="hidden" name="contamination" value="{{ analysis.controls.contamination }}">
+      <button class="btn" type="submit">Upload new file</button>
+    </form>
+
+    <!-- Also provide a simple link back to the main upload page -->
+    <a class="btn secondary" href="{{ url_for('upload_file') }}">Go to upload</a>
+
+    <!-- Theme toggle -->
+    <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()">Dark mode</button>
+  </div>
+
   <div class="card">
     <div class="controls">
       <form method="post">
@@ -156,7 +395,7 @@
         host.id = 'chart_' + idx;
         chartsRoot.appendChild(host);
         try {
-          Plotly.newPlot(host, it.traces, it.layout, {displayModeBar: true, responsive: true});
+          renderPlot(host, it.traces, it.layout, {displayModeBar: true, responsive: true});
         } catch (e) {
           console.error('Plotly render error for', it, e);
         }
@@ -189,11 +428,18 @@
         yaxis2: {title: selectB.value, overlaying: 'y', side: 'right', showgrid: false},
         legend: {orientation: 'h'}, margin: {l:40,r:40,t:40,b:40}
       };
-      Plotly.newPlot('cmpChart', traces, layout, {displayModeBar:true, responsive:true});
+      renderPlot('cmpChart', traces, {
+        title: {text: 'Compare ' + selectA.value + ' vs ' + selectB.value, x: 0.02},
+        xaxis: {title: 'Index/Timestamp'},
+        yaxis: {title: selectA.value, showgrid: true},
+        yaxis2: {title: selectB.value, overlaying: 'y', side: 'right', showgrid: false},
+        legend: {orientation: 'h'}, margin: {l:40,r:40,t:40,b:40}
+      }, {displayModeBar:true, responsive:true});
     });
 
-    // Distributions (histograms) using client-side binning for speed
+    // Distributions (histograms)
     const dists = document.getElementById('dists');
+    const tColors = getThemeColors();
     payload.forEach((it, idx) => {
       const host = document.createElement('div');
       host.className = 'chart';
@@ -201,25 +447,35 @@
       dists.appendChild(host);
       const vals = it.distribution.values;
       if (!vals || !vals.length) return;
-      Plotly.newPlot(host, [{
-        type: 'histogram', name: it.column, x: vals, marker: {color: 'rgba(31,119,180,0.7)'}
+      renderPlot(host, [{
+        type: 'histogram',
+        name: it.column,
+        x: vals,
+        marker: { color: tColors.accent }
       }], {
-        title: {text: 'Distribution: ' + it.column, x: 0.02},
-        bargap: 0.05, margin:{l:40,r:10,t:40,b:40}
-      }, {displayModeBar:false, responsive:true});
+        title: { text: 'Distribution: ' + it.column, x: 0.02 },
+        bargap: 0.05
+      }, {
+        displayModeBar: true,
+        responsive: true,
+        scrollZoom: true
+      });
     });
 
     // Correlation heatmap
     if (corr && corr.z && corr.z.length) {
-      Plotly.newPlot('corr', [{
+      const t = getThemeColors();
+      const corrTrace = {
         type: 'heatmap',
         z: corr.z, x: corr.x, y: corr.y,
-        colorscale: 'RdBu', reversescale: true,
-        zmid: 0
-      }], {
-        title: {text: 'Correlation (numeric columns)', x: 0.02},
-        margin:{l:80,r:10,t:40,b:80}
-      }, {displayModeBar:false, responsive:true});
+        zmin: -1, zmax: 1, colorscale: 'RdBu',
+        showscale: true,
+        colorbar: { tickfont: { color: t.text }, title: { text: 'ρ', font: { color: t.text } } }
+      };
+      renderPlot('corr', [corrTrace], {
+        title: { text: 'Correlation (Spearman)' },
+        margin: { l: 120, r: 40, t: 40, b: 40 } // Increased left margin for y-axis labels
+      }, {displayModeBar:true, responsive:true});
     }
   </script>
 </body>

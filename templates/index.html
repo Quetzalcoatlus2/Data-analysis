@@ -4,14 +4,77 @@
   <meta charset="utf-8">
   <title>Data Analysis – Upload</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
-    .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; max-width: 720px; }
-    label { display:block; margin-top: .75rem; }
-    input[type="range"] { width: 100%; }
+    :root {
+      --bg: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --card: #f8fafc;
+      --border: #e2e8f0;
+      --accent: #0ea5e9;
+      --button-text: #ffffff;
+    }
+    :root[data-theme="dark"] {
+      --bg: #0b1220;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --card: #111827;
+      --border: #1f2937;
+      --accent: #38bdf8;
+      --button-text: #0b1220;
+    }
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+    }
+    .topbar {
+      display:flex; align-items:center; gap:10px; padding:10px 0;
+    }
+    .spacer { flex: 1; }
+    .btn {
+      display:inline-block; padding:8px 12px; border:1px solid var(--border);
+      background: var(--accent); color: var(--button-text);
+      border-radius:6px; text-decoration:none; cursor:pointer;
+    }
+    .btn.secondary {
+      background: transparent; color: var(--text);
+    }
+    .card {
+      background: var(--card); border:1px solid var(--border); border-radius:8px; padding:12px;
+    }
+    input[type="file"], input[type="number"], input[type="text"], button {
+      color: var(--text); background: var(--bg); border:1px solid var(--border);
+      border-radius:6px; padding:8px;
+    }
+    label { color: var(--muted); }
   </style>
+  <script>
+    (function() {
+      const saved = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      window.toggleTheme = function() {
+        const cur = document.documentElement.getAttribute('data-theme') || 'light';
+        const next = cur === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        const btn = document.getElementById('themeToggle');
+        if (btn) btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
+      };
+      window.addEventListener('DOMContentLoaded', function() {
+        const btn = document.getElementById('themeToggle');
+        if (btn) btn.textContent = (localStorage.getItem('theme') || 'light') === 'light' ? 'Dark mode' : 'Light mode';
+      });
+    })();
+  </script>
 </head>
 <body>
+  <div class="topbar">
+    <h2 style="margin:0;">Data Analysis – Upload</h2>
+    <div class="spacer"></div>
+    <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()">Dark mode</button>
+  </div>
+
   <div class="card">
     <h2>Upload a dataset</h2>
     <form method="post" enctype="multipart/form-data">

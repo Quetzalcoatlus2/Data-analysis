@@ -396,3 +396,113 @@
 2025-08-11 19:27:01,620 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 19:27:01] "GET / HTTP/1.1" 200 -
 2025-08-11 19:27:19,587 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 19:27:19] "POST / HTTP/1.1" 302 -
 2025-08-11 19:28:41,227 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 19:28:41] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 19:46:45,773 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 19:46:45] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 20:03:01,518 INFO app: Attempting to configure AI...
+2025-08-11 20:03:01,520 INFO app: AI configured successfully.
+2025-08-11 20:03:01,524 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 20:03:01,594 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 20:03:01,594 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 20:03:13,360 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:03:13] "GET / HTTP/1.1" 200 -
+2025-08-11 20:03:59,872 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:03:59] "POST / HTTP/1.1" 302 -
+2025-08-11 20:05:24,784 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:05:24] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 20:15:13,149 INFO app: Attempting to configure AI...
+2025-08-11 20:15:13,152 INFO app: AI configured successfully.
+2025-08-11 20:15:13,158 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 20:15:13,241 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 20:15:13,243 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 20:15:24,763 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:15:24] "POST / HTTP/1.1" 302 -
+2025-08-11 20:15:24,796 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:15:24] "GET / HTTP/1.1" 200 -
+2025-08-11 20:15:42,131 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:15:42] "POST / HTTP/1.1" 302 -
+2025-08-11 20:17:22,247 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:17:22] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 20:26:58,711 INFO app: Attempting to configure AI...
+2025-08-11 20:26:58,715 INFO app: AI configured successfully.
+2025-08-11 20:26:58,723 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 20:26:58,833 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 20:26:58,834 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 20:27:06,648 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:27:06] "POST / HTTP/1.1" 302 -
+2025-08-11 20:27:06,673 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:27:06] "GET / HTTP/1.1" 200 -
+2025-08-11 20:27:26,425 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:27:26] "POST / HTTP/1.1" 302 -
+2025-08-11 20:28:55,911 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:28:55] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 20:35:14,091 INFO app: Attempting to configure AI...
+2025-08-11 20:35:14,092 INFO app: AI configured successfully.
+2025-08-11 20:35:14,101 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 20:35:14,210 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 20:35:14,215 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 20:35:51,582 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:35:51] "POST / HTTP/1.1" 302 -
+2025-08-11 20:37:19,024 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:37:19] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 20:37:41,200 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:37:41] "GET / HTTP/1.1" 200 -
+2025-08-11 20:38:00,356 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:38:00] "POST / HTTP/1.1" 302 -
+2025-08-11 20:38:19,815 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:38:19] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 20:38:53,472 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:38:53] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 20:39:01,050 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:39:01] "GET /favicon.ico HTTP/1.1" 404 -
+2025-08-11 20:40:54,505 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:40:54] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-11 20:48:24,001 INFO app: Attempting to configure AI...
+2025-08-11 20:48:24,001 INFO app: AI configured successfully.
+2025-08-11 20:48:24,008 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 20:48:24,067 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 20:48:24,068 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 20:48:27,607 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:48:27] "GET /favicon.ico HTTP/1.1" 404 -
+2025-08-11 20:48:43,526 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:48:43] "GET / HTTP/1.1" 200 -
+2025-08-11 20:49:20,633 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:49:20] "POST / HTTP/1.1" 302 -
+2025-08-11 20:49:40,716 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 20:49:40] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 21:01:42,363 INFO app: Attempting to configure AI...
+2025-08-11 21:01:42,364 INFO app: AI configured successfully.
+2025-08-11 21:01:42,370 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 21:01:42,405 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 21:01:42,405 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 21:01:53,234 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:01:53] "GET / HTTP/1.1" 200 -
+2025-08-11 21:02:16,489 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:02:16] "POST / HTTP/1.1" 302 -
+2025-08-11 21:02:38,948 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:02:38] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 21:15:54,868 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:15:54] "GET / HTTP/1.1" 200 -
+2025-08-11 21:20:20,873 INFO app: Attempting to configure AI...
+2025-08-11 21:20:20,874 INFO app: AI configured successfully.
+2025-08-11 21:20:20,876 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 21:20:20,908 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 21:20:20,912 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 21:20:25,482 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:20:25] "GET / HTTP/1.1" 200 -
+2025-08-11 21:21:15,842 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:21:15] "POST / HTTP/1.1" 302 -
+2025-08-11 21:21:29,279 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:21:29] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 21:30:15,751 INFO app: Attempting to configure AI...
+2025-08-11 21:30:15,752 INFO app: AI configured successfully.
+2025-08-11 21:30:15,757 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 21:30:15,824 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 21:30:15,824 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 21:32:06,116 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:32:06] "GET / HTTP/1.1" 200 -
+2025-08-11 21:32:40,944 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:32:40] "POST / HTTP/1.1" 302 -
+2025-08-11 21:32:55,441 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:32:55] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 21:41:38,888 INFO app: Attempting to configure AI...
+2025-08-11 21:41:38,890 INFO app: AI configured successfully.
+2025-08-11 21:41:38,894 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 21:41:38,957 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 21:41:38,958 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 21:41:48,625 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:41:48] "GET / HTTP/1.1" 200 -
+2025-08-11 21:42:29,929 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:42:29] "POST / HTTP/1.1" 302 -
+2025-08-11 21:42:54,915 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:42:54] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 21:44:17,266 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:44:17] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-11 21:51:31,443 INFO app: Attempting to configure AI...
+2025-08-11 21:51:31,444 INFO app: AI configured successfully.
+2025-08-11 21:51:31,450 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 21:51:31,505 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 21:51:31,507 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 21:52:05,202 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:52:05] "GET / HTTP/1.1" 200 -
+2025-08-11 21:52:33,091 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:52:33] "POST / HTTP/1.1" 302 -
+2025-08-11 21:52:50,790 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 21:52:50] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-11 22:01:56,052 INFO app: Attempting to configure AI...
+2025-08-11 22:01:56,054 INFO app: AI configured successfully.
+2025-08-11 22:01:56,058 INFO app: Starting server on http://127.0.0.1:5000
+2025-08-11 22:01:56,106 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-11 22:01:56,107 INFO werkzeug: Press CTRL+C to quit
+2025-08-11 22:02:21,735 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 22:02:21] "GET / HTTP/1.1" 200 -
+2025-08-11 22:03:08,874 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 22:03:08] "POST / HTTP/1.1" 302 -
+2025-08-11 22:03:32,275 INFO werkzeug: 127.0.0.1 - - [11/Aug/2025 22:03:32] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
