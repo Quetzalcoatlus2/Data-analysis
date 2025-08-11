@@ -304,17 +304,35 @@ def get_ai_answer(dataframe, question):
     except Exception as e:
         return f"<p>Error while answering the question: {e}</p>"
 
-def get_ai_summary_with_file(df, file_asset=None):
+def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
     if not AI_ENABLED or model is None:
         return "AI analysis is disabled."
     # concise stats context + prefer attaching the full file if available
     df_description = describe_for_ai(df)
     prompt = f"""
-    You are a data analyst. Provide a concise HTML snippet with insights, trends, and anomalies.
-    Use <h3>, <p>, <ul><li>, <strong>. No Markdown.
+    You are a senior data scientist. Produce an in-depth, expert-level analysis.
+    Output strictly an HTML snippet (no <html> or <body>).
+    Use semantic structure with <h3>, <h4>, <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, and <em>.
+    Avoid Markdown or code fences.
 
-    Data Description:
+    Include these sections when relevant:
+    - Executive overview (1-3 paragraphs).
+    - Data quality and coverage (missingness, types, ranges, outliers).
+    - Key drivers and relationships (strongest correlations and plausible causality; note spurious risks).
+    - Time-series patterns (trend, seasonality, changepoints; specify frequency/periods if known).
+    - Anomalies and hypotheses (counts per metric, plausible root causes, impact).
+    - Forecast outlook and assumptions (direction, uncertainty drivers; tie to recent slope/volatility).
+    - Risks, limitations, and caveats (data issues, sampling bias, non-stationarity).
+    - Actionable recommendations (prioritized, concrete next steps).
+    - Next data to collect to reduce uncertainty.
+
+    Base all quantitative claims on the provided statistics/context. Cite numbers inline where helpful.
+
+    Context statistics:
     {df_description}
+
+    Additional context:
+    {extra_context}
     """
     try:
         if file_asset:
@@ -753,6 +771,95 @@ def coerce_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
         else:
             res[col] = _try_parse_numeric_series(ser)
     return pd.DataFrame(res, index=df.index)
+
+def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict, used_cols: list, is_timeseries: bool, forecast_horizon: int, contamination: float) -> str:
+    """Assemble structured stats the AI can leverage for a deeper analysis."""
+    try:
+        lines = []
+        lines.append(f"Shape: {getattr(df, 'shape', None)}")
+        # Column dtypes
+        try:
+            dtypes = {c: str(t) for c, t in df.dtypes.items()}
+            lines.append("Dtypes: " + json.dumps(dtypes, ensure_ascii=False))
+        except Exception:
+            pass
+        # Missingness (fraction)
+        try:
+            mv = df.isna().mean().sort_values(ascending=False)
+            top_mv = mv[mv > 0].head(20)
+            if not top_mv.empty:
+                lines.append("Top missingness (fraction): " + json.dumps({k: float(v) for k, v in top_mv.items()}))
+        except Exception:
+            pass
+        # Numeric summaries
+        try:
+            nums = df.select_dtypes(include='number')
+            if not nums.empty:
+                desc = nums.describe().to_dict()
+                compact = {}
+                for col in nums.columns:
+                    stats = {}
+                    for k in ("mean", "50%", "std", "min", "max"):
+                        if k in desc and col in desc[k]:
+                            stats[k] = float(desc[k][col])
+                    compact[col] = stats
+                lines.append("Numeric summary (mean, median, std, min, max): " + json.dumps(compact))
+        except Exception:
+            pass
+        # Recent trend per used column
+        try:
+            trend_info = {}
+            for col in used_cols[:20]:
+                s = pd.to_numeric(df[col], errors='coerce').dropna()
+                if len(s) >= 5:
+                    w = min(len(s), max(20, len(s)//5))
+                    y = s.iloc[-w:]
+                    x = np.arange(len(y), dtype=float)
+                    slope, intercept = np.polyfit(x, y.values, 1)
+                    change = float(y.iloc[-1] - y.iloc[0])
+                    pct = float((change / (abs(y.iloc[0]) + 1e-12)) * 100.0)
+                    trend_info[col] = {"window": int(w), "slope_per_step": float(slope), "recent_change": float(change), "pct_change": pct, "last": float(y.iloc[-1])}
+            if trend_info:
+                lines.append("Recent trends: " + json.dumps(trend_info))
+        except Exception:
+            pass
+        # Anomalies
+        try:
+            if anomalies_found:
+                lines.append("Anomalies summary: " + json.dumps(anomalies_found))
+        except Exception:
+            pass
+        # Correlations (top absolute Spearman)
+        try:
+            if corr_payload and corr_payload.get("z"):
+                x = corr_payload["x"]; y = corr_payload["y"]; z = corr_payload["z"]
+                pairs = []
+                for i, row in enumerate(z):
+                    for j, val in enumerate(row):
+                        if i >= j:
+                            continue
+                        if val is None or isinstance(val, str):
+                            continue
+                        pairs.append((abs(float(val)), float(val), y[i], x[j]))
+                pairs.sort(reverse=True)
+                top = [{"pair": [a, b], "rho": v, "abs": av} for av, v, a, b in pairs[:15]]
+                lines.append("Top correlations (Spearman): " + json.dumps(top))
+        except Exception:
+            pass
+        # Time axis info
+        try:
+            if is_timeseries and isinstance(df.index, pd.DatetimeIndex):
+                idx = df.index.dropna()
+                if len(idx):
+                    freq = str(idx.freq) if idx.freq is not None else (pd.infer_freq(idx) or "unknown")
+                    lines.append(f"Time series detected. Start: {str(idx[0])}, End: {str(idx[-1])}, Freq: {freq}")
+        except Exception:
+            pass
+        # Parameters
+        lines.append(f"User settings: forecast_horizon={int(forecast_horizon)}, anomaly_contamination={float(contamination)}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
 
 @app.route('/', methods=['GET', 'POST'])
 # Optional rate limit on uploads
@@ -1267,12 +1374,23 @@ def analyze_file(filename):
         # ai_summary = get_ai_summary_with_file(df, file_asset)
 
         # With this cached/skip-on-POST logic:
+        # Build richer AI context from current analysis artifacts
+        ai_context = build_ai_context(
+            df=df,
+            anomalies_found=anomalies_found,
+            corr_payload=analysis.get('corr') if 'corr' in locals() else locals().get('corr_payload'),
+            used_cols=used_cols,
+            is_timeseries=is_timeseries,
+            forecast_horizon=user_steps,
+            contamination=user_contam
+        )
+
         ai_summary = AI_SUMMARY_CACHE.get(filename)
         if ai_summary is None:
             # Only generate on initial GET to avoid rate limits on re-runs/questions
             if request.method == 'GET' and AI_ENABLED and model is not None:
                 try:
-                    generated = get_ai_summary_with_file(df, file_asset)
+                    generated = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
                     ai_summary = generated
                     # cache whatever we got (even an error string) to avoid repeated calls under rate limits
                     AI_SUMMARY_CACHE[filename] = generated
