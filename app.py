@@ -1,7 +1,7 @@
 import os
 import io
 import base64
-from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request
+from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response
 
 from datetime import datetime, timedelta
 import pandas as pd
@@ -1285,61 +1285,91 @@ def analyze_file(filename):
             x_hist = [str(i) for i in s_tail.index]
             y_hist = [float(v) for v in s_tail.values]
             traces = [{
-                "type": "scatter", "mode": "lines",
-                "name": "History", "x": x_hist, "y": y_hist,
-                "line": {"color": "rgb(31,119,180)", "width": 2}
+                "type": "scatter",
+                "mode": "lines+markers",  # markers enable box/lasso
+                "name": "History",
+                "x": x_hist,
+                "y": y_hist,
+                "line": {"color": "rgb(31,119,180)", "width": 2},
+                "marker": {"size": 4, "opacity": 0.6}
             }]
+
             # anomalies in tail
             if len(an_idx):
-                an_tail = [i for i in an_idx if i in s_tail.index]
-                if an_tail:
+                an_tail_idx = [i for i in an_idx if i in s_tail.index]
+                if an_tail_idx:
                     traces.append({
-                        "type": "scatter", "mode": "markers",
+                        "type": "scatter",
+                        "mode": "markers",
                         "name": "Anomaly",
-                        "x": [str(i) for i in an_tail],
-                        "y": [float(series.loc[i]) for i in an_tail],
-                        "marker": {"color": "red", "size": 7, "symbol": "x"}
+                        "x": [str(i) for i in an_tail_idx],
+                        "y": [float(s_tail.loc[i]) for i in an_tail_idx],
+                        "marker": {"color": "#ef4444", "size": 7, "opacity": 0.9},
+                        "hovertemplate": "Anomaly<br>%{x}<br>%{y}<extra></extra>"
                     })
+
             # forecast for interactive
             fc_x = fc_y = ci_lower = ci_upper = split_x = None
             if is_timeseries and len(series) >= 10:
                 try:
-                    steps_i = max(10, min(240, user_steps))
-                    fc_mean_i, conf_df_i = _recent_slope_forecast(series, steps_i, window=min(len(series), 200), damping=None)
+                    steps = max(10, min(240, user_steps))
+                    # normalize spacing, forecast, and naturalize if too straight
+                    s_norm = normalize_timeseries(series)
+                    fc_mean, conf_df = _recent_slope_forecast(s_norm, steps=steps, window=None, damping=None)
                     try:
-                        base_slope_est = float((fc_mean_i.iloc[-1] - fc_mean_i.iloc[0]) / max(1, len(fc_mean_i) - 1))
-                        if _is_too_linear(fc_mean_i):
-                            fc_mean_i, conf_df_i = _bootstrap_natural_path(
-                                series, steps_i, window=min(len(series), 200), base_slope=base_slope_est,
-                                n_samples=200, q_low=0.1, q_high=0.9
-                            )
+                        if _is_too_linear(fc_mean):
+                            fc_mean, conf_df = _bootstrap_natural_path(s_norm, steps=steps, base_slope=None, n_samples=200)
                     except Exception:
                         pass
+
                     split_x = str(series.index[-1])
-                    fc_x = [str(i) for i in fc_mean_i.index]
-                    fc_y = [float(v) for v in fc_mean_i.values]
-                    if conf_df_i is not None and not conf_df_i.empty:
-                        ci_lower = [float(v) for v in conf_df_i.iloc[:, 0].values]
-                        ci_upper = [float(v) for v in conf_df_i.iloc[:, 1].values]
-                    traces.append({
-                        "type": "scatter", "mode": "lines+markers",
-                        "name": "Forecast", "x": fc_x, "y": fc_y,
-                        "line": {"color": "orangered", "width": 3, "dash": "dash"},
-                        "marker": {"size": 4}
-                    })
-                    if ci_lower and ci_upper:
+                    fc_x = [str(i) for i in fc_mean.index]
+                    fc_y = [float(v) for v in fc_mean.values]
+                    if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
+                        ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
+                        ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
+
+                    # 95% CI band (two traces, grouped under one legend item)
+                    if fc_x and ci_lower and ci_upper:
+                        ci_group = f"ci-{re.sub(r'[^A-Za-z0-9_-]+', '', str(column))}"
                         traces.append({
-                            "type": "scatter", "name": "95% CI",
-                            "x": fc_x + fc_x[::-1],
-                            "y": ci_upper + ci_lower[::-1],
-                            "fill": "toself",
-                            "fillcolor": "rgba(255,69,0,0.2)",
-                            "line": {"color": "rgba(255,69,0,0)"},
+                            "type": "scatter",
+                            "mode": "lines",
+                            "name": "95% CI",
+                            "x": fc_x, "y": ci_lower,
+                            "line": {"width": 0},
                             "hoverinfo": "skip",
-                            "showlegend": True
+                            "showlegend": True,
+                            "legendgroup": ci_group
+                        })
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines",
+                            "name": "95% CI",
+                            "x": fc_x, "y": ci_upper,
+                            "line": {"width": 0},
+                            "fill": "tonexty",
+                            "fillcolor": "rgba(255,69,0,0.18)",
+                            "hoverinfo": "skip",
+                            "showlegend": False,
+                            "legendgroup": ci_group,
+                            "legendgrouptitle": {"text": "95% CI"}
+                        })
+
+                    # Forecast mean line (unchanged)
+                    if fc_x and fc_y:
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines+markers",
+                            "name": "Forecast",
+                            "x": fc_x, "y": fc_y,
+                            "line": {"color": "orangered", "width": 3, "dash": "dash"},
+                            "marker": {"size": 3}
                         })
                 except Exception:
                     pass
+
+            # Update layout to include split line and legend group behavior
             layout = {
                 "title": {"text": f"{column} (interactive)", "x": 0.02},
                 "xaxis": {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True},
@@ -1349,9 +1379,10 @@ def analyze_file(filename):
                     "x0": split_x, "x1": split_x, "y0": 0, "y1": 1,
                     "line": {"color": "gray", "width": 1, "dash": "dot"}
                 }],
-                "legend": {"orientation": "h"},
+                "legend": {"orientation": "h", "groupclick": "togglegroup"},
                 "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
             }
+
             dist = {"name": column, "values": [float(v) for v in series.dropna().tail(5000).values]}
             interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
 
@@ -1452,6 +1483,60 @@ def analyze_file(filename):
 @app.route('/health', methods=['GET'])
 def health():
     return "ok", 200
+
+@app.route('/download/<filename>/cleaned.csv', methods=['GET'])
+def download_cleaned_csv(filename):
+    # Only allow app-managed hashed uploads
+    if not HASHED_UPLOAD_RE.match(filename):
+        return ("Not found", 404)
+    path = os.path.join(app.config['UPLOADS_DIR'], filename)
+    df = DATAFRAME_CACHE.get(filename)
+    if df is None:
+        if not os.path.exists(path):
+            return ("Not found", 404)
+        # Re-read using the same heuristics
+        try:
+            if filename.endswith('.csv'):
+                df = read_csv_fallback(path, index_col=0, parse_dates=True)
+            elif filename.endswith('.xlsx'):
+                df = read_excel_smart(path)
+            elif filename.endswith('.json'):
+                df = read_json_fallback(path)
+            elif filename.endswith('.txt'):
+                df = read_csv_fallback(path, sep=',', index_col=0, parse_dates=True)
+            else:
+                return ("Unsupported type", 400)
+        except Exception as e:
+            return (f"Failed to load: {e}", 500)
+
+    # Build a “cleaned” version: robust numeric coercion but keep non-numeric columns
+    cleaned = df.copy()
+    try:
+        for col in cleaned.columns:
+            ser = cleaned[col]
+            if pd.api.types.is_numeric_dtype(ser):
+                cleaned[col] = pd.to_numeric(ser, errors='coerce')
+            else:
+                coerced = _try_parse_numeric_series(ser)
+                # Replace only if coercion meaningfully helps
+                if coerced.notna().sum() >= pd.to_numeric(ser, errors='coerce').notna().sum():
+                    cleaned[col] = coerced
+        # Sort by time if datetime index
+        if isinstance(cleaned.index, pd.DatetimeIndex):
+            cleaned = cleaned.sort_index()
+        # Drop fully empty columns after coercion
+        cleaned = cleaned.dropna(axis=1, how='all')
+    except Exception:
+        pass
+
+    csv = cleaned.to_csv(index=True)
+    resp = make_response(csv)
+    resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    display = request.args.get('display') or filename
+    base = os.path.splitext(display)[0]
+    out_name = secure_filename(f"{base}_cleaned.csv")
+    resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
+    return resp
 
 if __name__ == '__main__':
     host = os.getenv("HOST", "127.0.0.1")
