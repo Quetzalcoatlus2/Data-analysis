@@ -29,6 +29,7 @@ import uuid
 import json  # <— add
 import numpy as np  # add
 from statsmodels.tsa.holtwinters import ExponentialSmoothing  # add
+from statsmodels.tsa.seasonal import STL  # <-- add this import
 from collections import OrderedDict  # add
 import re
 import html as htmllib  # add
@@ -381,6 +382,37 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None):
     ax.legend(); ax.grid(True, alpha=0.3)
     buf = io.BytesIO(); fig.savefig(buf, format='png', bbox_inches='tight'); buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8'); plt.close(fig); return img
+
+# ADD: STL decomposition helper (static PNG like other plots)
+def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
+    try:
+        s = normalize_timeseries(series)
+        # guard: need enough points to estimate trend/seasonal cleanly
+        if s is None or len(s) < max(28, seasonal_period * 2):
+            return None
+        res = STL(s.astype(float), period=int(seasonal_period), robust=True).fit()
+
+        fig, axes = plt.subplots(4, 1, figsize=(10, 6), sharex=True)
+        axes[0].plot(s.index, s.values, color='tab:blue', lw=1.6); axes[0].set_ylabel("Observed"); axes[0].grid(True, alpha=0.3)
+        axes[1].plot(res.trend.index, res.trend.values, color='tab:orange', lw=1.6); axes[1].set_ylabel("Trend"); axes[1].grid(True, alpha=0.3)
+        axes[2].plot(res.seasonal.index, res.seasonal.values, color='tab:green', lw=1.6); axes[2].set_ylabel("Seasonal"); axes[2].grid(True, alpha=0.3)
+        axes[3].plot(res.resid.index, res.resid.values, color='tab:red', lw=1.6); axes[3].axhline(0, color='gray', ls=':', lw=1)
+        axes[3].set_ylabel("Residual"); axes[3].grid(True, alpha=0.3)
+        axes[0].set_title(title)
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        img = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close(fig)
+        return img
+    except Exception:
+        try:
+            plt.close(fig)
+        except Exception:
+            pass
+        return None
 
 # ADD: helpers to build a proper future index and a clearer forecast plot
 def _infer_future_index(idx, steps):
@@ -1280,6 +1312,18 @@ def analyze_file(filename):
                         "indices": [str(i) for i in an_idx[:50]]
                     }
 
+            # ----- STL decomposition (static) -----
+            if is_timeseries and len(series) >= 10:
+                try:
+                    s_norm = normalize_timeseries(series)
+                    sp = _infer_seasonal_period(s_norm.index) if isinstance(s_norm.index, pd.DatetimeIndex) else None
+                    if sp:
+                        stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=sp)
+                        if stl_img:
+                            forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
+                except Exception:
+                    pass
+
             # ----- Interactive traces -----
             s_tail = series.tail(PLOTLY_TAIL)
             x_hist = [str(i) for i in s_tail.index]
@@ -1369,10 +1413,26 @@ def analyze_file(filename):
                 except Exception:
                     pass
 
-            # Update layout to include split line and legend group behavior
+            # Update layout to include split line and legend group behavior + range UI
+            xaxis = {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True}
+            if is_timeseries:
+                xaxis.update({
+                    "type": "date",
+                    "rangeslider": {"visible": True},
+                    "rangeselector": {
+                        "buttons": [
+                            {"count": 1, "label": "1m", "step": "month", "stepmode": "backward"},
+                            {"count": 6, "label": "6m", "step": "month", "stepmode": "backward"},
+                            {"step": "year", "stepmode": "todate", "label": "YTD"},
+                            {"count": 1, "label": "1y", "step": "year", "stepmode": "backward"},
+                            {"step": "all", "label": "All"}
+                        ]
+                    }
+                })
+
             layout = {
                 "title": {"text": f"{column} (interactive)", "x": 0.02},
-                "xaxis": {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True},
+                "xaxis": xaxis,
                 "yaxis": {"title": column, "showgrid": True},
                 "shapes": [] if not split_x else [{
                     "type": "line", "xref": "x", "yref": "paper",

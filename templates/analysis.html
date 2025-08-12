@@ -91,14 +91,15 @@
   <script>
     function getThemeColors() {
       const siteTheme = document.documentElement.getAttribute('data-theme') || 'light';
-
       if (siteTheme === 'dark') {
         return {
-          paper: '#111827',   // card
+          paper: '#111827',
           plot:  '#111827',
           text:  '#e5e7eb',
           grid:  '#334155',
-          accent:'#38bdf8'
+          accent:'#38bdf8',
+          // add soft surfaces for controls
+          subtle: '#0b1220'
         };
       } else {
         return {
@@ -106,14 +107,10 @@
           plot:  '#ffffff',
           text:  '#0f172a',
           grid:  '#cbd5e1',
-          accent:'#0ea5e9'
+          accent:'#0ea5e9',
+          subtle: '#f8fafc'
         };
       }
-    }
-
-    function getPalette() {
-      // High-contrast palette that works in both themes
-      return ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#17becf','#e377c2','#8c564b','#bcbd22','#7f7f7f'];
     }
 
     function themedLayout(base) {
@@ -133,24 +130,60 @@
           gridcolor: t.grid, zerolinecolor: t.grid, linecolor: t.grid,
           tickfont: { color: t.text }, title: { font: { color: t.text } }
         },
-        margin: { l: 40, r: 10, t: 40, b: 40 }
+        margin: { l: 40, r: 10, t: 120, b: 80 } // more top room for legend
       }, base || {});
+
+      // Preserve axis titles
       if (base && base.xaxis && base.xaxis.title && base.xaxis.title.text) merged.xaxis.title.text = base.xaxis.title.text;
       if (base && base.yaxis && base.yaxis.title && base.yaxis.title.text) merged.yaxis.title.text = base.yaxis.title.text;
+
+      // Legend ABOVE the plotting area, horizontal
+      merged.legend = Object.assign(
+        { orientation: 'h', bgcolor: t.paper, font: { color: t.text }, x: 0, xanchor: 'left', y: 1.12, yanchor: 'bottom' },
+        merged.legend || {}
+      );
+      merged.margin = Object.assign({ l: 40, r: 10, t: 120, b: 80 }, merged.margin || {});
+      merged.margin.t = Math.max(merged.margin.t, 120);
+
+      // Range selector/slider theming stays
+      merged.xaxis = merged.xaxis || {};
+      merged.xaxis.rangeselector = Object.assign(
+        { bgcolor: t.subtle, activecolor: t.accent, bordercolor: t.grid, font: { color: t.text } },
+        (merged.xaxis.rangeselector || {})
+      );
+      merged.xaxis.rangeslider = Object.assign(
+        { bgcolor: t.paper, bordercolor: t.grid },
+        (merged.xaxis.rangeslider || {})
+      );
+
+      merged.title = Object.assign({ x: 0.02, y: 0.98, font: { color: t.text } }, merged.title || {});
+      if (merged.title.font) merged.title.font.color = t.text;
+
       return merged;
     }
   </script>
 
-  <!-- Replace your renderPlot with this version (adds markers for selection) -->
   <script>
+    // Minimal palette for consistent colors
+    function __palette() {
+      return ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#17becf','#e377c2','#8c564b','#bcbd22','#7f7f7f'];
+    }
+
+    // Define renderPlot so callers below can use it
     function renderPlot(host, traces, layout, config) {
       const el = (typeof host === 'string') ? document.getElementById(host) : host;
-      if (!el) return;
-      const t = getThemeColors();
-      const palette = getPalette();
+      if (!el || !window.Plotly) return Promise.resolve();
+
+      const t = (typeof getThemeColors === 'function') ? getThemeColors() : {
+        paper: '#fff', plot: '#fff', text: '#111', grid: '#ddd', accent: '#0ea5e9'
+      };
+      const palette = __palette();
 
       const titleText = (layout && layout.title && layout.title.text) || el.getAttribute('data-title') || 'Chart';
-      const fileName = `${safeName(DISPLAY_NAME)} - ${safeName(titleText)}`;
+      const fileName = (typeof safeName === 'function')
+        ? `${safeName(DISPLAY_NAME)} - ${safeName(titleText)}`
+        : 'chart';
+
       const baseCfg = {
         displayModeBar: true,
         responsive: true,
@@ -160,33 +193,31 @@
       };
       const cfg = Object.assign({}, baseCfg, config || {});
 
+      // Theme + ensure markers for selection
       const themedTraces = (traces || []).map((tr, i) => {
         const c = JSON.parse(JSON.stringify(tr || {}));
         const nextColor = palette[i % palette.length];
-        if (typeof c.opacity !== 'number') c.opacity = 1;
 
         if (c.type === 'scatter' || !c.type) {
-          // Ensure markers are present so selection tools appear
           if (!c.mode) c.mode = 'lines+markers';
-          else if (c.mode.indexOf('lines') >= 0 && c.mode.indexOf('markers') < 0) c.mode += '+markers';
+          else if (c.mode.includes('lines') && !c.mode.includes('markers')) c.mode += '+markers';
 
-          if (!c.line) c.line = {};
-          if (!c.line.color) c.line.color = (c.name === 'Anomaly') ? '#ef4444' : nextColor;
+          c.line = c.line || {};
+          if (!c.line.color) c.line.color = nextColor;
           c.line.width = Math.max(c.line.width || 2, 2);
 
-          if (!c.marker) c.marker = {};
+          c.marker = c.marker || {};
           if (!c.marker.color) c.marker.color = c.line.color;
           if (c.marker.size == null) c.marker.size = 4;
           if (c.marker.opacity == null) c.marker.opacity = 0.6;
-          if (!c.marker.line) c.marker.line = { width: 0 };
+          c.marker.line = c.marker.line || { width: 0 };
         } else if (c.type === 'bar' || c.type === 'histogram') {
-          if (!c.marker) c.marker = {};
-          if (!c.marker.color) c.marker.color = (i === 0 ? t.accent : nextColor);
-          if (!c.marker.line) c.marker.line = { color: t.grid, width: 0 };
+          c.marker = c.marker || {};
+          if (!c.marker.color) c.marker.color = nextColor;
+          c.marker.line = c.marker.line || { color: t.grid, width: 0 };
           if (typeof c.opacity !== 'number') c.opacity = 0.95;
         } else if (c.type === 'heatmap') {
-          // Heatmaps are not selectable; buttons may be hidden by Plotly
-          if (!c.colorscale) c.colorscale = 'RdBu';
+          c.colorscale = c.colorscale || 'RdBu';
           if (typeof c.zmin === 'undefined') c.zmin = -1;
           if (typeof c.zmax === 'undefined') c.zmax = 1;
           c.showscale = true;
@@ -197,8 +228,12 @@
         return c;
       });
 
-      return Plotly.newPlot(el, themedTraces, themedLayout(layout || {}), cfg);
+      const themed = (typeof themedLayout === 'function') ? themedLayout(layout || {}) : (layout || {});
+      return Plotly.newPlot(el, themedTraces, themed, cfg);
     }
+
+    // Expose globally now that it exists
+    window.renderPlot = renderPlot;
   </script>
 
   <script>
@@ -209,19 +244,31 @@
           paper_bgcolor: t.paper,
           plot_bgcolor: t.plot,
           'font.color': t.text,
+          'legend.bgcolor': t.paper,
+          'legend.font.color': t.text,
+          'legend.x': 0,
+          'legend.xanchor': 'left',
+          'legend.y': 1.12,
+          'legend.yanchor': 'bottom',
+          'margin.t': 120,
           'xaxis.gridcolor': t.grid,
           'xaxis.linecolor': t.grid,
           'xaxis.zerolinecolor': t.grid,
           'xaxis.tickfont.color': t.text,
           'xaxis.title.font.color': t.text,
+          'xaxis.rangeselector.bgcolor': t.subtle,
+          'xaxis.rangeselector.activecolor': t.accent,
+          'xaxis.rangeselector.bordercolor': t.grid,
+          'xaxis.rangeselector.font.color': t.text,
+          'xaxis.rangeslider.bgcolor': t.paper,
+          'xaxis.rangeslider.bordercolor': t.grid,
           'yaxis.gridcolor': t.grid,
           'yaxis.linecolor': t.grid,
           'yaxis.zerolinecolor': t.grid,
           'yaxis.tickfont.color': t.text,
-          'yaxis.title.font.color': t.text,
-          'legend.bgcolor': t.paper,
-          'legend.font.color': t.text
+          'yaxis.title.font.color': t.text
         }).catch(()=>{});
+
         try {
           const data = div.data || [];
           const heatIdx = data.map((tr, i) => tr.type === 'heatmap' ? i : null).filter(i => i !== null);
@@ -234,14 +281,20 @@
         } catch (e) {}
       });
     }
-
     window.renderPlot = renderPlot;
     window.rethemeExistingPlots = rethemeExistingPlots;
   </script>
 
   <!-- Add after your existing style blocks in <head> -->
   <style>
-    .chart { width: 100%; height: 420px; min-height: 320px; }
+    /* Keep toolbars inside charts so they can’t overlap page UI above */
+    .chart { width: 100%; height: 420px; min-height: 320px; position: relative; overflow: hidden; }
+
+    /* Nudge Plotly toolbar fully inside the plot area */
+    .js-plotly-plot .modebar-container { top: 6px !important; right: 6px !important; }
+
+    /* Make topbar stay above plots and remain clickable */
+    .topbar { position: sticky; top: 0; z-index: 1000; background: var(--bg); }
   </style>
 
   <script>
