@@ -251,9 +251,10 @@
   </script>
 
   <!-- put near other scripts in <head> -->
+  <script id="display-name-data" type="application/json">{{ display_name | tojson }}</script>
   <script>
     // Safe display name for filenames
-    const DISPLAY_NAME = {{ display_name | tojson }};
+    const DISPLAY_NAME = JSON.parse(document.getElementById('display-name-data').textContent || '""');
     function safeName(s) {
       return String(s || '')
         .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '')
@@ -343,11 +344,17 @@
     <div class="col card">
       <h3>AI summary</h3>
       <div id="ai-summary">{{ analysis.ai_summary | safe }}</div>
+      <div class="controls" style="margin-top:.5rem;">
+        <button class="btn secondary" type="button" onclick="dlHTML('#ai-summary','AI summary')">Download HTML</button>
+      </div>
     </div>
     {% if analysis.ai_answer %}
     <div class="col card">
       <h3>AI answer</h3>
       <div id="ai-answer">{{ analysis.ai_answer | safe }}</div>
+      <div class="controls" style="margin-top:.5rem;">
+        <button class="btn secondary" type="button" onclick="dlHTML('#ai-answer','AI answer')">Download HTML</button>
+      </div>
     </div>
     {% endif %}
   </div>
@@ -396,7 +403,11 @@
   {% if analysis.missing_values %}
   <div class="card">
     <h3>Missing values</h3>
-    {{ analysis.missing_values | safe }}
+    <div id="missing-table">{{ analysis.missing_values | safe }}</div>
+    <div class="controls" style="margin-top:.5rem;">
+      <button class="btn secondary" type="button" onclick="dlHTML('#missing-table','Missing values')">Download HTML</button>
+      <button class="btn secondary" type="button" onclick="dlCSV('#missing-table','Missing values')">Download CSV</button>
+    </div>
   </div>
   {% endif %}
 
@@ -406,7 +417,10 @@
       {% for p in analysis.plots %}
       <div class="col">
         <h4>{{ p.title }}</h4>
-        <img src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
+        <img id="trend_img_{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
+        <div class="controls" style="margin-top:.5rem;">
+          <button class="btn secondary" type="button" onclick="dlImg('#trend_img_{{ loop.index0 }}','{{ p.title }}')">Download PNG</button>
+        </div>
       </div>
       {% endfor %}
     </div>
@@ -414,7 +428,10 @@
       {% for p in analysis.forecast_plots %}
       <div class="col">
         <h4>{{ p.title }}</h4>
-        <img src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
+        <img id="forecast_img_{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
+        <div class="controls" style="margin-top:.5rem;">
+          <button class="btn secondary" type="button" onclick="dlImg('#forecast_img_{{ loop.index0 }}','{{ p.title }}')">Download PNG</button>
+        </div>
       </div>
       {% endfor %}
     </div>
@@ -557,5 +574,124 @@
       }, { displayModeBar: true, responsive: true });
     }
   </script>
+
+  <div style="margin: 8px 0;">
+    <button id="download-report-btn" type="button" onclick="downloadFullReport()">Download full report (HTML)</button>
+  </div>
+
+  <style>
+/* Ensure colors in print and reasonable margins */
+@page { size: A4; margin: 12mm; }
+@media print {
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print, .modebar-container, .plotly .modebar { display: none !important; }
+  /* Make charts white only in print so they contrast on paper */
+  .js-plotly-plot .plotly .main-svg { background: #ffffff !important; }
+}
+/* REMOVE the next global rule (it made charts look like white blocks on screen) */
+/* .js-plotly-plot .plotly .main-svg { background: #ffffff !important; } */
+</style>
+
+<div style="margin: 8px 0;">
+  <!-- Add alongside your existing HTML report button -->
+  <button id="download-pdf-btn" type="button" class="no-print" onclick="downloadPDF()">Download as PDF</button>
+</div>
+
+<script>
+(function () {
+  window.downloadPDF = function () {
+    try {
+      // Build a nice filename via the document title (browsers use it for Save as PDF)
+      var disp = (window.display_name || '{{ display_name|e }}' || 'report');
+      var base = String(disp).replace(/\.[^.]+$/, '');
+      if (typeof safeName === 'function') base = safeName(base);
+      var prevTitle = document.title;
+      document.title = base + '_report';
+      // Trigger browser print dialog; choose “Save as PDF”
+      window.print();
+      // Restore title after print
+      setTimeout(function(){ document.title = prevTitle; }, 1000);
+    } catch (e) {
+      alert('Print to PDF failed: ' + e);
+    }
+  };
+})();
+</script>
+
+  <script>
+  // Reuse existing helpers if present
+  (function(){
+    window.downloadFullReport = function() {
+      try {
+        var html = '<!doctype html>\n' + document.documentElement.outerHTML;
+        var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        var a = document.createElement('a');
+        var disp = (window.display_name || '{{ display_name|e }}' || 'report');
+        var base = String(disp).replace(/\.[^.]+$/, '');
+        a.download = (typeof safeName === 'function' ? safeName(base) : base) + '_report.html';
+        a.href = URL.createObjectURL(blob);
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      } catch (e) {
+        alert('Failed to build report: ' + e);
+      }
+    };
+  })();
+  </script>
+
+  <!-- JS helpers: place near the bottom, before </body> -->
+  <script>
+    function suggestName(title, ext) {
+      try {
+        const base = (typeof safeName === 'function' ? safeName(DISPLAY_NAME) : (DISPLAY_NAME || 'report'));
+        const part = (typeof safeName === 'function' ? safeName(title) : String(title||'item'));
+        return base + ' - ' + part + '.' + ext;
+      } catch (e) {
+        return 'download.' + ext;
+      }
+    }
+    function downloadBlob(blob, filename) {
+      const a = document.createElement('a');
+      a.download = filename; a.href = URL.createObjectURL(blob);
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+    }
+    function dlHTML(selector, title) {
+      const el = document.querySelector(selector);
+      if (!el) return alert('Element not found: ' + selector);
+      const html = '<!doctype html><html><head><meta charset="utf-8"><title>'+ (title||'snippet') +'</title></head><body>' + el.outerHTML + '</body></html>';
+      downloadBlob(new Blob([html], {type:'text/html;charset=utf-8'}), suggestName(title, 'html'));
+    }
+    function dlCSV(selector, title) {
+      const root = document.querySelector(selector);
+      if (!root) return alert('Table not found: ' + selector);
+      const table = root.tagName === 'TABLE' ? root : root.querySelector('table');
+      if (!table) return alert('No table inside: ' + selector);
+      const rows = Array.from(table.querySelectorAll('tr'));
+      const csv = rows.map(tr => {
+        const cells = Array.from(tr.querySelectorAll('th,td')).map(td => {
+          let v = td.textContent || '';
+          v = v.replace(/\r?\n+/g, ' ').trim();
+          v = '"' + v.replace(/"/g, '""') + '"';
+          return v;
+        });
+        return cells.join(',');
+      }).join('\r\n');
+      downloadBlob(new Blob([csv], {type:'text/csv;charset=utf-8'}), suggestName(title, 'csv'));
+    }
+    function dlImg(selector, title) {
+      const img = document.querySelector(selector);
+      if (!img) return alert('Image not found: ' + selector);
+      const src = img.getAttribute('src');
+      if (!src) return alert('Image has no source');
+      const a = document.createElement('a');
+      a.download = suggestName(title, 'png');
+      a.href = src;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { a.remove(); }, 200);
+    }
+  </script>
+
 </body>
 </html>
