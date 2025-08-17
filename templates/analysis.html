@@ -338,6 +338,10 @@
     }
   </script>
 
+  <!-- NEW: backend endpoint for full-history data (safe to leave even if route not added yet) -->
+  <script id="full-data-endpoint" type="application/json">
+    {{ url_for('full_history_json', filename=filename, display=display_name) | tojson }}
+  </script>
 </head>
 <body>
   <div class="topbar">
@@ -415,6 +419,16 @@
   <div class="card">
     <h3>Interactive charts</h3>
     <div id="charts"></div>
+  </div>
+
+  <!-- NEW: Full-history interactive charts -->
+  <div class="card">
+    <h3>Full-history interactive charts (fast)</h3>
+    <div class="controls">
+      <button id="loadFullBtn" class="btn" type="button">Load full charts</button>
+      <span style="opacity:.8">Uses WebGL + downsampling. Zoom in for more detail.</span>
+    </div>
+    <div id="fullCharts"></div>
   </div>
 
   <div class="card">
@@ -506,6 +520,8 @@
       payload = JSON.parse(document.getElementById('data-payload').textContent);
       columns = JSON.parse(document.getElementById('data-columns').textContent);
       corr = JSON.parse(document.getElementById('data-corr').textContent);
+      // NEW: expose to window for full-history fallback
+      window.payload = payload;
     } catch (e) {
       console.error('Failed to parse interactive payload:', e);
     }
@@ -746,5 +762,201 @@
     }
   </script>
 
+  <script>
+  // Full-history charts: fetch all data, LTTB downsampling, lazy render, zoom refine
+  (function fullHistorySection() {
+    const root = document.getElementById('fullCharts');
+    const btn = document.getElementById('loadFullBtn');
+    if (!root || !btn) return;
+
+    const ENDPOINT = JSON.parse(document.getElementById('full-data-endpoint')?.textContent || 'null');
+    const MAX_POINTS = 1800;  // target points per chart for perf
+    const MIN_POINTS = 600;
+
+    function lowerBound(arr, target) { let lo=0, hi=arr.length; while (lo<hi){const m=(lo+hi)>>>1; if (arr[m]<target) lo=m+1; else hi=m;} return lo; }
+    function upperBound(arr, target) { let lo=0, hi=arr.length; while (lo<hi){const m=(lo+hi)>>>1; if (arr[m]<=target) lo=m+1; else hi=m;} return lo; }
+
+    function lttbMs(xMs, y, threshold) {
+      const n = xMs.length;
+      if (threshold >= n || threshold <= 0) return { xMs, y };
+      const valid = []; for (let i=0;i<n;i++){ if (isFinite(xMs[i]) && isFinite(y[i])) valid.push(i); }
+      const m = valid.length; if (m <= threshold) { const xo=new Array(m), yo=new Array(m); for (let k=0;k<m;k++){const i=valid[k]; xo[k]=xMs[i]; yo[k]=y[i]; } return { xMs: xo, y: yo }; }
+      const sampled = new Array(threshold); sampled[0]=valid[0]; const every=(m-2)/(threshold-2); let a=0;
+      for (let i=0;i<threshold-2;i++){
+        const avgStart = Math.floor((i+1)*every)+1, avgEnd=Math.min(Math.floor((i+2)*every)+1, m), avgLen=Math.max(1, avgEnd-avgStart);
+        let avgX=0, avgY=0; for (let j=avgStart;j<avgEnd;j++){ const idx=valid[j]; avgX+=xMs[idx]; avgY+=y[idx]; } avgX/=avgLen; avgY/=avgLen;
+        const r0=Math.floor(i*every)+1, r1=Math.min(Math.floor((i+1)*every)+1, m); let maxA=-1, nextA=r0; const aIdx=valid[a];
+        for (let j=r0;j<r1;j++){ const idx=valid[j]; const A=Math.abs((xMs[aIdx]-avgX)*(y[idx]-y[aIdx]) - (xMs[idx]-xMs[aIdx])*(avgY-y[aIdx])); if (A>maxA){maxA=A; nextA=j;} }
+        a=nextA; sampled[i+1]=valid[a];
+      }
+      sampled[threshold-1]=valid[m-1];
+      const outX=new Array(threshold), outY=new Array(threshold); for (let i=0;i<threshold;i++){ const idx=sampled[i]; outX[i]=xMs[idx]; outY[i]=y[idx]; }
+      return { xMs: outX, y: outY };
+    }
+
+    const toDateArray = msArr => msArr.map(ms => new Date(ms));
+    const makeFullTrace = ds => ({ type: 'scattergl', mode: 'lines', name: 'Full history', x: toDateArray(ds.xMs), y: ds.y, line: { width: 1.6 }, hovertemplate: '%{x}<br>%{y}<extra></extra>' });
+
+    function themedBaseLayout(title, yTitle) {
+      const base = themedLayout({
+        title: { text: title, x: 0.02 },
+        xaxis: { title: 'Timestamp', type: 'date' },
+        yaxis: { title: yTitle || title, showgrid: true },
+        legend: { orientation: 'h' },
+        margin: { l: 40, r: 10, t: 80, b: 60 },
+        hovermode: 'x unified'
+      });
+      base.legend = Object.assign({}, base.legend, { y: 1.05, yanchor: 'bottom' });
+      return base;
+    }
+
+    function decimateForRange(series, xrangeMs) {
+      const xMs = series.xMs, y = series.y;
+      let start=0, end=xMs.length;
+      if (xrangeMs) { const [x0,x1]=xrangeMs; start=lowerBound(xMs,x0); end=upperBound(xMs,x1); }
+      const len = Math.max(0, end - start);
+      const target = Math.min(MAX_POINTS, Math.max(MIN_POINTS, Math.floor((window.innerWidth || 1200) * 1.25)));
+      if (len <= target) return { xMs: xMs.slice(start, end), y: y.slice(start, end) };
+      return lttbMs(xMs.slice(start, end), y.slice(start, end), target);
+    }
+
+    function renderOne(el, series, title, yTitle) {
+      const ds = decimateForRange(series, null);
+      el.setAttribute('data-title', title);
+      let rafToken = null;
+
+      return renderPlot(el, [makeFullTrace(ds)], themedBaseLayout(title, yTitle), {
+        displayModeBar: true, responsive: true, scrollZoom: true,
+        toImageButtonOptions: { filename: (typeof safeName==='function' ? `${safeName(DISPLAY_NAME)} - ${safeName(title)}` : 'full-history') }
+      }).then(() => {
+        registerForSync(el);
+        el.on?.('plotly_relayout', ev => {
+          const x0 = ev && (ev['xaxis.range[0]'] || ev['xaxis']?.range?.[0]);
+          const x1 = ev && (ev['xaxis.range[1]'] || ev['xaxis']?.range?.[1]);
+          if (!x0 || !x1) return;
+          const x0ms = (x0 instanceof Date) ? x0.getTime() : new Date(x0).getTime();
+          const x1ms = (x1 instanceof Date) ? x1.getTime() : new Date(x1).getTime();
+          if (!isFinite(x0ms) || !isFinite(x1ms)) return;
+
+          if (rafToken) cancelAnimationFrame(rafToken);
+          rafToken = requestAnimationFrame(() => {
+            const ds2 = decimateForRange(series, [x0ms, x1ms]);
+            Plotly.restyle(el, { x: [toDateArray(ds2.xMs)], y: [ds2.y] }, [0]).catch(()=>{});
+            rafToken = null;
+          });
+        });
+      });
+    }
+
+    function buildPlaceholders(fullSeries) {
+      root.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      fullSeries.forEach((s, idx) => {
+        const host = document.createElement('div');
+        host.className = 'chart';
+        host.id = 'full_' + idx;
+        host.style.minHeight = '320px';
+        host.__series = s; // keep full series for zoom refinement
+        frag.appendChild(host);
+      });
+      root.appendChild(frag);
+    }
+
+    function setupVirtualizedRender() {
+      const io = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          const el = entry.target;
+          if (entry.isIntersecting && !el.__rendered && el.__series) {
+            el.__rendered = true;
+            const col = el.__series.column || 'Series';
+            renderOne(el, el.__series, 'Full history – ' + col, col).catch(e => console.error('Full chart render error', e));
+          }
+        });
+      }, { root: null, rootMargin: '200px 0px', threshold: 0 });
+
+      document.querySelectorAll('#fullCharts .chart').forEach(el => io.observe(el));
+
+      // Render first two immediately for a quick preview
+      Array.from(document.querySelectorAll('#fullCharts .chart')).slice(0, 2).forEach(el => {
+        if (el.__series && !el.__rendered) {
+          el.__rendered = true;
+          const col = el.__series.column || 'Series';
+          renderOne(el, el.__series, 'Full history – ' + col, col).catch(e => console.error('Full chart render error', e));
+        }
+      });
+    }
+
+    async function fetchFullSeries() {
+      if (!ENDPOINT) return null;
+      const res = await fetch(ENDPOINT, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Full history fetch failed: ' + res.status);
+      const json = await res.json();
+      // Expected: { series: [ { column: 'col', x_ms: [..], y: [..] }, ... ] }
+      const out = [];
+      const arr = Array.isArray(json.series) ? json.series : [];
+      for (const s of arr) {
+        const xMs = Array.isArray(s.x_ms) ? s.x_ms : [];
+        const y = Array.isArray(s.y) ? s.y : [];
+        if (xMs.length && y.length && xMs.length === y.length) {
+          out.push({ column: s.column || 'Series', xMs, y });
+        }
+      }
+      return out;
+    }
+
+    function fallbackFromInteractive() {
+      try {
+        const txt = document.getElementById('data-payload')?.textContent || '[]';
+        const items = JSON.parse(txt);
+        const derived = [];
+        items.forEach(it => {
+          const tr = (it.traces || [])[0];
+          if (!tr || !Array.isArray(tr.x) || !Array.isArray(tr.y)) return;
+          const xMs = tr.x.map(v => (v instanceof Date) ? v.getTime() : new Date(v).getTime());
+          const y = tr.y.slice();
+          const good = [];
+          for (let i=0;i<xMs.length;i++){ if (isFinite(xMs[i]) && isFinite(y[i])) good.push(i); }
+          if (good.length) {
+            derived.push({
+              column: it.column || it.title || 'Series',
+              xMs: good.map(i => xMs[i]),
+              y: good.map(i => y[i])
+            });
+          }
+        });
+        return derived;
+      } catch {
+        return [];
+      }
+    }
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const prev = btn.textContent;
+      btn.textContent = 'Loading...';
+      try {
+        let fullSeries = await fetchFullSeries();
+        if (!fullSeries || !fullSeries.length) {
+          console.warn('Full endpoint unavailable or empty; falling back to interactive payload (likely truncated).');
+          fullSeries = fallbackFromInteractive();
+        }
+        if (!fullSeries.length) {
+          btn.textContent = 'No data';
+          return;
+        }
+        buildPlaceholders(fullSeries);
+        setupVirtualizedRender();
+        btn.textContent = 'Loaded';
+      } catch (e) {
+        console.error(e);
+        btn.textContent = 'Failed';
+        btn.disabled = false;
+        alert('Could not load full charts: ' + e.message);
+      } finally {
+        setTimeout(() => { if (btn.textContent==='Loaded') btn.disabled = false; }, 1000);
+      }
+    });
+  })();
+  </script>
 </body>
 </html>

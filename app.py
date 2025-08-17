@@ -1,7 +1,7 @@
 import os
 import io
 import base64
-from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response
+from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
 
 from datetime import datetime, timedelta
 import pandas as pd
@@ -351,7 +351,7 @@ def get_ai_answer_with_file(df, question, file_asset=None):
     df_description = df.describe().to_string()
     prompt = f"""
     You are a helpful data analyst. Answer as an HTML snippet (no <html>/<body>).
-    Use <h4>, <p>, <ul><li>, <strong>. No Markdown.
+    Use <h4>, <p>, <ul><li>, and <strong>. No Markdown.
 
     Context:
     Data Summary:
@@ -1000,7 +1000,7 @@ def read_excel_smart(path: str):
                     df2 = df2.dropna(how='all').dropna(axis=1, how='all')
                     if df2 is not None and df2.shape[1] > 0:
                         header_row = df2.index[df2.notna().any(axis=1)][0] if not df2.empty else 0
-                        df2.columns = df2.iloc[header_row]
+                        df2.columns = df2.iloc[df2.index[df2.notna().any(axis=1)][0]]
                         df2 = df2.drop(df2.index[:header_row + 1])
                         df2 = df2.loc[:, ~df2.columns.isna()]
                         for cand in ['timestamp', 'date', 'time']:
@@ -1598,8 +1598,170 @@ def download_cleaned_csv(filename):
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
     return resp
 
-if __name__ == '__main__':
+def get_dataframe_for(filename: str):
+    """
+    Load the full DataFrame for a hashed upload filename.
+    Reuses DATAFRAME_CACHE and the same read_* heuristics as analyze_file.
+    Returns None if the file is missing or unsupported.
+    """
+    if not filename:
+        return None
+
+    # Only allow app-managed hashed uploads for safety
+    try:
+        if not HASHED_UPLOAD_RE.match(filename):
+            # If you also want to allow non-hashed files in UPLOADS_DIR, remove this guard.
+            return None
+    except Exception:
+        # If regex not defined yet at import time, we still try a best-effort read.
+        pass
+
+    path = os.path.join(app.config.get('UPLOADS_DIR', UPLOAD_FOLDER), filename)
+    # Use cache first
+    df = DATAFRAME_CACHE.get(filename)
+    if df is not None:
+        return df
+
+    if not os.path.exists(path):
+        return None
+
+    try:
+        if filename.lower().endswith('.csv'):
+            df = read_csv_fallback(path, index_col=0, parse_dates=True)
+        elif filename.lower().endswith('.xlsx'):
+            df = read_excel_smart(path)
+        elif filename.lower().endswith('.json'):
+            df = read_json_fallback(path)
+            # Best-effort: set index to a time-like column if present
+            for col in ('timestamp', 'date', 'time'):
+                if col in df.columns:
+                    try:
+                        dt = pd.to_datetime(df[col], errors='coerce')
+                        if dt.notna().any():
+                            df = df.set_index(dt)
+                            break
+                    except Exception:
+                        pass
+        elif filename.lower().endswith('.txt'):
+            df = read_csv_fallback(path, sep=',', index_col=0, parse_dates=True)
+        else:
+            return None
+
+        # Cache for later use
+        DATAFRAME_CACHE.set(filename, df)
+        return df
+    except Exception as e:
+        app.logger.exception("get_dataframe_for failed for %s: %s", filename, e)
+        return None
+
+@app.route('/full_history_json')
+def full_history_json():
+    filename = request.args.get('filename')
+    display = request.args.get('display')  # unused but kept for parity with UI
+
+    df = get_dataframe_for(filename)
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        return jsonify(series=[])
+
+    # Normalize index and columns
+    try:
+        # If index is datetime, prefer it as the time axis
+        if isinstance(df.index, pd.DatetimeIndex):
+            # Convert to epoch ms safely
+            # .asi8 gives ns; scale down to ms and cast to Python int
+            x_ms = (df.index.asi8 // 10**6).astype('int64').tolist()
+            time_col = None
+        else:
+            time_col = None
+            # Look for an actual datetime-typed column first
+            for c in df.columns:
+                try:
+                    if pd.api.types.is_datetime64_any_dtype(df[c]):
+                        time_col = c
+                        break
+                except Exception:
+                    pass
+            # If none, search by name and try to parse
+            if time_col is None:
+                for c in df.columns:
+                    cn = str(c).lower()
+                    if 'time' in cn or 'date' in cn or 'stamp' in cn:
+                        try:
+                            dt = pd.to_datetime(df[c], errors='coerce')
+                            if dt.notna().any():
+                                df = df.copy()
+                                df[c] = dt
+                                time_col = c
+                                break
+                        except Exception:
+                            pass
+
+            if time_col is None:
+                # Fallback: synthetic ms from row index (monotonic increasing)
+                x_ms = (pd.RangeIndex(len(df)).to_series() * 1000).astype('int64').tolist()
+            else:
+                # Convert column to epoch ms; coerce errors so we can mask later
+                dt = pd.to_datetime(df[time_col], errors='coerce')
+                # Use values in ms to avoid overflow/NaT casting issues
+                x_ms = (dt.values.astype('datetime64[ms]').astype('int64')).tolist()
+
+        # Prepare numeric series
+        series = []
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        # If a datetime column was found, ensure we don't treat it as numeric
+        if 'time_col' in locals() and time_col in numeric_cols:
+            numeric_cols = [c for c in numeric_cols if c != time_col]
+
+        for col in numeric_cols:
+            try:
+                y_raw = pd.to_numeric(df[col], errors='coerce').astype(float).replace([np.inf, -np.inf], np.nan)
+                xs, ys = [], []
+                # Align and drop NaNs in either axis
+                for xm, yv in zip(x_ms, y_raw.tolist()):
+                    if xm is None or pd.isna(xm) or pd.isna(yv):
+                        continue
+                    xs.append(int(xm))
+                    ys.append(float(yv))
+                if xs and ys:
+                    series.append({'column': col, 'x_ms': xs, 'y': ys})
+            except Exception:
+                continue
+
+        return jsonify(series=series)
+    except Exception as e:
+        app.logger.exception("full_history_json failed: %s", e)
+        return jsonify(series=[]), 500
+
+if __name__ == "__main__":
+    # Read basic server config from env (with safe defaults)
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "5000"))
-    app.logger.info(f"Starting server on http://{host}:{port}")
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on")
+
+    # Optional: enable security headers only when explicitly requested
+    if Talisman and str(os.getenv("USE_TALISMAN", "0")).strip().lower() in ("1", "true", "yes", "on"):
+        try:
+            # Allow inline scripts and data: images so Plotly and your UI work in dev
+            default_csp = {
+                "default-src": ["'self'", "https:", "http:"],
+                "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
+                "style-src": ["'self'", "'unsafe-inline'", "https:", "http:"],
+                "img-src": ["'self'", "data:", "https:", "http:"],
+                "connect-src": ["'self'", "https:", "http:"],
+            }
+            Talisman(app, content_security_policy=default_csp)
+            app.logger.info("Talisman enabled.")
+        except Exception as e:
+            app.logger.warning("Talisman init failed: %s", e)
+
+    # Optional: basic rate limiting if configured
+    if Limiter and os.getenv("RATE_LIMIT"):
+        try:
+            limiter = Limiter(get_remote_address, app=app, default_limits=[os.getenv("RATE_LIMIT")])
+            app.logger.info("Rate limiting enabled: %s", os.getenv("RATE_LIMIT"))
+        except Exception as e:
+            app.logger.warning("Limiter init failed: %s", e)
+
+    app.logger.info("Starting Flask server on %s:%s (debug=%s)", host, port, debug)
+    # threaded=True plays nicer on Windows; use_reloader obeys debug
+    app.run(host=host, port=port, debug=debug, threaded=True)
