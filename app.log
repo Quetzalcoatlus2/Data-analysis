@@ -1002,3 +1002,173 @@ NameError: name 'get_dataframe_for' is not defined
 2025-08-17 14:05:44,899 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:05:44] "POST / HTTP/1.1" 302 -
 2025-08-17 14:07:30,725 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:07:30] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
 2025-08-17 14:07:58,993 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:07:58] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-17 14:28:31,132 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-17 14:28:38,159 INFO werkzeug:  * Restarting with stat
+2025-08-17 14:28:51,933 INFO app: Attempting to configure AI...
+2025-08-17 14:28:51,934 INFO app: AI configured successfully.
+2025-08-17 14:28:51,940 INFO app: Talisman enabled.
+2025-08-17 14:28:51,942 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 14:28:51,944 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 14:28:51,994 WARNING werkzeug:  * Debugger is active!
+2025-08-17 14:28:52,012 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 14:36:05,285 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-17 14:36:06,217 INFO werkzeug:  * Restarting with stat
+2025-08-17 14:36:14,399 INFO app: Attempting to configure AI...
+2025-08-17 14:36:14,400 INFO app: AI configured successfully.
+2025-08-17 14:36:14,407 INFO app: Talisman enabled.
+2025-08-17 14:36:14,409 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 14:36:14,409 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 14:36:14,439 WARNING werkzeug:  * Debugger is active!
+2025-08-17 14:36:14,444 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 14:41:06,833 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:41:06] "GET / HTTP/1.1" 200 -
+2025-08-17 14:41:29,178 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:41:29] "POST / HTTP/1.1" 302 -
+2025-08-17 14:42:54,032 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:42:54] "POST / HTTP/1.1" 302 -
+2025-08-17 14:43:09,756 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:43:09] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-17 14:43:24,803 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:43:24] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-17 14:43:52,567 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:43:52] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-17 14:49:03,277 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:49:03] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-17 14:49:07,269 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 14:49:07] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-17 15:01:06,606 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-17 15:01:14,567 INFO werkzeug:  * Restarting with stat
+2025-08-17 15:01:27,384 INFO app: Attempting to configure AI...
+2025-08-17 15:01:27,385 INFO app: AI configured successfully.
+2025-08-17 15:01:27,391 INFO app: Talisman enabled.
+2025-08-17 15:01:27,393 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 15:01:27,395 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 15:01:27,428 WARNING werkzeug:  * Debugger is active!
+2025-08-17 15:01:27,441 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 15:02:27,501 INFO app: Attempting to configure AI...
+2025-08-17 15:02:27,502 INFO app: AI configured successfully.
+2025-08-17 15:02:27,512 INFO app: Talisman enabled.
+2025-08-17 15:02:27,516 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 15:02:27,517 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 15:02:27,647 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-17 15:02:27,648 INFO werkzeug: Press CTRL+C to quit
+2025-08-17 15:02:27,653 INFO werkzeug:  * Restarting with stat
+2025-08-17 15:02:40,365 INFO app: Attempting to configure AI...
+2025-08-17 15:02:40,366 INFO app: AI configured successfully.
+2025-08-17 15:02:40,372 INFO app: Talisman enabled.
+2025-08-17 15:02:40,376 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 15:02:40,377 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 15:02:40,417 WARNING werkzeug:  * Debugger is active!
+2025-08-17 15:02:40,428 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 15:22:20,817 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:22:20] "GET / HTTP/1.1" 200 -
+2025-08-17 15:22:35,866 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:22:35] "POST / HTTP/1.1" 302 -
+2025-08-17 15:24:13,729 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:24:13] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-17 15:25:45,210 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:25:45] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv&max_points=3742 HTTP/1.1" 200 -
+2025-08-17 15:55:58,070 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-17 15:56:05,466 INFO werkzeug:  * Restarting with stat
+2025-08-17 15:56:23,386 INFO app: Attempting to configure AI...
+2025-08-17 15:56:23,388 INFO app: AI configured successfully.
+2025-08-17 15:56:23,404 INFO app: Talisman enabled.
+2025-08-17 15:56:23,411 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 15:56:23,415 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 15:56:23,565 WARNING werkzeug:  * Debugger is active!
+2025-08-17 15:56:23,605 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 15:56:23,901 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:56:23] "GET / HTTP/1.1" 200 -
+2025-08-17 15:56:40,956 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:56:40] "POST / HTTP/1.1" 302 -
+2025-08-17 15:56:50,530 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:56:50] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-17 15:56:50,650 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:56:50] "GET / HTTP/1.1" 200 -
+2025-08-17 15:57:43,992 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:57:43] "POST / HTTP/1.1" 302 -
+2025-08-17 15:57:53,972 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:57:53] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-17 15:57:53,993 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:57:53] "GET / HTTP/1.1" 200 -
+2025-08-17 15:59:12,252 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:59:12] "POST / HTTP/1.1" 302 -
+2025-08-17 15:59:20,402 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:59:20] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-17 15:59:20,417 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 15:59:20] "GET / HTTP/1.1" 200 -
+2025-08-17 16:05:20,772 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-17 16:05:26,236 INFO werkzeug:  * Restarting with stat
+2025-08-17 16:05:43,272 INFO app: Attempting to configure AI...
+2025-08-17 16:05:43,273 INFO app: AI configured successfully.
+2025-08-17 16:05:43,279 INFO app: Talisman enabled.
+2025-08-17 16:05:43,283 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 16:05:43,285 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 16:05:43,353 WARNING werkzeug:  * Debugger is active!
+2025-08-17 16:05:43,374 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 16:07:33,667 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:07:33] "POST / HTTP/1.1" 302 -
+2025-08-17 16:09:36,908 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:09:36] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-17 16:11:29,404 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:11:29] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv&max_points=3742 HTTP/1.1" 200 -
+2025-08-17 16:36:32,619 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-17 16:36:43,899 INFO werkzeug:  * Restarting with stat
+2025-08-17 16:37:02,450 INFO app: Attempting to configure AI...
+2025-08-17 16:37:02,451 INFO app: AI configured successfully.
+2025-08-17 16:37:02,465 INFO app: Talisman enabled.
+2025-08-17 16:37:02,469 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 16:37:02,471 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 16:37:02,532 WARNING werkzeug:  * Debugger is active!
+2025-08-17 16:37:02,556 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 16:38:37,351 INFO app: Attempting to configure AI...
+2025-08-17 16:38:37,352 INFO app: AI configured successfully.
+2025-08-17 16:38:37,360 INFO app: Talisman enabled.
+2025-08-17 16:38:37,366 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 16:38:37,368 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 16:38:37,485 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-17 16:38:37,486 INFO werkzeug: Press CTRL+C to quit
+2025-08-17 16:38:37,491 INFO werkzeug:  * Restarting with stat
+2025-08-17 16:38:45,954 INFO app: Attempting to configure AI...
+2025-08-17 16:38:45,955 INFO app: AI configured successfully.
+2025-08-17 16:38:45,962 INFO app: Talisman enabled.
+2025-08-17 16:38:45,965 INFO app: Rate limiting enabled: 120/hour
+2025-08-17 16:38:45,967 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-17 16:38:46,011 WARNING werkzeug:  * Debugger is active!
+2025-08-17 16:38:46,027 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-17 16:40:36,057 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:40:36] "GET / HTTP/1.1" 200 -
+2025-08-17 16:41:02,738 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:41:02] "POST / HTTP/1.1" 302 -
+2025-08-17 16:43:49,239 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:43:49] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-17 16:47:32,341 ERROR app: full_history_json failed: name 'x_vals' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 1811, in full_history_json
+    if (max_points is not None) and len(x_vals) > max_points:
+                                        ^^^^^^
+NameError: name 'x_vals' is not defined
+2025-08-17 16:47:32,370 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:47:32] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv&max_points=3824 HTTP/1.1" 500 -
+2025-08-17 16:47:36,889 ERROR app: full_history_json failed: name 'x_vals' is not defined
+Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 1811, in full_history_json
+    if (max_points is not None) and len(x_vals) > max_points:
+                                        ^^^^^^
+NameError: name 'x_vals' is not defined
+2025-08-17 16:47:36,894 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:47:36] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv&max_points=3824 HTTP/1.1" 500 -
+2025-08-17 16:47:46,881 INFO werkzeug: 127.0.0.1 - - [17/Aug/2025 16:47:46] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-17 16:52:59,683 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-17 16:53:07,305 INFO werkzeug:  * Restarting with stat
+2025-08-17 16:53:24,000 INFO app: Attempting to configure AI...
+2025-08-17 16:53:24,001 INFO app: AI configured successfully.
+2025-08-21 09:21:40,298 INFO app: Attempting to configure AI...
+2025-08-21 09:21:40,299 INFO app: AI configured successfully.
+2025-08-21 09:24:34,882 INFO app: Attempting to configure AI...
+2025-08-21 09:24:34,883 INFO app: AI configured successfully.
+2025-08-21 09:35:29,270 INFO app: Attempting to configure AI...
+2025-08-21 09:35:29,277 INFO app: AI configured successfully.
+2025-08-21 10:06:38,258 INFO app: Attempting to configure AI...
+2025-08-21 10:06:38,262 INFO app: AI configured successfully.
+2025-08-21 10:12:19,607 INFO app: Attempting to configure AI...
+2025-08-21 10:12:19,609 INFO app: AI configured successfully.
+2025-08-21 10:40:50,832 INFO app: Attempting to configure AI...
+2025-08-21 10:40:50,834 INFO app: AI configured successfully.
+2025-08-21 10:41:08,014 INFO app: Attempting to configure AI...
+2025-08-21 10:41:08,015 INFO app: AI configured successfully.
+2025-08-21 10:44:11,717 INFO app: Attempting to configure AI...
+2025-08-21 10:44:11,719 INFO app: AI configured successfully.
+2025-08-21 10:53:08,188 INFO app: Attempting to configure AI...
+2025-08-21 10:53:08,191 INFO app: AI configured successfully.
+2025-08-21 10:53:08,198 INFO app: Talisman enabled.
+2025-08-21 10:53:08,201 INFO app: Rate limiting enabled: 120/hour
+2025-08-21 10:53:08,202 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 10:53:08,312 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 10:53:08,313 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 10:53:08,317 INFO werkzeug:  * Restarting with stat
+2025-08-21 10:53:19,955 INFO app: Attempting to configure AI...
+2025-08-21 10:53:19,957 INFO app: AI configured successfully.
+2025-08-21 10:53:19,971 INFO app: Talisman enabled.
+2025-08-21 10:53:19,979 INFO app: Rate limiting enabled: 120/hour
+2025-08-21 10:53:19,980 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 10:53:20,021 WARNING werkzeug:  * Debugger is active!
+2025-08-21 10:53:20,102 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 10:53:20,687 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 10:53:20] "GET / HTTP/1.1" 200 -
+2025-08-21 10:53:23,197 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 10:53:23] "GET /favicon.ico HTTP/1.1" 404 -
+2025-08-21 10:55:18,491 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 10:55:18] "POST / HTTP/1.1" 302 -
+2025-08-21 10:57:34,015 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 10:57:34] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 11:00:18,785 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 11:00:18] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv&max_points=3824 HTTP/1.1" 200 -

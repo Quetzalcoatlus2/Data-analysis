@@ -1521,17 +1521,12 @@ def analyze_file(filename):
             and os.path.exists(filepath)
         ):
             @after_this_request
-            def _delete_hashed_file(response):
+            def _delete_hashed_upload(response):
                 try:
-                    # delete only on success to avoid "lost file on failure"
-                    if 200 <= response.status_code < 300:
-                        ok = _safe_delete(filepath)
-                        if not ok:
-                            app.logger.info("Deferred deletion skipped (could not delete): %s", filepath)
-                    else:
-                        app.logger.info("Deferred deletion skipped due to non-2xx response: %s", response.status_code)
+                    _safe_delete(filepath)
+                    app.logger.info("Deferred delete of %s done", filepath)
                 except Exception as e:
-                    app.logger.warning("Deferred deletion error: %s", e)
+                    app.logger.warning("Deferred delete of %s failed: %s", filepath, e)
                 return response
 
         return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
@@ -1654,83 +1649,194 @@ def get_dataframe_for(filename: str):
         app.logger.exception("get_dataframe_for failed for %s: %s", filename, e)
         return None
 
+# After DATAFRAME_CACHE, add a small cache for prepped series
+SERIES_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'] * 3)
+
+def _lttb_downsample(x, y, threshold: int):
+    """
+    Largest-Triangle-Three-Buckets downsampling.
+    Returns (x_ds, y_ds) lists. Keeps first and last points.
+    """
+    n = len(x)
+    if n <= 2 or threshold >= n or threshold < 3:
+        return x, y
+
+    x_arr = np.asarray(x, dtype=np.float64)
+    y_arr = np.asarray(y, dtype=np.float64)
+
+    bucket_size = (n - 2) / (threshold - 2)
+    a = 0
+    x_ds = [x_arr[0]]
+    y_ds = [y_arr[0]]
+
+    for i in range(0, threshold - 2):
+        # Current bucket range
+        start = int(np.floor((i + 1) * bucket_size)) + 1
+        end = int(np.floor((i + 2) * bucket_size)) + 1
+        end = min(end, n - 1)
+        if start >= end:
+            start = max(1, start - 1)
+
+        # Next bucket average
+        avg_start = int(np.floor((i + 2) * bucket_size)) + 1
+        avg_end = int(np.floor((i + 3) * bucket_size)) + 1
+        avg_start = min(max(avg_start, start), n - 1)
+        avg_end = min(max(avg_end, avg_start + 1), n)
+        if avg_start < avg_end:
+            avg_x = float(np.mean(x_arr[avg_start:avg_end]))
+            avg_y = float(np.mean(y_arr[avg_start:avg_end]))
+        else:
+            avg_x = float(x_arr[avg_start - 1])
+            avg_y = float(y_arr[avg_start - 1])
+
+        # Pick point with largest triangle area
+        ax = x_arr[a]; ay = y_arr[a]
+        sel = start
+        max_area = -1.0
+        for idx in range(start, end):
+            area = abs((ax - avg_x) * (y_arr[idx] - ay) - (ax - x_arr[idx]) * (avg_y - ay))
+            if area > max_area:
+                max_area = area
+                sel = idx
+
+        x_ds.append(x_arr[sel])
+        y_ds.append(y_arr[sel])
+        a = sel
+
+    # Include last point
+    x_ds.append(x_arr[-1])
+    y_ds.append(y_arr[-1])
+
+    # Cast x back: prefer ints when close, to keep epoch-ms precise
+    out_x = []
+    for v in x_ds:
+        iv = int(round(float(v)))
+        out_x.append(iv if abs(iv - float(v)) < 1e-9 else float(v))
+    out_y = [float(v) for v in y_ds]
+    return out_x, out_y
+
+
 @app.route('/full_history_json')
 def full_history_json():
     filename = request.args.get('filename')
-    display = request.args.get('display')  # unused but kept for parity with UI
+    display = request.args.get('display')  # kept for parity with UI
+
+    # Allow disabling downsampling with 'all' (or 0/-1/none/false/"")
+    raw_mp = (request.args.get('max_points') or os.getenv("FULL_HISTORY_MAX_POINTS", "6000")).strip().lower()
+    if raw_mp in ("all", "0", "-1", "none", "false", ""):
+        max_points = None  # no downsampling
+    else:
+        try:
+            max_points = int(raw_mp)
+        except Exception:
+            max_points = 6000
+        max_points = max(500, min(20000, max_points))  # clamp when active
 
     df = get_dataframe_for(filename)
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         return jsonify(series=[])
 
-    # Normalize index and columns
     try:
-        # If index is datetime, prefer it as the time axis
-        if isinstance(df.index, pd.DatetimeIndex):
-            # Convert to epoch ms safely
-            # .asi8 gives ns; scale down to ms and cast to Python int
-            x_ms = (df.index.asi8 // 10**6).astype('int64').tolist()
-            time_col = None
-        else:
-            time_col = None
-            # Look for an actual datetime-typed column first
-            for c in df.columns:
+        # Base x-axis determination
+        is_dt_index = isinstance(df.index, pd.DatetimeIndex)
+        x_base = None
+        time_col = None
+        time_ms = None  # pandas Series of epoch-ms if time-like column used
+
+        if is_dt_index:
+            idx = df.index
+            try:
+                if idx.tz is not None:
+                    idx = idx.tz_convert("UTC").tz_localize(None)
+            except Exception:
                 try:
-                    if pd.api.types.is_datetime64_any_dtype(df[c]):
-                        time_col = c
-                        break
+                    idx = idx.tz_localize(None)
                 except Exception:
                     pass
-            # If none, search by name and try to parse
-            if time_col is None:
-                for c in df.columns:
-                    cn = str(c).lower()
-                    if 'time' in cn or 'date' in cn or 'stamp' in cn:
+            time_ms = (idx.astype("int64") // 10**6)  # ns -> ms
+            x_base = time_ms.tolist()
+        else:
+            # Try common time-like columns
+            for cand in ("timestamp", "datetime", "date", "time"):
+                if cand in df.columns:
+                    try:
+                        parsed = pd.to_datetime(df[cand], errors="coerce", utc=True)
+                        parsed = parsed.dt.tz_convert("UTC").dt.tz_localize(None)
+                    except Exception:
+                        parsed = pd.to_datetime(df[cand], errors="coerce")
                         try:
-                            dt = pd.to_datetime(df[c], errors='coerce')
-                            if dt.notna().any():
-                                df = df.copy()
-                                df[c] = dt
-                                time_col = c
-                                break
+                            parsed = parsed.dt.tz_localize(None)
                         except Exception:
                             pass
+                    if parsed.notna().any():
+                        time_col = cand
+                        time_ms = (parsed.astype("int64") // 10**6)
+                        break
+            if time_ms is None:
+                # fallback: positional index
+                x_base = list(range(len(df)))
 
-            if time_col is None:
-                # Fallback: synthetic ms from row index (monotonic increasing)
-                x_ms = (pd.RangeIndex(len(df)).to_series() * 1000).astype('int64').tolist()
-            else:
-                # Convert column to epoch ms; coerce errors so we can mask later
-                dt = pd.to_datetime(df[time_col], errors='coerce')
-                # Use values in ms to avoid overflow/NaT casting issues
-                x_ms = (dt.values.astype('datetime64[ms]').astype('int64')).tolist()
-
-        # Prepare numeric series
-        series = []
+        # Numeric columns only, drop the time column if numeric
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        # If a datetime column was found, ensure we don't treat it as numeric
-        if 'time_col' in locals() and time_col in numeric_cols:
+        if time_col in (numeric_cols or []):
             numeric_cols = [c for c in numeric_cols if c != time_col]
 
+        # If none detected, try to coerce object columns that look numeric
+        if not numeric_cols:
+            for c in df.columns:
+                if c == time_col:
+                    continue
+                try:
+                    test = pd.to_numeric(df[c], errors="coerce")
+                    if test.notna().sum() >= 2:
+                        numeric_cols.append(c)
+                except Exception:
+                    continue
+
+        series = []
         for col in numeric_cols:
-            try:
-                y_raw = pd.to_numeric(df[col], errors='coerce').astype(float).replace([np.inf, -np.inf], np.nan)
-                xs, ys = [], []
-                # Align and drop NaNs in either axis
-                for xm, yv in zip(x_ms, y_raw.tolist()):
-                    if xm is None or pd.isna(xm) or pd.isna(yv):
-                        continue
-                    xs.append(int(xm))
-                    ys.append(float(yv))
-                if xs and ys:
-                    series.append({'column': col, 'x_ms': xs, 'y': ys})
-            except Exception:
-                continue
+            y_raw = pd.to_numeric(df[col], errors="coerce")
+
+            if is_dt_index:
+                mask = y_raw.notna()
+                if not mask.any():
+                    continue
+                idxs = np.flatnonzero(mask.values)
+                x_vals = [x_base[i] for i in idxs]
+                y_vals = y_raw.iloc[idxs].astype(float).tolist()
+            elif time_ms is not None:
+                mask = y_raw.notna() & time_ms.notna()
+                if not mask.any():
+                    continue
+                tm = time_ms[mask].astype("int64").tolist()
+                x_vals = tm
+                y_vals = y_raw[mask].astype(float).tolist()
+            else:
+                mask = y_raw.notna()
+                if not mask.any():
+                    continue
+                idxs = list(np.flatnonzero(mask.values))
+                x_vals = idxs
+                y_vals = y_raw.iloc[idxs].astype(float).tolist()
+
+            # Apply LTTB only if enabled and necessary
+            if (max_points is not None) and len(x_vals) > max_points:
+                x_use, y_use = _lttb_downsample(x_vals, y_vals, max_points)
+            else:
+                x_use, y_use = x_vals, y_vals
+
+            series.append({
+                "name": col,
+                "is_time": bool(is_dt_index or (time_ms is not None)),
+                "x": x_use,
+                "y": y_use
+            })
 
         return jsonify(series=series)
     except Exception as e:
-        app.logger.exception("full_history_json failed: %s", e)
-        return jsonify(series=[]), 500
+        app.logger.exception("full_history_json failed for %s: %s", filename, e)
+        # Return empty gracefully to avoid breaking the UI
+        return jsonify(series=[]), 200
 
 if __name__ == "__main__":
     # Read basic server config from env (with safe defaults)
@@ -1741,7 +1847,6 @@ if __name__ == "__main__":
     # Optional: enable security headers only when explicitly requested
     if Talisman and str(os.getenv("USE_TALISMAN", "0")).strip().lower() in ("1", "true", "yes", "on"):
         try:
-            # Allow inline scripts and data: images so Plotly and your UI work in dev
             default_csp = {
                 "default-src": ["'self'", "https:", "http:"],
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],

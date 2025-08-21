@@ -353,7 +353,8 @@
 
     <!-- New: Link zoom/pan toggle -->
     <label class="btn secondary" style="display:flex; align-items:center; gap:.5rem;">
-      <input id="linkZoom" type="checkbox" checked> Link zoom/pan
+      <!-- remove 'checked' so linking is OFF by default -->
+      <input id="linkZoom" type="checkbox"> Link zoom/pan
     </label>
 
     <!-- Existing quick upload -->
@@ -769,9 +770,16 @@
     const btn = document.getElementById('loadFullBtn');
     if (!root || !btn) return;
 
-    const ENDPOINT = JSON.parse(document.getElementById('full-data-endpoint')?.textContent || 'null');
-    const MAX_POINTS = 1800;  // target points per chart for perf
+    const ENDPOINT_BASE = JSON.parse(document.getElementById('full-data-endpoint')?.textContent || 'null');
+
+    const MAX_POINTS = 1800;  // client-side target per chart for responsiveness
     const MIN_POINTS = 600;
+
+    function withMaxPoints(url) {
+      const target = Math.min(6000, Math.max(1500, Math.floor((window.innerWidth || 1200) * 2)));
+      const sep = url.includes('?') ? '&' : '?';
+      return `${url}${sep}max_points=${target}`;
+    }
 
     function lowerBound(arr, target) { let lo=0, hi=arr.length; while (lo<hi){const m=(lo+hi)>>>1; if (arr[m]<target) lo=m+1; else hi=m;} return lo; }
     function upperBound(arr, target) { let lo=0, hi=arr.length; while (lo<hi){const m=(lo+hi)>>>1; if (arr[m]<=target) lo=m+1; else hi=m;} return lo; }
@@ -795,12 +803,20 @@
     }
 
     const toDateArray = msArr => msArr.map(ms => new Date(ms));
-    const makeFullTrace = ds => ({ type: 'scattergl', mode: 'lines', name: 'Full history', x: toDateArray(ds.xMs), y: ds.y, line: { width: 1.6 }, hovertemplate: '%{x}<br>%{y}<extra></extra>' });
+    const makeFullTrace = (ds, isTime) => ({
+      type: 'scattergl',
+      mode: 'lines',
+      name: 'Full history',
+      x: isTime ? toDateArray(ds.xMs) : ds.xMs,
+      y: ds.y,
+      line: { width: 1.6 },
+      hovertemplate: isTime ? '%{x}<br>%{y}<extra></extra>' : 'x=%{x}<br>%{y}<extra></extra>'
+    });
 
-    function themedBaseLayout(title, yTitle) {
+    function themedBaseLayout(title, yTitle, isTime) {
       const base = themedLayout({
         title: { text: title, x: 0.02 },
-        xaxis: { title: 'Timestamp', type: 'date' },
+        xaxis: { title: isTime ? 'Timestamp' : 'Index', type: isTime ? 'date' : 'linear' },
         yaxis: { title: yTitle || title, showgrid: true },
         legend: { orientation: 'h' },
         margin: { l: 40, r: 10, t: 80, b: 60 },
@@ -811,41 +827,13 @@
     }
 
     function decimateForRange(series, xrangeMs) {
-      const xMs = series.xMs, y = series.y;
+      const xMs = series.xMs, y = series.y, isTime = series.isTime !== false;
       let start=0, end=xMs.length;
-      if (xrangeMs) { const [x0,x1]=xrangeMs; start=lowerBound(xMs,x0); end=upperBound(xMs,x1); }
+      if (xrangeMs && isTime) { const [x0,x1]=xrangeMs; start=lowerBound(xMs,x0); end=upperBound(xMs,x1); }
       const len = Math.max(0, end - start);
       const target = Math.min(MAX_POINTS, Math.max(MIN_POINTS, Math.floor((window.innerWidth || 1200) * 1.25)));
       if (len <= target) return { xMs: xMs.slice(start, end), y: y.slice(start, end) };
       return lttbMs(xMs.slice(start, end), y.slice(start, end), target);
-    }
-
-    function renderOne(el, series, title, yTitle) {
-      const ds = decimateForRange(series, null);
-      el.setAttribute('data-title', title);
-      let rafToken = null;
-
-      return renderPlot(el, [makeFullTrace(ds)], themedBaseLayout(title, yTitle), {
-        displayModeBar: true, responsive: true, scrollZoom: true,
-        toImageButtonOptions: { filename: (typeof safeName==='function' ? `${safeName(DISPLAY_NAME)} - ${safeName(title)}` : 'full-history') }
-      }).then(() => {
-        registerForSync(el);
-        el.on?.('plotly_relayout', ev => {
-          const x0 = ev && (ev['xaxis.range[0]'] || ev['xaxis']?.range?.[0]);
-          const x1 = ev && (ev['xaxis.range[1]'] || ev['xaxis']?.range?.[1]);
-          if (!x0 || !x1) return;
-          const x0ms = (x0 instanceof Date) ? x0.getTime() : new Date(x0).getTime();
-          const x1ms = (x1 instanceof Date) ? x1.getTime() : new Date(x1).getTime();
-          if (!isFinite(x0ms) || !isFinite(x1ms)) return;
-
-          if (rafToken) cancelAnimationFrame(rafToken);
-          rafToken = requestAnimationFrame(() => {
-            const ds2 = decimateForRange(series, [x0ms, x1ms]);
-            Plotly.restyle(el, { x: [toDateArray(ds2.xMs)], y: [ds2.y] }, [0]).catch(()=>{});
-            rafToken = null;
-          });
-        });
-      });
     }
 
     function buildPlaceholders(fullSeries) {
@@ -887,18 +875,19 @@
     }
 
     async function fetchFullSeries() {
-      if (!ENDPOINT) return null;
-      const res = await fetch(ENDPOINT, { credentials: 'same-origin' });
+      if (!ENDPOINT_BASE) return null;
+      const res = await fetch(withMaxPoints(ENDPOINT_BASE), { credentials: 'same-origin', cache: 'no-store' });
       if (!res.ok) throw new Error('Full history fetch failed: ' + res.status);
       const json = await res.json();
-      // Expected: { series: [ { column: 'col', x_ms: [..], y: [..] }, ... ] }
       const out = [];
       const arr = Array.isArray(json.series) ? json.series : [];
       for (const s of arr) {
-        const xMs = Array.isArray(s.x_ms) ? s.x_ms : [];
+        const xMs = Array.isArray(s.x_ms) ? s.x_ms : (Array.isArray(s.x) ? s.x : []);
         const y = Array.isArray(s.y) ? s.y : [];
+        const colName = s.column || s.name || 'Series';
+        const isTime = (s.is_time !== false);
         if (xMs.length && y.length && xMs.length === y.length) {
-          out.push({ column: s.column || 'Series', xMs, y });
+          out.push({ column: colName, xMs, y, isTime });
         }
       }
       return out;
@@ -920,7 +909,8 @@
             derived.push({
               column: it.column || it.title || 'Series',
               xMs: good.map(i => xMs[i]),
-              y: good.map(i => y[i])
+              y: good.map(i => y[i]),
+              isTime: true
             });
           }
         });
@@ -928,6 +918,38 @@
       } catch {
         return [];
       }
+    }
+
+    function renderOne(el, series, title, yTitle) {
+      const isTime = series.isTime !== false;
+      const ds = decimateForRange(series, null);
+      el.setAttribute('data-title', title);
+      let rafToken = null;
+
+      return renderPlot(el, [makeFullTrace(ds, isTime)], themedBaseLayout(title, yTitle, isTime), {
+        displayModeBar: true, responsive: true, scrollZoom: true,
+        modeBarButtonsToRemove: ['lasso2d','select2d'],
+        toImageButtonOptions: { filename: (typeof safeName==='function' ? `${safeName(DISPLAY_NAME)} - ${safeName(title)}` : 'full-history') }
+      }).then(() => {
+        registerForSync(el);
+        if (isTime) {
+          el.on?.('plotly_relayout', ev => {
+            const x0 = ev && (ev['xaxis.range[0]'] || ev['xaxis']?.range?.[0]);
+            const x1 = ev && (ev['xaxis.range[1]'] || ev['xaxis']?.range?.[1]);
+            if (!x0 || !x1) return;
+            const x0ms = (x0 instanceof Date) ? x0.getTime() : new Date(x0).getTime();
+            const x1ms = (x1 instanceof Date) ? x1.getTime() : new Date(x1).getTime();
+            if (!isFinite(x0ms) || !isFinite(x1ms)) return;
+
+            if (rafToken) cancelAnimationFrame(rafToken);
+            rafToken = requestAnimationFrame(() => {
+              const ds2 = decimateForRange(series, [x0ms, x1ms]);
+              Plotly.restyle(el, { x: [toDateArray(ds2.xMs)], y: [ds2.y] }, [0]).catch(()=>{});
+              rafToken = null;
+            });
+          });
+        }
+      });
     }
 
     btn.addEventListener('click', async () => {
