@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark">
   <style>
-    /* Theme variables */
+  
     :root[data-theme="light"] {
       --bg: #ffffff; --panel: #f8fafc; --text: #0f172a; --muted: #475569;
       --border: #e2e8f0; --link: #0ea5e9; --accent: #0ea5e9; --accent-2: #f97316;
@@ -35,18 +35,15 @@
     .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
     select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 
-    /* Center header cells for Preview/Description tables on Overview */
     .table-center table { width: 100%; }
     .table-center table th,
     .table-center table thead th { text-align: center !important; }
   </style>
   {% set active_view = request.args.get('view', 'overview') %}
   {% if active_view in ['interactive', 'correlation'] %}
-    <!-- Load synchronously so Plotly is ready before inline scripts below -->
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   {% endif %}
   <script>
-    // Theme bootstrap + utilities
     (function() {
       const saved = localStorage.getItem('theme') || 'light';
       document.documentElement.setAttribute('data-theme', saved);
@@ -55,7 +52,6 @@
         const next = cur === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
-        // Live-update plots on theme change
         if (window.applyThemeToPlots) window.applyThemeToPlots();
       };
       window.getThemeVars = function() {
@@ -73,7 +69,7 @@
     })();
   </script>
   <script>
-// Simple, idempotent Plotly loader Promise
+
 (function () {
   let p;
   window.loadPlotly = function loadPlotly() {
@@ -116,19 +112,11 @@
 
   <main class="container" style="max-width: 1200px; margin: 0 auto; padding: 16px">
 
-    <!-- Removed global AI assistant (will show only on Overview now) -->
-    <!--
-    <section id="ai-assistant" class="panel" style="margin-bottom: 16px;">
-      ...
-    </section>
-    {% if analysis.ai_answer %}
-    <script> ... </script>
-    {% endif %}
-    -->
+
 
     {% if active_view == 'overview' %}
 
-      <!-- AI assistant (Overview only) -->
+
       <section id="ai-assistant" class="panel" style="margin-bottom: 16px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
           <h2 style="margin:0;">AI assistant</h2>
@@ -266,13 +254,13 @@
           layout.font = { color: t.text };
           layout.margin = layout.margin || { l: 40, r: 10, t: 20, b: 40 };
           layout.legend = Object.assign({ orientation: 'h' }, layout.legend || {});
-          // Remove inner figure title (use section heading)
+
           layout.title = null;
 
           if (!layout.xaxis) layout.xaxis = {};
           layout.xaxis.showgrid = true;
           layout.xaxis.automargin = true;
-          // Ensure dark-mode readable range selector buttons
+          
           if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
           Object.assign(layout.xaxis.rangeselector, {
             visible: true,
@@ -364,7 +352,7 @@
           else renderByFetch(col);
         }
 
-        // Re-apply theme styles to existing plots on theme change
+  
         window.applyThemeToPlots = function() {
           const t = getThemeVars();
           const chart = document.getElementById('chart');
@@ -425,18 +413,18 @@
               paper_bgcolor: t.panel,
               plot_bgcolor: t.panel,
               font: { color: t.text },
-              // extra space for long y labels
+             
               margin: { l: 120, r: 10, t: 60, b: 60 }
             };
             Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
 
-            // Pearson heatmap (same theming and margins)
+        
             if (corrData && corrData.pearson && corrData.pearson.z) {
               const pearDiv = document.createElement('div');
               pearDiv.id = 'pearson';
               pearDiv.className = 'panel';
               pearDiv.style.minHeight = '520px';
-              // Append right after the current script's parent (section)
+             
               document.currentScript.parentElement.appendChild(pearDiv);
 
               const pearData = [{

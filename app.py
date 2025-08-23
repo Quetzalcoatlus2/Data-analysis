@@ -8,11 +8,11 @@ from datetime import datetime, timedelta
 import pandas as pd
 from werkzeug.utils import secure_filename
 
-# --- Add these two lines ---
+
 try:
     from dotenv import load_dotenv
-    load_dotenv(".env.public")   # committed, non-sensitive defaults
-    load_dotenv(".env")          # local, secrets override
+    load_dotenv(".env.public")   
+    load_dotenv(".env")          
 except Exception:
     pass
 
@@ -20,61 +20,54 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# AI & ML Libraries
+
 import google.generativeai as genai
 from sklearn.ensemble import IsolationForest
 from statsmodels.tsa.arima.model import ARIMA
 import warnings
 import hashlib
 import uuid
-import json  # <— add
-import numpy as np  # add
-from statsmodels.tsa.holtwinters import ExponentialSmoothing  # add
-from statsmodels.tsa.seasonal import STL  # <-- add this import
-from collections import OrderedDict  # add
+import json  
+import numpy as np  
+from statsmodels.tsa.holtwinters import ExponentialSmoothing  
+from statsmodels.tsa.seasonal import STL  
+from collections import OrderedDict  
 import re
-import html as htmllib  # add
-import math  # add
+import html as htmllib  
+import math  
 
-# Optional security/rate limiting (enabled via env)
+
 try:
-    from flask_limiter import Limiter  # add
-    from flask_limiter.util import get_remote_address  # add
+    from flask_limiter import Limiter  
+    from flask_limiter.util import get_remote_address  
 except Exception:
     Limiter = None
 try:
-    from flask_talisman import Talisman  # add
+    from flask_talisman import Talisman  
 except Exception:
     Talisman = None
 
-# Suppress harmless warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# Configuration
 UPLOAD_FOLDER = 'datasets'
 ALLOWED_EXTENSIONS = {'txt', 'csv', 'xlsx', 'json'}
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# New: dedicated subfolder for hashed uploads
 app.config['UPLOADS_SUBDIR'] = os.getenv("UPLOADS_SUBDIR", "uploaded")
 app.config['UPLOADS_DIR'] = os.path.join(app.config['UPLOAD_FOLDER'], app.config['UPLOADS_SUBDIR'])
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY") or "dev-secret-change-me"
-# Enable immediate deletion by default; override with .env
 app.config['DELETE_UPLOADED_AFTER_PROCESSING'] = os.getenv("DELETE_UPLOADED_AFTER_PROCESSING", "true").strip().lower() in ("1", "true", "yes", "on")
-# Optional retention cleanup window (set in .env to auto-clean stragglers)
 if "UPLOAD_RETENTION_DAYS" in os.environ:
     try:
         app.config['UPLOAD_RETENTION_DAYS'] = int(os.getenv("UPLOAD_RETENTION_DAYS"))
     except Exception:
         app.logger.warning("Invalid UPLOAD_RETENTION_DAYS; ignoring")
 
-# Defaults for cache and analysis settings
 app.config.setdefault('MAX_CACHE_ITEMS', int(os.getenv("MAX_CACHE_ITEMS", "6")))
 app.config.setdefault('DEFAULT_FORECAST_STEPS', int(os.getenv("DEFAULT_FORECAST_STEPS", "30")))
 app.config.setdefault('DEFAULT_CONTAMINATION', float(os.getenv("DEFAULT_CONTAMINATION", "0.02")))
 app.config.setdefault('PLOTLY_TAIL', int(os.getenv("PLOTLY_TAIL", "800")))
-# Add AI call behavior knobs
 app.config.setdefault('AI_TIMEOUT_SECONDS', int(os.getenv("AI_TIMEOUT_SECONDS", "30")))
 app.config.setdefault('AI_RETRY_ATTEMPTS', int(os.getenv("AI_RETRY_ATTEMPTS", "2")))
 app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACKOFF_SECONDS", "2.0")))
@@ -82,9 +75,8 @@ app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACK
 import logging
 import re
 from logging.handlers import RotatingFileHandler
-import time  # add
+import time 
 
-# Optional: disable CLI coloring globally (helps Werkzeug/Click)
 os.environ.setdefault("NO_COLOR", "1")
 
 class StripAnsiFormatter(logging.Formatter):
@@ -95,38 +87,33 @@ class StripAnsiFormatter(logging.Formatter):
 
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# File handler (rotating) with ANSI stripping
 file_handler = RotatingFileHandler("app.log", maxBytes=2_000_000, backupCount=3)
 file_handler.setLevel(log_level)
 file_handler.setFormatter(StripAnsiFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
 
-# Console handler (stdout) for on-screen logs
 console_handler = logging.StreamHandler()
 console_handler.setLevel(log_level)
-console_handler.setFormatter(logging.Formatter("%(message)s"))  # simple, readable in terminal
+console_handler.setFormatter(logging.Formatter("%(message)s"))  
 
-# Attach once
 for h in (file_handler, console_handler):
     if not any(type(x) is type(h) for x in app.logger.handlers):
         app.logger.addHandler(h)
 
 app.logger.setLevel(log_level)
 
-# Also forward Werkzeug logs to both handlers (once)
 werk = logging.getLogger("werkzeug")
 werk.setLevel(log_level)
 for h in (file_handler, console_handler):
     if not any(type(x) is type(h) for x in werk.handlers):
         werk.addHandler(h)
 
-# --- AI model selection & caching ---
 DEFAULT_AI_MODEL = (
     os.getenv("GENAI_MODEL")
     or os.getenv("GOOGLE_MODEL")
-    or "models/gemini-2.5-pro-preview-06-05"   # default (typo-safe normalization below)
+    or "models/gemini-2.5-pro-preview-06-05"
 )
-MODEL_CACHE = {}          # name -> GenerativeModel instance
-CURRENT_MODEL_NAME = None # the last-resolved working model name
+MODEL_CACHE = {}
+CURRENT_MODEL_NAME = None
 
 def _normalize_model_aliases(name: str) -> list[str]:
     """
@@ -138,19 +125,19 @@ def _normalize_model_aliases(name: str) -> list[str]:
     if not name:
         return []
     n = name.strip()
-    if n.startswith("odels/"):  # fix missing 'm'
+    if n.startswith("models/"): 
         n = "m" + n
     candidates = [n]
-    # try toggling the 'models/' prefix
+
     if n.startswith("models/"):
         candidates.append(n.replace("models/", "", 1))
     else:
         candidates.append("models/" + n)
-    # stable fallbacks (only if not already present)
+ 
     for fb in ("gemini-1.5-pro", "models/gemini-1.5-pro", "gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-pro", "models/gemini-pro"):
         if fb not in candidates:
             candidates.append(fb)
-    # de-dup preserving order
+    
     seen = set(); out = []
     for c in candidates:
         if c and c not in seen:
@@ -159,9 +146,9 @@ def _normalize_model_aliases(name: str) -> list[str]:
 
 def _make_model(name: str):
     m = genai.GenerativeModel(name)
-    # quick ping to confirm it actually responds
+    
     resp = m.generate_content("OK", request_options={"timeout": 15}, generation_config={"response_mime_type": "text/plain"})
-    _ = _extract_text_from_gemini_response(resp)  # ignore the content
+    _ = _extract_text_from_gemini_response(resp)  
     return m
 
 def get_or_create_model(preferred: str | None = None):
@@ -187,7 +174,7 @@ def get_or_create_model(preferred: str | None = None):
             continue
     raise RuntimeError("No working Gemini model available. Check API key/network or try a different model.")
 
-# --- AI Configuration (lazy model init) ---
+
 app.logger.info("Attempting to configure AI...")
 
 def configure_ai():
@@ -195,7 +182,6 @@ def configure_ai():
     try:
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
         AI_ENABLED = True
-        # lazily initialize the default model; if it fails, defer to first call
         try:
             model = get_or_create_model(DEFAULT_AI_MODEL)
         except Exception as e:
@@ -228,7 +214,6 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
                 request_options={"timeout": timeout},
                 generation_config=(generation_config or {})
             )
-            # If blocked, bubble up to trigger fallback
             try:
                 pf = getattr(resp, "prompt_feedback", None)
                 if pf and getattr(pf, "block_reason", None):
@@ -247,7 +232,6 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
                 continue
             raise last_err
 
-# Replace plain dict with tiny LRU using OrderedDict
 class TinyLRU(OrderedDict):
     def __init__(self, max_items=6):
         super().__init__()
@@ -255,7 +239,7 @@ class TinyLRU(OrderedDict):
     def get(self, key, default=None):
         if key in self:
             val = super().pop(key)
-            super().__setitem__(key, val)  # move to end (recently used)
+            super().__setitem__(key, val)  
             return val
         return default
     def set(self, key, value):
@@ -265,18 +249,16 @@ class TinyLRU(OrderedDict):
         while len(self) > self.max_items:
             self.popitem(last=False)
 
-DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'])  # key: hashed filename -> DataFrame
-NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  # <— add
-app.config['AI_FULL_UPLOAD_MAX_MB'] = 5  # only upload full file if <= 5 MB
-AI_FILE_MAP = {}  # key: hashed filename -> genai uploaded file handle
-ORIGINAL_NAME_MAP = {}  # ensure default global exists even if name-map file is absent
-AI_SUMMARY_CACHE = {}  # key: filename -> HTML snippet for server-side download
+DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'])  
+NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  
+app.config['AI_FULL_UPLOAD_MAX_MB'] = 5  
+AI_FILE_MAP = {}  
+ORIGINAL_NAME_MAP = {}  
+AI_SUMMARY_CACHE = {}
 
-# Ensure rotating file handler is attached (avoid duplicates)
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
 
-# also capture werkzeug (request) logs into the same file
 werk = logging.getLogger("werkzeug")
 werk.setLevel(log_level)
 if not any(isinstance(h, RotatingFileHandler) for h in werk.handlers):
@@ -310,14 +292,12 @@ def _safe_delete(path, retries=3, delay=0.2):
             time.sleep(delay)
     return False
 
-# Ensure folders and load map at startup
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(app.config['UPLOADS_DIR'], exist_ok=True)  # ensure uploads subfolder exists
+os.makedirs(app.config['UPLOADS_DIR'], exist_ok=True)
 _load_name_map()
 
 SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
 
-# Only treat 40-hex digest filenames as app-managed uploads
 HASHED_UPLOAD_RE = re.compile(r'^[a-f0-9]{40}\.(txt|csv|xlsx|json)$', re.IGNORECASE)
 
 def allowed_file(filename):
@@ -334,25 +314,19 @@ def sanitize_ai_html(raw: str) -> str:
     if raw is None:
         return "<p></p>"
     s = str(raw)
-    # strip code fences (opening like ``` or ```html and closing ```)
     s = re.sub(r'^\s*```(?:\w+)?\s*\n?', '', s, flags=re.I | re.M)
     s = re.sub(r'\n?\s*```\s*$', '', s, flags=re.M)
     s = s.replace("```", "")
-    # unescape HTML entities if looks escaped
     if re.search(r'&lt;/?[a-zA-Z]', s):
         try:
             s = htmllib.unescape(s)
         except Exception:
             pass
-    # drop html/body wrappers
     s = re.sub(r'</?\s*(html|body)[^>]*>', '', s, flags=re.I)
-    # drop script/style blocks
     s = re.sub(r'<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>', '', s, flags=re.I | re.S)
-    # strip event handler attributes and javascript: URLs
     s = re.sub(r'\s+on\w+\s*=\s*(".*?"|\'.*?\'|\w+)', '', s, flags=re.I)
     s = re.sub(r'javascript\s*:', '', s, flags=re.I)
     s = s.strip()
-    # if no recognizable HTML tags, wrap lines into paragraphs
     if not re.search(r'</?(h[1-6]|p|ul|ol|li|strong|em|b|i|br|table|thead|tbody|tr|th|td|a)\b', s, re.I):
         lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
         s = "<p>" + "</p><p>".join(lines) + "</p>" if lines else "<p></p>"
@@ -363,25 +337,21 @@ def html_to_pdf_bytes(html: str) -> bytes:
     Convert an HTML string to PDF bytes using the best-available backend.
     Tries WeasyPrint, then pdfkit (wkhtmltopdf), then xhtml2pdf; raises if none are available.
     """
-    # 1) WeasyPrint (pure-Python API; requires cairo/pango libs in environment)
     try:
-        import weasyprint  # type: ignore
+        import weasyprint  
         return weasyprint.HTML(string=html).write_pdf()
     except Exception:
         pass
 
-    # 2) pdfkit (requires wkhtmltopdf installed on the system PATH)
     try:
-        import pdfkit  # type: ignore
+        import pdfkit  
         return pdfkit.from_string(html, False)
     except Exception:
         pass
 
-    # 3) xhtml2pdf (pure-Python fallback)
     try:
-        from xhtml2pdf import pisa  # type: ignore
+        from xhtml2pdf import pisa  
         buf = io.BytesIO()
-        # pisa expects a text stream for the HTML source
         status = pisa.CreatePDF(io.StringIO(html), dest=buf)
         if getattr(status, "err", 0):
             raise RuntimeError("xhtml2pdf failed to render HTML to PDF")
@@ -397,7 +367,6 @@ def _extract_text_from_gemini_response(resp) -> str:
     Falls back to concatenating candidate parts if .text isn't available.
     Returns '' if nothing textual is found.
     """
-    # Try the SDK convenience accessor first
     try:
         t = getattr(resp, "text", None)
         if t:
@@ -405,7 +374,6 @@ def _extract_text_from_gemini_response(resp) -> str:
     except Exception as e:
         app.logger.warning("Gemini response.text accessor failed: %s", e)
 
-    # Try candidates -> content.parts
     try:
         candidates = getattr(resp, "candidates", None) or []
         for cand in candidates:
@@ -443,7 +411,6 @@ You are an expert data analyst. Given the following dataset profile, write a cle
         response = model.generate_content(prompt)
         app.logger.debug("AI summary call successful")
 
-        # Safety blocks (unchanged)
         if hasattr(response, "prompt_feedback"):
             pf = getattr(response, "prompt_feedback", None)
             if pf and getattr(pf, "block_reason", None):
@@ -451,10 +418,8 @@ You are an expert data analyst. Given the following dataset profile, write a cle
                 app.logger.warning("AI analysis blocked: %s", block_reason)
                 return f"AI analysis was blocked by the content filter. Reason: {block_reason}"
 
-        # NEW: safe extraction
         text = _extract_text_from_gemini_response(response).strip()
         if not text:
-            # Attempt to log finish_reason for debugging
             fr = None
             try:
                 cs = getattr(response, "candidates", None) or []
@@ -475,9 +440,7 @@ def get_ai_answer(dataframe, question):
     if not AI_ENABLED or model is None:
         return "AI analysis is disabled."
 
-    # Give the AI context with structure and a summary (prompt omitted here for brevity)
     try:
-        # Build a concise prompt with dataset context and the user's question
         df_desc = describe_for_ai(dataframe)
         prompt = f"""
 You are a senior data scientist. Answer the user's question about the dataset clearly and precisely.
@@ -492,7 +455,6 @@ Question:
 """.strip()
 
         response = model.generate_content(prompt)
-        # NEW: safe extraction
         text = _extract_text_from_gemini_response(response).strip()
         if not text:
             fr = None
@@ -511,7 +473,6 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
     if not AI_ENABLED or model is None:
         return "AI analysis is disabled."
 
-    # Build long-form prompt for the model (HTML-only response)
     try:
         df_desc = describe_for_ai(df)
     except Exception:
@@ -528,7 +489,6 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
         "temperature": 0.4,
         "top_p": 0.95,
         "top_k": 40,
-        # Encourage the SDK to produce HTML directly when supported
         "response_mime_type": "text/html",
     }
 
@@ -536,7 +496,6 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
         resp = _call_gemini(prompt, file_asset=file_asset, generation_config=gen_cfg)
         text = _extract_text_from_gemini_response(resp).strip()
         if not text:
-            # one-shot simplified retry with smaller output to coax a textual reply
             try:
                 simple_cfg = {"max_output_tokens": 512, "temperature": 0.2, "response_mime_type": "text/html"}
                 simple_prompt = "Provide a concise HTML summary of the dataset using <p> and <ul><li> only."
@@ -546,7 +505,6 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
                     return sanitize_ai_html(text2)
             except Exception:
                 pass
-            # If still empty, fall back
             raise RuntimeError("Empty AI response")
         return sanitize_ai_html(text)
     except Exception as e:
@@ -564,7 +522,6 @@ def get_ai_answer_with_file(df: pd.DataFrame, question: str, file_asset=None) ->
         if not AI_ENABLED or model is None:
             return offline_answer(df, question, error="AI disabled.")
 
-        # Build a concise but structured prompt with context
         df_desc = describe_for_ai(df)
         prompt = f"""
 You are a senior data scientist. Answer the user's question about the dataset clearly and precisely.
@@ -578,7 +535,6 @@ Question:
 {question}
 """.strip()
 
-        # First attempt
         resp = _call_gemini(prompt, file_asset=file_asset, generation_config={
             "max_output_tokens": 1024,
             "temperature": 0.3,
@@ -588,7 +544,6 @@ Question:
         })
         text = _extract_text_from_gemini_response(resp).strip()
 
-        # If we got no textual parts, try a simplified one-shot retry
         if not text:
             try:
                 simple = _call_gemini(
@@ -601,7 +556,6 @@ Question:
                     return sanitize_ai_html(text2)
             except Exception:
                 pass
-            # If still empty, fall back offline
             return offline_answer(df, question, error="Empty AI response")
 
         return sanitize_ai_html(text)
@@ -657,18 +611,14 @@ def _ensure_plot_dicts(items):
                 title, img = p[0], p[1]
                 out.append({'title': '' if title is None else str(title), 'img': img})
             elif isinstance(p, str):
-                # Assume raw base64 image; synthesize empty title
                 out.append({'title': '', 'img': p})
         except Exception:
-            # Skip invalid entries quietly
             continue
     return out
 
-# ADD: STL decomposition helper (static PNG like other plots)
 def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
     try:
         s = normalize_timeseries(series)
-        # guard: need enough points to estimate trend/seasonal cleanly
         if s is None or len(s) < max(28, seasonal_period * 2):
             return None
         res = STL(s.astype(float), period=int(seasonal_period), robust=True).fit()
@@ -695,9 +645,7 @@ def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
             pass
         return None
 
-# ADD: helpers to build a proper future index and a clearer forecast plot
 def _infer_future_index(idx, steps):
-    # Datetime: use explicit freq or infer; fallback to median delta
     if isinstance(idx, pd.DatetimeIndex):
         freq = idx.freq or pd.infer_freq(idx)
         if freq is not None:
@@ -708,7 +656,6 @@ def _infer_future_index(idx, steps):
             offset = pd.tseries.frequencies.to_offset(step)
         start = idx[-1] + offset
         return pd.date_range(start=start, periods=steps, freq=offset)
-    # Numeric/other: extend by median step or 1
     try:
         ser_idx = pd.Series(idx.astype('int64') if hasattr(idx, 'astype') else list(idx))
     except Exception:
@@ -718,30 +665,27 @@ def _infer_future_index(idx, steps):
     last = int(ser_idx.iloc[-1])
     return pd.Index([last + step * (i + 1) for i in range(steps)])
 
-# add: simple seasonality inference for DatetimeIndex
 def _infer_seasonal_period(idx, min_seasons=2):
     if not isinstance(idx, pd.DatetimeIndex):
         return None
     freq = (idx.freqstr or pd.infer_freq(idx)) or ""
     f = freq.upper()
-    # heuristics for common granularities
-    if f.startswith("H"):  # hourly
+    if f.startswith("H"):
         period = 24
-    elif f.startswith("T") or f.startswith("MIN"):  # minutely
+    elif f.startswith("T") or f.startswith("MIN"):
         period = 60
-    elif f.startswith("S"):  # secondly
+    elif f.startswith("S"):
         period = 60
-    elif f.startswith("D"):  # daily
+    elif f.startswith("D"):
         period = 7
-    elif f.startswith("W"):  # weekly
+    elif f.startswith("W"):
         period = 52
-    elif f.startswith("M"):  # monthly
+    elif f.startswith("M"):
         period = 12
-    elif f.startswith("Q"):  # quarterly
+    elif f.startswith("Q"):
         period = 4
     else:
         period = None
-    # ensure enough data to estimate seasonality
     try:
         n = len(idx)
         if period is None or n < period * min_seasons:
@@ -750,7 +694,6 @@ def _infer_seasonal_period(idx, min_seasons=2):
     except Exception:
         return None
 
-# add/replace: recent-slope forecaster to avoid flat futures
 def _recent_slope_forecast(series, steps, window=None, damping=None):
     """
     Forecast using robust recent slope.
@@ -765,18 +708,16 @@ def _recent_slope_forecast(series, steps, window=None, damping=None):
         fc_mean = pd.Series([y.iloc[-1]] * steps, index=future_idx)
         ci = pd.concat([fc_mean, fc_mean], axis=1)
         ci.columns = ['lower', 'upper']
-        return fc_mean, ci
+        return
 
     w = window or min(max(20, n // 5), n)
     y_win = y.iloc[-w:]
 
-    # Linear trend + robust median step
     x = np.arange(len(y_win), dtype=float)
     slope_lr, intercept = np.polyfit(x, y_win.values, 1)
     diffs = np.diff(y_win.values)
     med_diff = float(np.median(diffs)) if len(diffs) else 0.0
 
-    # Combine and enforce a minimum magnitude relative to recent steps
     slope = 0.5 * float(slope_lr) + 0.5 * med_diff
     baseline = max(abs(med_diff), 1e-12)
     min_mag = 0.25 * baseline
@@ -793,7 +734,6 @@ def _recent_slope_forecast(series, steps, window=None, damping=None):
 
     fc_mean = pd.Series(fc_vals, index=future_idx)
 
-    # CI from residuals in the window (robust-ish)
     resid = y_win.values - (slope_lr * x + intercept)
     resid_std = float(np.nanstd(resid, ddof=1)) if len(resid) > 2 else float(np.nanstd(y_win.values, ddof=1))
     lower = fc_mean - 1.96 * resid_std
@@ -805,7 +745,6 @@ def _recent_slope_forecast(series, steps, window=None, damping=None):
 def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None):
     fig, ax = plt.subplots(figsize=(10, 4))
 
-    # Use full history by default; limit only if a positive tail is provided
     history_tail_series = history if not history_tail or history_tail <= 0 else history.tail(history_tail)
     history_tail_series.plot(ax=ax, label='History', color='tab:blue', linewidth=1.8)
 
@@ -820,7 +759,6 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         zorder=3
     )
 
-    # Confidence interval shading
     if conf_int is not None:
         try:
             lower = conf_int.iloc[:, 0]
@@ -834,7 +772,6 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         except Exception:
             pass
 
-    # Clear forecast region separation
     try:
         split_x = history.index[-1]
         ax.axvline(split_x, color='gray', linestyle=':', linewidth=1.5, label='Forecast start', zorder=1)
@@ -842,7 +779,6 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
     except Exception:
         pass
 
-    # Focus y-limits on history tail + forecast (ignore very wide CI that can flatten visuals)
     try:
         y_stack = pd.concat([history_tail_series, forecast_series]).astype(float)
         y_min = float(np.nanmin(y_stack.values))
@@ -875,9 +811,7 @@ def read_csv_fallback(path, **kwargs):
             last_err = e
             continue
         except Exception as e:
-            # If it's not a decode error, re-raise
             raise
-    # Final lenient attempt for pandas>=2: replace undecodable bytes
     try:
         return pd.read_csv(path, encoding="utf-8", encoding_errors="replace", **kwargs)
     except TypeError:
@@ -896,13 +830,11 @@ def read_json_fallback(path):
             last_err = e
             continue
         except ValueError:
-            # Try JSON Lines if normal JSON fails
             try:
                 with open(path, "r", encoding=enc, errors="strict") as f:
                     return pd.read_json(f, lines=True)
             except Exception:
                 continue
-    # Final lenient attempt
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return pd.read_json(f, orient="records")
@@ -926,7 +858,6 @@ def _cleanup_uploads_if_configured():
             path = os.path.join(uploads_dir, name)
             if not os.path.isfile(path):
                 continue
-            # Only delete app-hashed uploads; leave user files alone
             if not HASHED_UPLOAD_RE.match(name):
                 continue
             mtime = datetime.fromtimestamp(os.path.getmtime(path))
@@ -938,7 +869,6 @@ def _cleanup_uploads_if_configured():
     except Exception as e:
         app.logger.warning("Cleanup scan failed: %s", e)
 
-# Detect if a forecast is too linear (nearly a straight line)
 def _is_too_linear(series_like):
     try:
         y = pd.Series(series_like).astype(float).values
@@ -950,11 +880,10 @@ def _is_too_linear(series_like):
         ss_res = float(np.sum((y - fitted) ** 2))
         ss_tot = float(np.sum((y - y.mean()) ** 2)) + 1e-12
         r2 = 1.0 - ss_res / ss_tot
-        return r2 > 0.985  # threshold for "too straight"
+        return r2 > 0.985  
     except Exception:
         return False
 
-# Bootstrap a "natural-looking" forecast path from recent increments
 def _bootstrap_natural_path(series, steps, window=None, base_slope=None, n_samples=200, q_low=0.1, q_high=0.9):
     y = series.dropna()
     n = len(y)
@@ -967,15 +896,13 @@ def _bootstrap_natural_path(series, steps, window=None, base_slope=None, n_sampl
     if len(diffs) < 3 or np.allclose(diffs, 0):
         return _recent_slope_forecast(series, steps, window=None, damping=None)
 
-    # robust center/scale for winsorization
     med = float(np.median(diffs))
     mad = float(np.median(np.abs(diffs - med))) + 1e-12
     lo_clip = med - 3.0 * mad
     hi_clip = med + 3.0 * mad
 
-    # mild trend bias so the direction follows recent movement
     bias = base_slope if base_slope is not None else med
-    bias_weight = 0.3  # small bias to avoid runaway
+    bias_weight = 0.3  
 
     future_idx = _infer_future_index(series.index, steps)
     paths = np.empty((n_samples, steps), dtype=float)
@@ -983,15 +910,11 @@ def _bootstrap_natural_path(series, steps, window=None, base_slope=None, n_sampl
     rng = np.random.default_rng()
     for i in range(n_samples):
         incs = rng.choice(diffs, size=steps, replace=True).astype(float)
-        # winsorize outliers
         incs = np.clip(incs, lo_clip, hi_clip)
-        # add slight bias
         incs = incs + bias_weight * bias
-        # cumulative path from last observed value
         path = y.iloc[-1] + np.cumsum(incs)
         paths[i, :] = path
 
-    # aggregate to median and quantiles
     median_path = np.median(paths, axis=0)
     lower_path = np.quantile(paths, q_low, axis=0)
     upper_path = np.quantile(paths, q_high, axis=0)
@@ -1021,8 +944,8 @@ def detect_anomalies(series: pd.Series, contamination=0.02):
     try:
         iso = IsolationForest(n_estimators=200, contamination=float(contamination), random_state=42)
         X = s.values.reshape(-1, 1)
-        preds = iso.fit_predict(X)  # -1 = anomaly
-        # Decision function: lower = more abnormal; invert so higher is more anomalous
+        preds = iso.fit_predict(X)  
+        
         try:
             scores_all = -iso.decision_function(X)
         except Exception:
@@ -1044,12 +967,10 @@ def normalize_timeseries(series: pd.Series):
         return s
     freq = s.index.freq or pd.infer_freq(s.index)
     if freq is None:
-        # fallback to median delta
         diffs = pd.Series(s.index).diff().dropna()
         step = diffs.median() if not diffs.empty else pd.Timedelta(days=1)
         freq = pd.tseries.frequencies.to_offset(step)
     s = s.asfreq(freq)
-    # small-gap interpolation only
     s = s.interpolate(method='time', limit=3, limit_direction='both')
     return s
 
@@ -1059,37 +980,37 @@ def _try_parse_numeric_series(s: pd.Series) -> pd.Series:
     if not isinstance(s, pd.Series):
         return pd.to_numeric(s, errors='coerce')
 
-    # fast path
+    
     out = pd.to_numeric(s, errors='coerce')
     na_ratio = out.isna().mean()
 
     if na_ratio <= 0.25:
         return out
 
-    # as string for cleanup attempts
+    
     ss = s.astype(str).str.strip()
 
-    # remember percent
+    
     has_pct = ss.str.contains(r'%', regex=True, na=False)
 
-    # remove obvious units/symbols except digits, comma, dot, sign
+    
     cleaned = ss.str.replace(r'[^0-9,.\-+eE]', ' ', regex=True).str.replace(r'\s+', '', regex=True)
 
-    # Heuristic: if more commas than dots overall, treat comma as decimal
+    
     comma_cnt = cleaned.str.count(',').sum()
     dot_cnt = cleaned.str.count(r'\.').sum()
     if comma_cnt > dot_cnt:
-        # EU style: dots likely thousands separators; remove dots, change comma to dot
+        
         attempt = cleaned.str.replace(r'\.', '', regex=True).str.replace(',', '.', regex=False)
     else:
-        # US style: remove commas as thousands separators
+        
         attempt = cleaned.str.replace(',', '', regex=False)
 
     out2 = pd.to_numeric(attempt, errors='coerce')
 
-    # Apply percent scaling where appropriate
+    
     if has_pct.any():
-        # Only scale entries that originally had %
+        
         out2 = out2.where(~has_pct, out2 / 100.0)
 
     if out2.notna().sum() >= out.notna().sum():
@@ -1106,7 +1027,9 @@ def coerce_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
         if pd.api.types.is_numeric_dtype(ser):
             res[col] = ser.astype(float)
         else:
-            res[col] = _try_parse_numeric_series(ser)
+            coerced = _try_parse_numeric_series(ser)
+            if coerced.notna().sum() >= pd.to_numeric(ser, errors='coerce').notna().sum():
+                res[col] = coerced
     return pd.DataFrame(res, index=df.index)
 
 def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict, used_cols: list, is_timeseries: bool, forecast_horizon: int, contamination: float) -> str:
@@ -1114,13 +1037,13 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
     try:
         lines = []
         lines.append(f"Shape: {getattr(df, 'shape', None)}")
-        # Column dtypes
+        
         try:
             dtypes = {c: str(t) for c, t in df.dtypes.items()}
             lines.append("Dtypes: " + json.dumps(dtypes, ensure_ascii=False))
         except Exception:
             pass
-        # Missingness (fraction)
+        
         try:
             mv = df.isna().mean().sort_values(ascending=False)
             top_mv = mv[mv > 0].head(20)
@@ -1128,7 +1051,7 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
                 lines.append("Top missingness (fraction): " + json.dumps({k: float(v) for k, v in top_mv.items()}))
         except Exception:
             pass
-        # Numeric summaries
+        
         try:
             nums = df.select_dtypes(include='number')
             if not nums.empty:
@@ -1143,7 +1066,7 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
                 lines.append("Numeric summary (mean, median, std, min, max): " + json.dumps(compact))
         except Exception:
             pass
-        # Recent trend per used column
+        
         try:
             trend_info = {}
             for col in used_cols[:20]:
@@ -1160,13 +1083,13 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
                 lines.append("Recent trends: " + json.dumps(trend_info))
         except Exception:
             pass
-        # Anomalies
+        
         try:
             if anomalies_found:
                 lines.append("Anomalies summary: " + json.dumps(anomalies_found))
         except Exception:
             pass
-        # Correlations (top absolute Spearman)
+        
         try:
             if corr_payload and corr_payload.get("z"):
                 x = corr_payload["x"]; y = corr_payload["y"]; z = corr_payload["z"]
@@ -1183,7 +1106,7 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
                 lines.append("Top correlations (Spearman): " + json.dumps(top))
         except Exception:
             pass
-        # Time axis info
+        
         try:
             if is_timeseries and isinstance(df.index, pd.DatetimeIndex):
                 idx = df.index.dropna()
@@ -1192,14 +1115,12 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
                     lines.append(f"Time series detected. Start: {str(idx[0])}, End: {str(idx[-1])}, Freq: {freq}")
         except Exception:
             pass
-        # Parameters
         lines.append(f"User settings: forecast_horizon={int(forecast_horizon)}, anomaly_contamination={float(contamination)}")
         return "\n".join(lines)
     except Exception:
         return ""
 
 @app.route('/', methods=['GET', 'POST'])
-# Optional rate limit on uploads
 def upload_file():
     if request.method == 'POST':
         if 'file' not in request.files:
@@ -1214,22 +1135,22 @@ def upload_file():
             _, ext = os.path.splitext(orig_name)
             ext = ext.lower()
 
-            # 1) Save to a temp file once (avoid re-reading the stream)
+            
             temp_name = f"tmp_{uuid.uuid4().hex}{ext}"
-            temp_path = os.path.join(app.config['UPLOADS_DIR'], temp_name)  # CHANGED
+            temp_path = os.path.join(app.config['UPLOADS_DIR'], temp_name)  
             file.save(temp_path)
 
             try:
-                # 2) Hash the saved temp file
+                
                 hasher = hashlib.sha1()
                 with open(temp_path, "rb") as f:
-                    for chunk in iter(lambda: f.read(1 << 20), b""):  # 1 MB chunks
+                    for chunk in iter(lambda: f.read(1 << 20), b""):  
                         hasher.update(chunk)
                 digest = hasher.hexdigest()
 
-                # 3) Dedup by content hash
+                
                 storage_name = f"{digest}{ext}"
-                final_path = os.path.join(app.config['UPLOADS_DIR'], storage_name)  # CHANGED
+                final_path = os.path.join(app.config['UPLOADS_DIR'], storage_name)  
 
                 if os.path.exists(final_path):
                     try:
@@ -1239,7 +1160,7 @@ def upload_file():
                 else:
                     os.replace(temp_path, final_path)
 
-                # 4) Optional: upload full CSV to AI if within size cap
+                
                 try:
                     size_bytes = os.path.getsize(final_path)
                     if size_bytes <= app.config['AI_FULL_UPLOAD_MAX_MB'] * 1024 * 1024:
@@ -1248,8 +1169,8 @@ def upload_file():
                 except Exception as e:
                     app.logger.info("AI file upload skipped: %s", e)
 
-                # 5) Redirect with the original filename for display only
-                # forward user controls for immediate use
+                
+                
                 fh = request.form.get('forecast_horizon')
                 cont = request.form.get('contamination')
                 start_view = request.form.get('view') or 'overview'
@@ -1272,19 +1193,15 @@ def upload_file():
                 return redirect(request.url)
     return render_template('index.html')
 
-# Place near other read_* helpers
 def read_excel_smart(path: str):
     """Read the first non-empty sheet; try to infer header and index."""
     try:
-        # use context manager to avoid file locking on Windows/OneDrive
         with pd.ExcelFile(path) as xls:
             for sheet in xls.sheet_names:
                 try:
-                    # first attempt: normal header
                     df = pd.read_excel(xls, sheet_name=sheet, header=0)
                     df = df.dropna(how='all').dropna(axis=1, how='all')
                     if df is not None and df.shape[1] > 0:
-                        # try to set a good index
                         for cand in ['timestamp', 'date', 'time']:
                             if cand in df.columns:
                                 with pd.option_context('mode.chained_assignment', None):
@@ -1298,7 +1215,6 @@ def read_excel_smart(path: str):
                                     pass
                                 break
                         else:
-                            # if first column looks datetime, use it
                             first_col = df.columns[0]
                             try:
                                 maybe_dt = pd.to_datetime(df[first_col], errors='coerce')
@@ -1307,7 +1223,6 @@ def read_excel_smart(path: str):
                             except Exception:
                                 pass
                         return df
-                    # second attempt: no header, treat first row as header
                     df2 = pd.read_excel(xls, sheet_name=sheet, header=None)
                     df2 = df2.dropna(how='all').dropna(axis=1, how='all')
                     if df2 is not None and df2.shape[1] > 0:
@@ -1326,16 +1241,13 @@ def read_excel_smart(path: str):
                         return df2
                 except Exception:
                     continue
-        # nothing usable
         return pd.DataFrame()
     except Exception as e:
-        # Fallback to default read_excel if ExcelFile fails
         try:
             return pd.read_excel(path)
         except Exception:
             raise e
 
-# ADD: central DataFrame loader for download/report endpoints (read-only; no deletions)
 def get_dataframe_for(filename):
     """
     Best-effort loader for an uploaded dataset by hashed filename.
@@ -1347,12 +1259,10 @@ def get_dataframe_for(filename):
     Returns: pandas.DataFrame or None if not found/unreadable.
     """
     try:
-        # 1) Cache fast-path
         df = DATAFRAME_CACHE.get(filename)
         if df is not None:
             return df
 
-        # 2) Disk path
         uploads_dir = app.config.get('UPLOADS_DIR', UPLOAD_FOLDER)
         path = os.path.join(uploads_dir, filename)
         if not os.path.exists(path):
@@ -1362,47 +1272,42 @@ def get_dataframe_for(filename):
         _, ext = os.path.splitext(filename)
         ext = (ext or "").lower()
 
-        # 3) Read using robust helpers
         if ext == ".csv":
-            df = read_csv_fallback(path)
+            df = read_csv_fallback(path, index_col=0, parse_dates=True)
         elif ext == ".xlsx":
             df = read_excel_smart(path)
         elif ext == ".json":
             df = read_json_fallback(path)
+            for col in ['timestamp', 'date', 'time']:
+                if col in df.columns:
+                    try:
+                        df[col] = pd.to_datetime(df[col])
+                        df.set_index(col, inplace=True)
+                    except Exception:
+                        pass
+                    break
         elif ext == ".txt":
-            # Try Python engine with sep=None to sniff dialect; fallback to whitespace
-            try:
-                df = read_csv_fallback(path, sep=None, engine="python")
-            except Exception:
-                df = read_csv_fallback(path, delim_whitespace=True)
+            df = read_csv_fallback(path, sep=',', index_col=0, parse_dates=True)
         else:
-            # Unknown extension; try CSV as a last resort
-            try:
-                df = read_csv_fallback(path)
-            except Exception as e:
-                app.logger.warning("get_dataframe_for: unsupported extension %s; error: %s", ext, e)
-                return None
+            app.logger.warning("get_dataframe_for: unsupported extension %s", ext)
+            return None
 
         if not isinstance(df, pd.DataFrame):
             app.logger.info("get_dataframe_for: reader returned non-DataFrame for %s", filename)
             return None
 
-        # 4) Basic cleanup: drop fully empty columns
         try:
             df = df.dropna(axis=1, how='all')
         except Exception:
             pass
 
-        # 5) Infer datetime index (common first-column timestamp)
         try:
             if not isinstance(df.index, pd.DatetimeIndex) and df.shape[1] >= 1:
                 candidate_cols = []
-                # Prefer obvious datetime-named columns
                 for c in df.columns:
                     lc = str(c).strip().lower()
                     if any(tok in lc for tok in ("date", "time", "timestamp", "datetime")):
                         candidate_cols.append(c)
-                # Fallback to the first column
                 if not candidate_cols:
                     candidate_cols = [df.columns[0]]
 
@@ -1416,7 +1321,6 @@ def get_dataframe_for(filename):
                     ts = pd.to_datetime(df[picked], errors="coerce", utc=False, infer_datetime_format=True)
                     df = df.drop(columns=[picked])
                     df.index = ts
-                    # sort by time for consistency
                     try:
                         df = df[ts.notna()].sort_index()
                     except Exception:
@@ -1424,7 +1328,6 @@ def get_dataframe_for(filename):
         except Exception as e:
             app.logger.debug("get_dataframe_for: datetime inference skipped: %s", e)
 
-        # 6) Cache and return
         DATAFRAME_CACHE.set(filename, df)
         return df
     except Exception as e:
@@ -1442,10 +1345,8 @@ def safe_df_head_html(df: pd.DataFrame) -> str:
 def safe_df_description_html(df: pd.DataFrame) -> str:
     try:
         if df is None or df.shape[1] == 0:
-            # show dtypes or placeholder
             return (df.dtypes.to_frame('dtype').to_html()
                     if df is not None and isinstance(df, pd.DataFrame) else "<p>No data.</p>")
-        # include='all' is more forgiving; handle pandas versions without datetime_is_numeric
         try:
             desc = df.describe(include='all')
         except Exception:
@@ -1483,7 +1384,6 @@ def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> s
         q = (str(question or "")).strip().lower()
         parts = []
         parts.append("<h3>Offline analysis</h3>")
-        # Friendlier banner (hide low-level error details from the UI)
         if error:
             try:
                 parts.append("<p><em>AI response unavailable. Showing a quick offline analysis instead.</em></p>")
@@ -1494,7 +1394,7 @@ def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> s
             parts.append("<p>No data available.</p>")
             return "".join(parts)
 
-        # Overview
+        
         try:
             parts.append(f"<p><strong>Shape:</strong> {tuple(df.shape)}</p>")
             dtypes = ", ".join([f"{htmllib.escape(str(c))}: {htmllib.escape(str(t))}" for c, t in df.dtypes.items()])
@@ -1502,7 +1402,7 @@ def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> s
         except Exception:
             pass
 
-        # Missingness
+        
         try:
             mv = df.isna().mean().sort_values(ascending=False)
             mv = mv[mv > 0].head(10)
@@ -1514,7 +1414,7 @@ def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> s
         except Exception:
             pass
 
-        # Numeric trends
+        
         try:
             df_num = coerce_numeric_df(df)
             sel = df_num.select_dtypes(include='number')
@@ -1539,7 +1439,7 @@ def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> s
         except Exception:
             pass
 
-        # If it's a specific question (non-summary), show simple stats for mentioned columns
+        
         if q and q != "summary":
             try:
                 mentioned = []
@@ -1548,7 +1448,6 @@ def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> s
                     name = str(col)
                     if name.lower() in q_low:
                         mentioned.append(col)
-                # Fallback: top 3 numeric columns if nothing is detected
                 if not mentioned:
                     df_num = coerce_numeric_df(df).select_dtypes(include='number')
                     mentioned = list(df_num.columns[:3]) if df_num is not None else []
@@ -1594,18 +1493,15 @@ def _get_arg_int(name, default):
         return default
 
 @app.route('/analyze/<filename>', methods=['GET', 'POST'])
-# Optional rate limit on analyze
 def analyze_file(filename):
     filepath = os.path.join(app.config['UPLOADS_DIR'], filename)
     display_name = request.args.get('display') or request.form.get('display') or filename
 
-    # User controls with sensible defaults
     default_steps = int(os.getenv("DEFAULT_FORECAST_STEPS", "40"))
     default_contam = float(os.getenv("DEFAULT_CONTAMINATION", "0.02"))
     user_steps = _get_arg_int("forecast_horizon", default_steps)
     user_contam = _get_arg_float("contamination", default_contam)
 
-    # New: handle missing file up-front
     if not os.path.exists(filepath) and filename not in DATAFRAME_CACHE:
         flash("The uploaded file is no longer available. Please re-upload it.")
         return redirect(url_for('upload_file'))
@@ -1613,7 +1509,6 @@ def analyze_file(filename):
     try:
         df = DATAFRAME_CACHE.get(filename)
         if df is None:
-            # Improved file reading to handle timestamps and non-UTF8 encodings
             if filename.endswith('.csv'):
                 df = read_csv_fallback(filepath, index_col=0, parse_dates=True)
             elif filename.endswith('.xlsx'):
@@ -1634,10 +1529,8 @@ def analyze_file(filename):
                 flash('Unsupported file type')
                 return redirect(url_for('upload_file'))
 
-            # Cache for follow-up questions
             DATAFRAME_CACHE.set(filename, df)
 
-        # NEW: delete only app-hashed files from uploads dir, never user originals
         if (
             app.config.get('DELETE_UPLOADED_AFTER_PROCESSING', False)
             and HASHED_UPLOAD_RE.match(os.path.basename(filepath))
@@ -1645,40 +1538,34 @@ def analyze_file(filename):
         ):
             _safe_delete(filepath)
 
-        # Optional: opportunistic cleanup for old files if retention is set
         _cleanup_uploads_if_configured()
 
-        # DEFINE file_asset BEFORE any use (fixes possible NameError)
         file_asset = AI_FILE_MAP.get(filename)
 
-        # --- Handle follow-up questions (only when provided) ---
+        
         user_question = None
         ai_answer = None
         if request.method == 'POST':
             user_question = (request.form.get('question') or '').strip()
             ai_answer_html = ""
             if user_question:
-                # file_asset assumed available from earlier logic; if not, set to None
                 ai_answer_html = get_ai_answer_with_file(df, user_question, file_asset=file_asset)
-            ai_answer = ai_answer_html  # <-- ensure the template gets the answer
+            ai_answer = ai_answer_html  
 
         analysis = {}
         plots = []
         forecast_plots = []
-        anomalies_found = {}  # collect anomalies per column
+        anomalies_found = {}  
         is_timeseries = isinstance(df.index, pd.DatetimeIndex)
-        used_cols = []  # track columns actually plotted
+        used_cols = []  
 
-        # Precompute correlation for advanced view
+        
         corr_payload = None
         try:
             num_df = coerce_numeric_df(df).select_dtypes(include='number')
-            # Drop columns that are entirely NaN or nearly constant
             if num_df is not None and not num_df.empty:
-                # Require at least 3 non-null values
                 valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
                 num_df = num_df[valid]
-                # Drop near-constant columns
                 keep = []
                 for c in num_df.columns:
                     s = pd.to_numeric(num_df[c], errors='coerce').dropna()
@@ -1692,13 +1579,13 @@ def analyze_file(filename):
                 cols = list(num_df.columns)
                 payload = {}
 
-                # Spearman (default for z)
+                
                 try:
                     spearman = num_df.corr(method='spearman')
                 except Exception:
                     spearman = None
 
-                # Pearson (also requested)
+                
                 try:
                     pearson = num_df.corr(method='pearson')
                 except Exception:
@@ -1719,13 +1606,13 @@ def analyze_file(filename):
             app.logger.warning("Correlation computation failed: %s", e)
             corr_payload = None
 
-        interactive = []  # payload for Plotly charts
-        # Use full series by default for interactive traces; allow optional tail by env if needed
-        # Accept: "all", "", "0", "-1", "none", "false" => full; else parse int
+        interactive = []  
+        
+        
         raw_tail = (os.getenv("PLOTLY_TAIL", "all") or "all").strip().lower()
 
         for column in df.columns:
-            # Coerce series to numeric where possible
+            
             series_raw = df[column]
             try:
                 series = pd.to_numeric(series_raw, errors='coerce').dropna()
@@ -1733,8 +1620,8 @@ def analyze_file(filename):
                 series = pd.Series(dtype=float)
             if series.empty:
                 continue
-            plots.append(column)  # <-- track all columns for plots
-            # Detect anomalies first so we can overlay on both static and interactive
+            plots.append(column)  
+            
             an_idx, an_score = detect_anomalies(series, contamination=user_contam)
             if len(an_idx):
                 try:
@@ -1745,7 +1632,7 @@ def analyze_file(filename):
                     except Exception:
                         anomalies_found[str(column)] = []
 
-            # Static trend with anomalies overlay (already full series)
+            
             title_trend = f"Trend for {column}"
             title_trend = f"Trend for {column}"
             plots.append({
@@ -1764,7 +1651,7 @@ def analyze_file(filename):
                     steps = max(10, min(240, user_steps))
                     conf_df = None
                     fc_mean = None
-                    # Holt-Winters + slope/naturalization (unchanged)
+                    
                     try:
                         hw = ExponentialSmoothing(
                             series, trend='add', damped_trend=True, seasonal=None,
@@ -1780,7 +1667,7 @@ def analyze_file(filename):
                         conf_df.columns = ['lower', 'upper']
                     except Exception as e_hw:
                         app.logger.warning("Holt-Winters (damped) failed for %s: %s", column, e_hw)
-                    # Need slope fallback?
+                    
                     need_slope = False
                     if fc_mean is not None:
                         recent = series.tail(min(len(series), 300)).values
@@ -1791,7 +1678,7 @@ def analyze_file(filename):
                         flat_by_slope = (recent_step > 0 and abs(slope_fc) < 0.25 * recent_step)
                     if fc_mean is None or need_slope:
                         fc_mean, conf_df = _recent_slope_forecast(series, steps, window=min(len(series), 200), damping=None)
-                    # Naturalize if too straight
+                    
                     try:
                         base_slope_est = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
                         if _is_too_linear(fc_mean):
@@ -1802,8 +1689,7 @@ def analyze_file(filename):
                     except Exception as e_nat:
                         app.logger.warning("Naturalization failed for %s: %s", column, e_nat)
 
-                    # Build arrays for interactive forecast
-                    # Build arrays for interactive forecast
+                    
                     split_x = str(series.index[-1])
                     fc_x = [str(i) for i in fc_mean.index]
                     fc_y = [float(v) for v in fc_mean.values]
@@ -1811,7 +1697,7 @@ def analyze_file(filename):
                         ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
                         ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
 
-                    # Keep static forecast image too — now with full history
+                    
                     title_fc = f"Forecast for {column}"
                     forecast_plots.append({
                         "img": generate_forecast_plot(
@@ -1821,14 +1707,14 @@ def analyze_file(filename):
                             'Timestamp',
                             column,
                             conf_int=conf_df,
-                            history_tail=None  # full history
+                            history_tail=None  
                         ),
                         "title": title_fc
                     })
                 except Exception as e:
                     app.logger.warning("Could not generate forecast for %s: %s", column, e)
 
-            # ----- STL decomposition (static) ----- (unchanged)
+            
             if is_timeseries and len(series) >= 10:
                 try:
                     s_norm = normalize_timeseries(series)
@@ -1841,8 +1727,8 @@ def analyze_file(filename):
                 except Exception:
                     pass
 
-            # ----- Interactive traces -----
-            # Use full series unless PLOTLY_TAIL is set to a positive integer
+            
+            
             if raw_tail in ("all", "", "0", "-1", "none", "false"):
                 s_tail = series
             else:
@@ -1856,7 +1742,118 @@ def analyze_file(filename):
             y_hist = [float(v) for v in s_tail.values]
             traces = [{
                 "type": "scatter",
-                "mode": "lines+markers",  # markers enable box/lasso
+                "mode": "lines+markers",  
+                "name": "History",
+                "x": x_hist,
+                "y": y_hist,
+                "line":
+                    series,
+                    title_trend,
+                    'Timestamp' if is_timeseries else 'Index',
+                    column,
+                    anomalies_idx=an_idx
+                ),
+                "title": title_trend
+            })
+
+            if is_timeseries and len(series) >= 10:
+                try:
+                    steps = max(10, min(240, user_steps))
+                    conf_df = None
+                    fc_mean = None
+                    
+                    try:
+                        hw = ExponentialSmoothing(
+                            series, trend='add', damped_trend=True, seasonal=None,
+                            initialization_method='estimated'
+                        ).fit(optimized=True)
+                        fc_vals = hw.forecast(steps)
+                        future_idx = _infer_future_index(series.index, steps)
+                        fc_mean = pd.Series(fc_vals.values, index=future_idx)
+                        resid_std = float(np.nanstd(getattr(hw, 'resid', series - hw.fittedvalues), ddof=1))
+                        lower = fc_mean - 1.96 * resid_std
+                        upper = fc_mean + 1.96 * resid_std
+                        conf_df = pd.concat([lower, upper], axis=1)
+                        conf_df.columns = ['lower', 'upper']
+                    except Exception as e_hw:
+                        app.logger.warning("Holt-Winters (damped) failed for %s: %s", column, e_hw)
+                    
+                    need_slope = False
+                    if fc_mean is not None:
+                        recent = series.tail(min(len(series), 300)).values
+                        diffs = np.diff(recent)
+                        recent_step = float(np.median(np.abs(diffs))) if len(diffs) else 0.0
+                        slope_fc = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
+                        flat_by_range = np.allclose(fc_mean.values, fc_mean.values[0], rtol=1e-3, atol=1e-6)
+                        flat_by_slope = (recent_step > 0 and abs(slope_fc) < 0.25 * recent_step)
+                    if fc_mean is None or need_slope:
+                        fc_mean, conf_df = _recent_slope_forecast(series, steps, window=min(len(series), 200), damping=None)
+                    
+                    try:
+                        base_slope_est = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
+                        if _is_too_linear(fc_mean):
+                            fc_mean, conf_df = _bootstrap_natural_path(
+                                series, steps, window=min(len(series), 200), base_slope=base_slope_est,
+                                n_samples=200, q_low=0.1, q_high=0.9
+                            )
+                    except Exception as e_nat:
+                        app.logger.warning("Naturalization failed for %s: %s", column, e_nat)
+
+                    
+                    
+                    split_x = str(series.index[-1])
+                    fc_x = [str(i) for i in fc_mean.index]
+                    fc_y = [float(v) for v in fc_mean.values]
+                    if conf_df is not None:
+                        ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
+                        ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
+
+                    
+                    title_fc = f"Forecast for {column}"
+                    forecast_plots.append({
+                        "img": generate_forecast_plot(
+                            series,
+                            fc_mean,
+                            title_fc,
+                            'Timestamp',
+                            column,
+                            conf_int=conf_df,
+                            history_tail=None  
+                        ),
+                        "title": title_fc
+                    })
+                except Exception as e:
+                    app.logger.warning("Could not generate forecast for %s: %s", column, e)
+
+            
+            if is_timeseries and len(series) >= 10:
+                try:
+                    s_norm = normalize_timeseries(series)
+                    sp = _infer_seasonal_period(s_norm.index) if isinstance(s_norm.index, pd.DatetimeIndex) else None
+                    if sp:
+                        stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=sp)
+                       
+                        if stl_img:
+                            forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
+                except Exception:
+                    pass
+
+            
+            
+            if raw_tail in ("all", "", "0", "-1", "none", "false"):
+                s_tail = series
+            else:
+                try:
+                    tail_n = int(raw_tail)
+                    s_tail = series.tail(max(1, tail_n))
+                except Exception:
+                    s_tail = series
+
+            x_hist = [str(i) for i in s_tail.index]
+            y_hist = [float(v) for v in s_tail.values]
+            traces = [{
+                "type": "scatter",
+                "mode": "lines+markers",  
                 "name": "History",
                 "x": x_hist,
                 "y": y_hist,
@@ -1864,7 +1861,7 @@ def analyze_file(filename):
                 "marker": {"size": 4, "opacity": 0.6}
             }]
 
-            # anomalies in full or tail (s_tail may be full now)
+            
             if len(an_idx):
                 an_tail_idx = [i for i in an_idx if i in s_tail.index]
                 if an_tail_idx:
@@ -1878,12 +1875,12 @@ def analyze_file(filename):
                         "hovertemplate": "Anomaly<br>%{x}<br>%{y}<extra></extra>"
                     })
 
-            # forecast for interactive (unchanged)
+            
             fc_x = fc_y = ci_lower = ci_upper = split_x = None
             if is_timeseries and len(series) >= 10:
                 try:
                     steps = max(10, min(240, user_steps))
-                    # normalize spacing, forecast, and naturalize if too straight
+                    
                     s_norm = normalize_timeseries(series)
                     fc_mean, conf_df = _recent_slope_forecast(s_norm, steps=steps, window=None, damping=None)
                     try:
@@ -1899,7 +1896,7 @@ def analyze_file(filename):
                         ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
                         ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
 
-                    # 95% CI band (two traces, grouped under one legend item)
+                    
                     if fc_x and ci_lower and ci_upper:
                         ci_group = f"ci-{re.sub(r'[^A-Za-z0-9_-]+', '', str(column))}"
                         traces.append({
@@ -1926,7 +1923,7 @@ def analyze_file(filename):
                             "legendgrouptitle": {"text": "95% CI"}
                         })
 
-                    # Forecast mean line (unchanged)
+                    
                     if fc_x and fc_y:
                         traces.append({
                             "type": "scatter",
@@ -1939,7 +1936,7 @@ def analyze_file(filename):
                 except Exception:
                     pass
 
-            # Update layout to include split line and legend group behavior + range UI
+            
             xaxis = {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True}
             if is_timeseries:
                 xaxis.update({
@@ -1981,11 +1978,11 @@ def analyze_file(filename):
                     }
                 })
 
-            # Use full values for the distribution
+            
             dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
             interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
 
-        # Compute info(), missing values, and AI summary safely
+        
         buf = io.StringIO()
         try:
             df.info(buf=buf)
@@ -2000,11 +1997,11 @@ def analyze_file(filename):
         except Exception:
             missing_values_html = None
 
-        # Replace this line:
-        # ai_summary = get_ai_summary_with_file(df, file_asset)
+        
+        
 
-        # With this cached/skip-on-POST logic:
-        # Build richer AI context from current analysis artifacts
+        
+        
         used_cols = list(df.columns)
         ai_context = build_ai_context(
             df=df,
@@ -2018,21 +2015,21 @@ def analyze_file(filename):
 
         ai_summary = AI_SUMMARY_CACHE.get(filename)
         if ai_summary is None:
-            # Only generate on initial GET to avoid rate limits on re-runs/questions
+            
             if request.method == 'GET' and AI_ENABLED and model is not None:
                 try:
                     generated = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
                     ai_summary = generated
-                    # cache whatever we got (even an error string) to avoid repeated calls under rate limits
+                    
                     AI_SUMMARY_CACHE[filename] = generated
                 except Exception as _e:
-                    # fallback message if generation fails unexpectedly
+                    
                     ai_summary = "<p>AI summary temporarily unavailable.</p>"
             else:
-                # POST or AI disabled: reuse cached if any; otherwise neutral message
+                
                 ai_summary = "<p>AI summary will appear after initial analysis loads.</p>"
 
-        # Build final analysis dict (use used_cols instead of raw numeric_cols)
+        
         analysis.update({
             'head': safe_df_head_html(df),
             'description': safe_df_description_html(df),
@@ -2044,7 +2041,7 @@ def analyze_file(filename):
             'ai_summary': ai_summary,
             'user_question': user_question,
             'ai_answer': ai_answer,
-            # Interactive payloads expected by the template
+            
             'interactive': interactive,
             'columns': used_cols,
             'corr': corr_payload,
@@ -2054,7 +2051,7 @@ def analyze_file(filename):
             }
         })
 
-        # Schedule deletion of the hashed upload only if the response is successful
+        
         if (
             app.config.get('DELETE_UPLOADED_AFTER_PROCESSING', False)
             and HASHED_UPLOAD_RE.match(os.path.basename(filepath))
@@ -2081,7 +2078,7 @@ def health():
 
 @app.route('/download/<filename>/cleaned.csv', methods=['GET'])
 def download_cleaned_csv(filename):
-    # Only allow app-managed hashed uploads
+    
     if not HASHED_UPLOAD_RE.match(filename):
         return ("Not found", 404)
     df = DATAFRAME_CACHE.get(filename)
@@ -2090,12 +2087,12 @@ def download_cleaned_csv(filename):
         path = os.path.join(uploads_dir, filename)
         if not os.path.exists(path):
             return ("Not found", 404)
-        # Re-read using the same heuristics
+        
         df = get_dataframe_for(filename)
         if df is None:
             return ("Not found", 404)
 
-    # Build a “cleaned” version: robust numeric coercion but keep non-numeric columns
+    
     cleaned = df.copy()
     try:
         for col in cleaned.columns:
@@ -2104,14 +2101,14 @@ def download_cleaned_csv(filename):
                 cleaned[col] = pd.to_numeric(ser, errors='coerce')
             else:
                 coerced = _try_parse_numeric_series(ser)
-                # Replace only if coercion meaningfully helps
+                
 
                 if coerced.notna().sum() >= pd.to_numeric(ser, errors='coerce').notna().sum():
                     cleaned[col] = coerced
-        # Sort by time if datetime index
+        
         if isinstance(cleaned.index, pd.DatetimeIndex):
             cleaned = cleaned.sort_index()
-        # Drop fully empty columns after coercion
+        
         cleaned = cleaned.dropna(axis=1, how='all')
     except Exception:
         pass
@@ -2125,17 +2122,17 @@ def download_cleaned_csv(filename):
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
     return resp
 
-# --- AI summary as HTML download ---
+
 @app.route('/download/<filename>/ai_summary.html', methods=['GET'])
 def download_ai_summary_html(filename):
-    # Only allow app-managed hashed uploads
+    
     if not HASHED_UPLOAD_RE.match(filename):
         return ("Not found", 404)
 
-    # Try cache first
+    
     ai_html = AI_SUMMARY_CACHE.get(filename)
     if ai_html is None:
-        # Best effort to generate now
+        
         df = get_dataframe_for(filename)
         if df is None:
             return ("Not found", 404)
@@ -2156,20 +2153,20 @@ def download_ai_summary_html(filename):
 
 @app.route('/download/<filename>/ai_summary.pdf', methods=['GET'])
 def download_ai_summary_pdf(filename):
-    # Only allow app-managed hashed uploads
+    
     if not HASHED_UPLOAD_RE.match(filename):
         return jsonify({"ok": False, "message": "Invalid filename."}), 400
 
-    # Reuse cached summary or generate on demand
+    
     ai_html = AI_SUMMARY_CACHE.get(filename)
     if ai_html is None or not isinstance(ai_html, str) or not ai_html.strip():
         df = get_dataframe_for(filename)
         if df is None or (isinstance(df, pd.DataFrame) and df.empty):
             return jsonify({"ok": False, "message": "Dataset not found or empty."}), 404
-        # Never re-generate more than once per file: use cache-first wrapper
+        
         ai_html = get_or_cache_ai_summary_for(filename, df)
 
-    # Wrap into a minimal printable HTML doc
+    
     doc_html = f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>AI Summary</title>
 <style>
@@ -2207,7 +2204,7 @@ def download_static_plots_zip(filename):
     bio = io.BytesIO()
     with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
         for col in df.columns:
-            # Build a static trend plot for each numeric column
+            
             try:
                 s = pd.to_numeric(df[col], errors='coerce').dropna()
             except Exception:
@@ -2226,7 +2223,7 @@ def download_static_plots_zip(filename):
                 raw = base64.b64decode(img_b64.encode('utf-8'))
                 zf.writestr(f"{secure_filename(str(col))}_trend.png", raw)
             except Exception:
-                # Skip this column on any failure
+                
                 continue
 
     bio.seek(0)
@@ -2238,7 +2235,7 @@ def download_static_plots_zip(filename):
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
     return resp
 
-# --- Full report (single HTML including overview, plots, forecasts, correlation) ---
+
 @app.route('/download/<filename>/report.html', methods=['GET'])
 def download_full_report_html(filename):
     if not HASHED_UPLOAD_RE.match(filename):
@@ -2248,7 +2245,7 @@ def download_full_report_html(filename):
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         return ("Not found", 404)
 
-    # Overview
+    
     head_html = safe_df_head_html(df)
     desc_html = safe_df_description_html(df)
     buf = io.StringIO()
@@ -2264,7 +2261,7 @@ def download_full_report_html(filename):
     except Exception:
         missing_html = ""
 
-    # AI summary (cached or on-demand)
+    
     ai_html = AI_SUMMARY_CACHE.get(filename)
     if ai_html is None:
         try:
@@ -2274,7 +2271,7 @@ def download_full_report_html(filename):
         except Exception:
             ai_html = "<p>AI summary temporarily unavailable.</p>"
 
-    # Static plots and forecasts
+    
     is_ts = isinstance(df.index, pd.DatetimeIndex)
     static_sections = []
     forecast_sections = []
@@ -2293,13 +2290,13 @@ def download_full_report_html(filename):
             fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast for {col}", 'Timestamp', col, conf_int=ci, history_tail=None)
             forecast_sections.append(f'<figure><figcaption>Forecast for {col}</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
 
-    # Correlation table (robust)
+    
     corr_html = ""
     try:
         df_num = coerce_numeric_df(df)
         sel = df_num.select_dtypes(include='number')
         if not sel.empty:
-            # drop constant columns
+            
             nunique = sel.nunique(dropna=True)
             sel = sel.loc[:, nunique > 1]
         if sel.shape[1] >= 2:
@@ -2308,7 +2305,7 @@ def download_full_report_html(filename):
     except Exception:
         pass
 
-    # Build HTML document
+    
     display = request.args.get('display') or filename
     title = f"Analysis report — {display}"
     html = f"""<!doctype html>
@@ -2357,14 +2354,14 @@ def download_full_report_html(filename):
 
 @app.route('/download/<filename>/report.pdf', methods=['GET'])
 def download_full_report_pdf(filename):
-    # Only allow app-managed hashed uploads
+    
     if not HASHED_UPLOAD_RE.match(filename):
         return jsonify({"ok": False, "message": "Invalid filename."}), 400
 
-    # Reuse the HTML builder to avoid duplicating content logic
+    
     html_resp = download_full_report_html(filename)
     try:
-        # If the HTML route returned an error Response, propagate it
+        
         if getattr(html_resp, "status_code", 200) != 200:
             return html_resp
         html_doc = html_resp.get_data(as_text=True)
@@ -2399,8 +2396,8 @@ def full_history_json():
         "is_timeseries": bool,
         "display": str,
         "length": int (number of rows serialized),
-        "columns": [str, ...],  # numeric columns included
-        "x": [ ... ],           # ISO timestamps or index values
+        "columns": [str, ...],  
+        "x": [ ... ],           
         "series": { "col": [y0, y1, ...], ... }
       }
     """
@@ -2414,11 +2411,11 @@ def full_history_json():
         if not HASHED_UPLOAD_RE.match(filename):
             return jsonify({"ok": False, "message": "Invalid filename format."}), 400
 
-        df = get_dataframe_for(filename)  # uses cache/disk; see get_dataframe_for
+        df = get_dataframe_for(filename)  
         if df is None or df.empty:
             return jsonify({"ok": False, "message": "Dataset not found or empty."}), 404
 
-        # Ensure deterministic order for plotting
+        
         try:
             df = df.sort_index()
         except Exception:
@@ -2426,10 +2423,10 @@ def full_history_json():
 
         is_ts = isinstance(df.index, pd.DatetimeIndex)
 
-        # Build x-axis values
+        
         if is_ts:
             idx = df.index
-            # Remove timezone if present for stable JSON
+            
             try:
                 idx = idx.tz_convert(None)
             except Exception:
@@ -2440,10 +2437,10 @@ def full_history_json():
             try:
                 x_all = [ts.isoformat() for ts in idx.to_pydatetime()]
             except Exception:
-                # Fallback to string format
+                
                 x_all = [str(v) for v in idx.astype('datetime64[ns]').tolist()]
         else:
-            # Use index if json-serializable; otherwise fall back to 0..N-1
+            
             try:
                 x_all_raw = df.index.tolist()
                 x_all = []
@@ -2460,16 +2457,16 @@ def full_history_json():
                 x_all = list(range(len(df)))
 
         n = len(x_all)
-        # Default: full data; thin only if asked and beneficial
+        
         step = 1
         if max_points and max_points > 0 and n > max_points:
-            # uniform thinning stride
+            
             step = max(1, n // max_points)
 
-        # Build numeric series payload
-        num_df = coerce_numeric_df(df)  # robust numeric parsing from strings
+        
+        num_df = coerce_numeric_df(df)  
         numeric_cols = [c for c in num_df.columns if pd.api.types.is_numeric_dtype(num_df[c])]
-        # If nothing numeric detected, try a best-effort pass per column
+        
         if not numeric_cols:
             for c in df.columns:
                 try:
@@ -2479,18 +2476,18 @@ def full_history_json():
                     continue
             numeric_cols = [c for c in num_df.columns if pd.api.types.is_numeric_dtype(num_df[c])]
 
-        # Align X and Y lengths; thin consistently using 'step'
+        
         x_vals = x_all[::step] if step > 1 else x_all
         series = {}
         for c in numeric_cols:
             try:
                 y_all = num_df[c].astype(float).tolist()
             except Exception:
-                # keep NaNs as None in JSON
+                
                 y_all = [float(v) if pd.notna(v) else None for v in num_df[c].tolist()]
             y_vals = y_all[::step] if step > 1 else y_all
 
-            # Ensure alignment (trim to same length as x)
+            
             if len(y_vals) != len(x_vals):
                 m = min(len(y_vals), len(x_vals))
                 y_vals = y_vals[:m]
@@ -2510,7 +2507,7 @@ def full_history_json():
         return jsonify(payload), 200
 
     except Exception as e:
-        # Log and return error
+        
         try:
             app.logger.exception("full_history_json failed: %s", e)
         except Exception:
@@ -2522,24 +2519,24 @@ def _sanitize_permissions_policy(resp):
     try:
         if 'Permissions-Policy' in resp.headers:
             pol = str(resp.headers.get('Permissions-Policy', ''))
-            # Remove a few commonly unsupported/legacy directives
+            
             bad_bits = ['interest-cohort', 'browsing-topics', 'join-ad-interest-group', 'run-ad-auction']
             cleaned = "; ".join(seg for seg in pol.split(';') if seg and not any(b in seg for b in bad_bits)).strip()
             if cleaned:
                 resp.headers['Permissions-Policy'] = cleaned
             else:
-                # If nothing usable remains, drop the header entirely
+                
                 del resp.headers['Permissions-Policy']
     except Exception:
-        # Never fail a response due to header cleanup
+        
         pass
     return resp
 
 if __name__ == "__main__":
     pass
-    # Read basic server config from env (with safe defaults)
+    
     debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on")
-    # Read basic server config from env (with safe defaults)
+    
     debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on")
     host = os.getenv("FLASK_HOST", os.getenv("HOST", "0.0.0.0"))
     try:
@@ -2547,7 +2544,7 @@ if __name__ == "__main__":
     except Exception:
         port = 5000
 
-    # Optional: enable security headers only when explicitly requested
+    
     if Talisman and str(os.getenv("USE_TALISMAN", "0")).strip().lower() in ("1", "true", "yes", "on"):
         try:
             default_csp = {
@@ -2562,7 +2559,7 @@ if __name__ == "__main__":
         except Exception as e:
             app.logger.warning("Talisman init failed: %s", e)
 
-    # Optional: basic rate limiting if configured
+    
     if Limiter and os.getenv("RATE_LIMIT"):
         try:
             limiter = Limiter(get_remote_address, app=app, default_limits=[os.getenv("RATE_LIMIT")])
@@ -2571,5 +2568,5 @@ if __name__ == "__main__":
             app.logger.warning("Limiter init failed: %s", e)
 
     app.logger.info("Starting Flask server on %s:%s (debug=%s)", host, port, debug)
-    # threaded=True plays nicer on Windows; use_reloader obeys debug
+    
     app.run(host=host, port=port, debug=debug, threaded=True)
