@@ -1742,19 +1742,13 @@ def analyze_file(filename):
             y_hist = [float(v) for v in s_tail.values]
             traces = [{
                 "type": "scatter",
-                "mode": "lines+markers",  
+                "mode": "lines+markers",
                 "name": "History",
                 "x": x_hist,
                 "y": y_hist,
-                "line":
-                    series,
-                    title_trend,
-                    'Timestamp' if is_timeseries else 'Index',
-                    column,
-                    anomalies_idx=an_idx
-                ),
-                "title": title_trend
-            })
+                "line": {"color": "rgb(31,119,180)", "width": 2},
+                "marker": {"size": 4, "opacity": 0.6}
+            }]
 
             if is_timeseries and len(series) >= 10:
                 try:
