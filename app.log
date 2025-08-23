@@ -1172,3 +1172,2191 @@ NameError: name 'x_vals' is not defined
 2025-08-21 10:55:18,491 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 10:55:18] "POST / HTTP/1.1" 302 -
 2025-08-21 10:57:34,015 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 10:57:34] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
 2025-08-21 11:00:18,785 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 11:00:18] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&display=Project_1_-_Weather_Dataset.csv&max_points=3824 HTTP/1.1" 200 -
+2025-08-21 14:37:42,442 INFO app: Attempting to configure AI...
+2025-08-21 14:37:42,443 INFO app: AI configured successfully.
+2025-08-21 14:37:42,449 INFO app: Talisman enabled
+2025-08-21 14:37:42,451 INFO app: Rate limiting enabled
+2025-08-21 14:37:42,451 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 14:37:42,519 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 14:37:42,520 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 14:37:42,524 INFO werkzeug:  * Restarting with stat
+2025-08-21 14:37:51,203 INFO app: Attempting to configure AI...
+2025-08-21 14:37:51,204 INFO app: AI configured successfully.
+2025-08-21 14:37:51,211 INFO app: Talisman enabled
+2025-08-21 14:37:51,214 INFO app: Rate limiting enabled
+2025-08-21 14:37:51,215 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 14:37:51,249 WARNING werkzeug:  * Debugger is active!
+2025-08-21 14:37:51,265 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 14:37:51,490 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:37:51] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-21 14:37:51,525 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:37:51] "GET / HTTP/1.1" 200 -
+2025-08-21 14:37:52,499 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:37:52] "GET /favicon.ico HTTP/1.1" 404 -
+2025-08-21 14:38:06,284 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:38:06] "POST / HTTP/1.1" 302 -
+2025-08-21 14:40:00,081 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:40:00] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 14:55:39,504 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 14:55:45,263 INFO werkzeug:  * Restarting with stat
+2025-08-21 14:55:58,677 INFO app: Attempting to configure AI...
+2025-08-21 14:55:58,678 INFO app: AI configured successfully.
+2025-08-21 14:55:58,688 INFO app: Talisman enabled
+2025-08-21 14:55:58,690 INFO app: Rate limiting enabled
+2025-08-21 14:55:58,691 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 14:55:58,730 WARNING werkzeug:  * Debugger is active!
+2025-08-21 14:55:58,741 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 14:57:22,076 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 14:57:22,682 INFO werkzeug:  * Restarting with stat
+2025-08-21 14:57:30,679 INFO app: Attempting to configure AI...
+2025-08-21 14:57:30,679 INFO app: AI configured successfully.
+2025-08-21 14:57:30,688 INFO app: Talisman enabled
+2025-08-21 14:57:30,691 INFO app: Rate limiting enabled
+2025-08-21 14:57:30,692 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 14:57:30,717 WARNING werkzeug:  * Debugger is active!
+2025-08-21 14:57:30,721 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 14:58:02,210 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:58:02] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-21 14:58:02,292 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:58:02] "GET / HTTP/1.1" 200 -
+2025-08-21 14:58:15,929 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:58:15] "GET / HTTP/1.1" 200 -
+2025-08-21 14:58:39,646 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:58:39] "POST / HTTP/1.1" 302 -
+2025-08-21 14:59:59,178 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:59:59] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=240&contamination=0.02 HTTP/1.1" 302 -
+2025-08-21 14:59:59,204 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 14:59:59] "GET / HTTP/1.1" 200 -
+2025-08-21 15:00:38,803 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:00:38] "POST / HTTP/1.1" 302 -
+2025-08-21 15:00:38,905 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:00:38] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-21 15:00:38,920 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:00:38] "GET / HTTP/1.1" 200 -
+2025-08-21 15:00:58,067 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 15:01:00,925 INFO werkzeug:  * Restarting with stat
+2025-08-21 15:01:10,134 INFO app: Attempting to configure AI...
+2025-08-21 15:01:10,145 INFO app: AI configured successfully.
+2025-08-21 15:01:10,155 INFO app: Talisman enabled
+2025-08-21 15:01:10,159 INFO app: Rate limiting enabled
+2025-08-21 15:01:10,161 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 15:01:10,203 WARNING werkzeug:  * Debugger is active!
+2025-08-21 15:01:10,213 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 15:19:08,867 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:19:08] "GET / HTTP/1.1" 200 -
+2025-08-21 15:19:35,346 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:19:35] "POST / HTTP/1.1" 302 -
+2025-08-21 15:21:18,669 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:21:18] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 15:22:11,563 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:22:11] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-21 15:23:08,136 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:23:08] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-21 15:30:45,331 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:30:45] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-21 15:31:48,224 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:31:48] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 15:32:09,938 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:32:09] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/cleaned.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-21 15:32:53,357 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:32:53] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-21 15:33:42,672 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:33:42] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-21 15:35:02,552 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:35:02] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 15:41:29,172 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 15:41:35,245 INFO werkzeug:  * Restarting with stat
+2025-08-21 15:41:49,252 INFO app: Attempting to configure AI...
+2025-08-21 15:41:49,253 INFO app: AI configured successfully.
+2025-08-21 15:47:50,868 INFO app: Attempting to configure AI...
+2025-08-21 15:47:50,870 INFO app: AI configured successfully.
+2025-08-21 15:47:50,875 INFO app: Talisman enabled
+2025-08-21 15:47:50,879 INFO app: Rate limiting enabled
+2025-08-21 15:47:50,880 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 15:47:51,007 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 15:47:51,007 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 15:47:51,016 INFO werkzeug:  * Restarting with stat
+2025-08-21 15:47:59,016 INFO app: Attempting to configure AI...
+2025-08-21 15:47:59,018 INFO app: AI configured successfully.
+2025-08-21 15:47:59,023 INFO app: Talisman enabled
+2025-08-21 15:47:59,025 INFO app: Rate limiting enabled
+2025-08-21 15:47:59,026 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 15:47:59,060 WARNING werkzeug:  * Debugger is active!
+2025-08-21 15:47:59,085 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 15:55:54,348 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:55:54] "GET / HTTP/1.1" 200 -
+2025-08-21 15:56:13,175 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:56:13] "POST / HTTP/1.1" 302 -
+2025-08-21 15:58:09,186 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:58:09] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=240&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 15:59:54,586 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 15:59:54] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 16:00:36,354 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 16:00:36] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-21 16:02:14,900 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 16:02:14] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 16:02:44,978 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 16:02:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 19:56:02,421 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 19:56:02] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-21 19:56:48,483 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 19:56:48] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-21 19:58:16,637 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 19:58:16] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/cleaned.csv?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-21 20:04:23,679 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 20:04:29,828 INFO werkzeug:  * Restarting with stat
+2025-08-21 20:04:45,550 INFO app: Attempting to configure AI...
+2025-08-21 20:04:45,552 INFO app: AI configured successfully.
+2025-08-21 20:20:16,909 INFO app: Attempting to configure AI...
+2025-08-21 20:20:16,910 INFO app: AI configured successfully.
+2025-08-21 20:20:16,917 INFO app: Talisman enabled
+2025-08-21 20:20:16,919 INFO app: Rate limiting enabled
+2025-08-21 20:20:16,920 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 20:20:16,993 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 20:20:16,995 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 20:20:16,999 INFO werkzeug:  * Restarting with stat
+2025-08-21 20:20:25,872 INFO app: Attempting to configure AI...
+2025-08-21 20:20:25,873 INFO app: AI configured successfully.
+2025-08-21 20:20:25,880 INFO app: Talisman enabled
+2025-08-21 20:20:25,882 INFO app: Rate limiting enabled
+2025-08-21 20:20:25,883 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 20:20:25,937 WARNING werkzeug:  * Debugger is active!
+2025-08-21 20:20:25,960 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 20:20:33,344 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:20:33] "GET / HTTP/1.1" 200 -
+2025-08-21 20:21:02,903 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:21:02] "POST / HTTP/1.1" 302 -
+2025-08-21 20:22:52,576 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:22:52] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 20:23:54,741 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:23:54] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-21 20:28:13,915 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:28:13] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-21 20:30:09,034 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:30:09] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 20:35:35,380 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 20:35:42,315 INFO werkzeug:  * Restarting with stat
+2025-08-21 20:35:58,677 INFO app: Attempting to configure AI...
+2025-08-21 20:35:58,678 INFO app: AI configured successfully.
+2025-08-21 20:35:58,685 INFO app: Talisman enabled
+2025-08-21 20:35:58,688 INFO app: Rate limiting enabled
+2025-08-21 20:35:58,689 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 20:35:58,727 WARNING werkzeug:  * Debugger is active!
+2025-08-21 20:35:58,745 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 20:36:18,283 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:36:18] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 302 -
+2025-08-21 20:36:18,474 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:36:18] "GET / HTTP/1.1" 200 -
+2025-08-21 20:38:33,471 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 20:38:41,720 INFO werkzeug:  * Restarting with stat
+2025-08-21 20:38:59,418 INFO app: Attempting to configure AI...
+2025-08-21 20:38:59,419 INFO app: AI configured successfully.
+2025-08-21 20:38:59,428 INFO app: Talisman enabled
+2025-08-21 20:38:59,430 INFO app: Rate limiting enabled
+2025-08-21 20:38:59,431 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 20:38:59,475 WARNING werkzeug:  * Debugger is active!
+2025-08-21 20:38:59,495 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 20:39:18,315 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 20:39:20,663 INFO werkzeug:  * Restarting with stat
+2025-08-21 20:39:39,560 INFO app: Attempting to configure AI...
+2025-08-21 20:39:39,562 INFO app: AI configured successfully.
+2025-08-21 20:39:39,583 INFO app: Talisman enabled
+2025-08-21 20:39:39,631 INFO app: Rate limiting enabled
+2025-08-21 20:39:39,632 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 20:39:40,310 WARNING werkzeug:  * Debugger is active!
+2025-08-21 20:39:40,380 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 20:41:47,329 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 20:41:56,216 INFO werkzeug:  * Restarting with stat
+2025-08-21 20:42:16,954 INFO app: Attempting to configure AI...
+2025-08-21 20:42:16,955 INFO app: AI configured successfully.
+2025-08-21 20:47:00,089 INFO app: Attempting to configure AI...
+2025-08-21 20:47:00,090 INFO app: AI configured successfully.
+2025-08-21 20:47:00,104 INFO app: Talisman enabled
+2025-08-21 20:47:00,106 INFO app: Rate limiting enabled
+2025-08-21 20:47:00,107 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 20:47:00,207 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 20:47:00,207 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 20:47:00,212 INFO werkzeug:  * Restarting with stat
+2025-08-21 20:47:11,994 INFO app: Attempting to configure AI...
+2025-08-21 20:47:11,996 INFO app: AI configured successfully.
+2025-08-21 20:47:12,007 INFO app: Talisman enabled
+2025-08-21 20:47:12,011 INFO app: Rate limiting enabled
+2025-08-21 20:47:12,015 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 20:47:12,060 WARNING werkzeug:  * Debugger is active!
+2025-08-21 20:47:12,289 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 20:47:29,168 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:47:29] "POST / HTTP/1.1" 302 -
+2025-08-21 20:57:07,102 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 20:57:07] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=240&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 21:00:22,175 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:00:22] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2025-08-21 21:00:24,757 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:00:24] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-08-21 21:00:24,866 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:00:24] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-08-21 21:00:26,652 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:00:26] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?__debugger__=yes&cmd=resource&f=console.png&s=eWuL1A6xeqSHnNEctSSL HTTP/1.1" 200 -
+2025-08-21 21:00:30,318 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:00:30] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-08-21 21:15:55,440 INFO app: Attempting to configure AI...
+2025-08-21 21:15:55,442 INFO app: AI configured successfully.
+2025-08-21 21:15:55,451 INFO app: Talisman enabled
+2025-08-21 21:15:55,454 INFO app: Rate limiting enabled
+2025-08-21 21:15:55,455 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:15:55,565 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 21:15:55,566 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 21:15:55,570 INFO werkzeug:  * Restarting with stat
+2025-08-21 21:16:05,706 INFO app: Attempting to configure AI...
+2025-08-21 21:16:05,707 INFO app: AI configured successfully.
+2025-08-21 21:16:05,721 INFO app: Talisman enabled
+2025-08-21 21:16:05,724 INFO app: Rate limiting enabled
+2025-08-21 21:16:05,725 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:16:05,767 WARNING werkzeug:  * Debugger is active!
+2025-08-21 21:16:05,784 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 21:16:22,603 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:16:22] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 302 -
+2025-08-21 21:16:22,820 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:16:22] "GET / HTTP/1.1" 200 -
+2025-08-21 21:16:23,232 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:16:23] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:16:24,061 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:16:24] "GET /favicon.ico HTTP/1.1" 404 -
+2025-08-21 21:16:45,700 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:16:45] "POST / HTTP/1.1" 302 -
+2025-08-21 21:18:34,111 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:34] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=240&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 21:18:34,237 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:34] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:18:42,669 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:42] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2025-08-21 21:18:43,007 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:42] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:18:43,087 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:43] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 304 -
+2025-08-21 21:18:43,185 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:43] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 304 -
+2025-08-21 21:18:43,450 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:43] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?__debugger__=yes&cmd=resource&f=console.png&s=bN2WGadRjujfgxManMI9 HTTP/1.1" 200 -
+2025-08-21 21:18:48,464 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:18:48] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:19:41,053 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:41] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-21 21:19:41,189 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:41] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:19:59,227 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:59] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/static_plots.zip?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2025-08-21 21:19:59,353 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:59] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:19:59,402 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:59] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/static_plots.zip?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-08-21 21:19:59,406 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:59] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/static_plots.zip?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-08-21 21:19:59,642 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:59] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/static_plots.zip?__debugger__=yes&cmd=resource&f=console.png&s=bN2WGadRjujfgxManMI9 HTTP/1.1" 200 -
+2025-08-21 21:19:59,941 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:19:59] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/static_plots.zip?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-08-21 21:22:13,178 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:22:13] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:22:15,959 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:22:15] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-21 21:23:24,047 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:23:24] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 21:23:24,381 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:23:24] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:24:24,765 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 21:24:31,678 INFO werkzeug:  * Restarting with stat
+2025-08-21 21:24:46,029 INFO app: Attempting to configure AI...
+2025-08-21 21:24:46,030 INFO app: AI configured successfully.
+2025-08-21 21:24:46,040 INFO app: Talisman enabled
+2025-08-21 21:24:46,043 INFO app: Rate limiting enabled
+2025-08-21 21:24:46,044 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:24:46,087 WARNING werkzeug:  * Debugger is active!
+2025-08-21 21:24:46,103 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 21:25:03,902 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 21:25:04,728 INFO werkzeug:  * Restarting with stat
+2025-08-21 21:25:14,790 INFO app: Attempting to configure AI...
+2025-08-21 21:25:14,791 INFO app: AI configured successfully.
+2025-08-21 21:25:14,804 INFO app: Talisman enabled
+2025-08-21 21:25:14,806 INFO app: Rate limiting enabled
+2025-08-21 21:25:14,807 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:25:14,851 WARNING werkzeug:  * Debugger is active!
+2025-08-21 21:25:14,856 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 21:25:44,458 INFO app: Attempting to configure AI...
+2025-08-21 21:25:44,459 INFO app: AI configured successfully.
+2025-08-21 21:25:44,470 INFO app: Talisman enabled
+2025-08-21 21:25:44,472 INFO app: Rate limiting enabled
+2025-08-21 21:25:44,473 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:25:44,555 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 21:25:44,556 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 21:25:44,559 INFO werkzeug:  * Restarting with stat
+2025-08-21 21:25:53,656 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:25:53] "GET / HTTP/1.1" 200 -
+2025-08-21 21:25:53,968 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:25:53] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:25:56,408 INFO app: Attempting to configure AI...
+2025-08-21 21:25:56,409 INFO app: AI configured successfully.
+2025-08-21 21:25:56,432 INFO app: Talisman enabled
+2025-08-21 21:25:56,439 INFO app: Rate limiting enabled
+2025-08-21 21:25:56,439 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:25:56,526 WARNING werkzeug:  * Debugger is active!
+2025-08-21 21:25:56,537 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 21:26:25,970 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:26:25] "POST / HTTP/1.1" 302 -
+2025-08-21 21:27:17,984 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:27:17] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=240&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 21:27:18,100 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:27:18] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:29:13,609 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:29:13] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-21 21:29:25,061 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:29:25] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-21 21:29:25,216 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:29:25] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:30:57,811 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:30:57] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-21 21:31:03,778 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:31:03] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-21 21:31:12,671 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:31:12] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-21 21:31:22,135 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:31:22] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 21:33:00,455 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 21:33:00,700 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-21 21:33:10,178 INFO werkzeug:  * Restarting with stat
+2025-08-21 21:33:13,002 INFO werkzeug:  * Restarting with stat
+2025-08-21 21:47:45,999 INFO app: Attempting to configure AI...
+2025-08-21 21:47:46,001 INFO app: AI configured successfully.
+2025-08-21 21:47:46,012 INFO app: Talisman enabled
+2025-08-21 21:47:46,015 INFO app: Rate limiting enabled
+2025-08-21 21:47:46,016 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:47:46,085 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-21 21:47:46,085 INFO werkzeug: Press CTRL+C to quit
+2025-08-21 21:47:46,089 INFO werkzeug:  * Restarting with stat
+2025-08-21 21:47:53,997 INFO app: Attempting to configure AI...
+2025-08-21 21:47:53,998 INFO app: AI configured successfully.
+2025-08-21 21:47:54,011 INFO app: Talisman enabled
+2025-08-21 21:47:54,014 INFO app: Rate limiting enabled
+2025-08-21 21:47:54,015 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-21 21:47:54,040 WARNING werkzeug:  * Debugger is active!
+2025-08-21 21:47:54,051 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-21 21:47:54,253 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:47:54] "GET / HTTP/1.1" 200 -
+2025-08-21 21:47:54,497 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:47:54] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:48:14,297 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:48:14] "POST / HTTP/1.1" 302 -
+2025-08-21 21:48:49,235 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:48:49] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-21 21:48:49,299 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:48:49] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:49:25,627 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:49:25] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-21 21:52:27,805 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:52:27] "GET / HTTP/1.1" 200 -
+2025-08-21 21:52:34,790 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:52:34] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-21 21:53:50,509 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:53:50] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-21 21:53:50,673 INFO werkzeug: 127.0.0.1 - - [21/Aug/2025 21:53:50] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 09:42:24,035 INFO app: Attempting to configure AI...
+2025-08-22 09:42:24,037 INFO app: AI configured successfully.
+2025-08-22 09:42:24,079 INFO app: Talisman enabled
+2025-08-22 09:42:24,087 INFO app: Rate limiting enabled
+2025-08-22 09:42:24,093 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 09:42:24,235 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 09:42:24,236 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 09:42:24,246 INFO werkzeug:  * Restarting with stat
+2025-08-22 09:42:37,017 INFO app: Attempting to configure AI...
+2025-08-22 09:42:37,018 INFO app: AI configured successfully.
+2025-08-22 09:42:37,043 INFO app: Talisman enabled
+2025-08-22 09:42:37,048 INFO app: Rate limiting enabled
+2025-08-22 09:42:37,050 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 09:42:37,088 WARNING werkzeug:  * Debugger is active!
+2025-08-22 09:42:37,099 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 09:42:37,359 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:42:37] "GET / HTTP/1.1" 200 -
+2025-08-22 09:42:37,720 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:42:37] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 09:43:03,710 INFO app: AI file upload skipped: [WinError 10054] An existing connection was forcibly closed by the remote host
+2025-08-22 09:43:03,747 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:43:03] "POST / HTTP/1.1" 302 -
+2025-08-22 09:43:53,858 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:43:53] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=240&contamination=0.02 HTTP/1.1" 200 -
+2025-08-22 09:43:54,002 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:43:54] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 09:44:17,096 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:44:17] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/static_plots.zip?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-22 09:49:47,610 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:49:47] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-22 09:50:38,848 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:50:38] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-22 09:50:39,510 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:50:39] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-22 09:52:04,942 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:52:04] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-22 09:52:41,021 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:52:41] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 09:56:43,628 INFO app: Attempting to configure AI...
+2025-08-22 09:56:43,629 INFO app: AI configured successfully.
+2025-08-22 09:56:43,647 INFO app: Talisman enabled
+2025-08-22 09:56:43,655 INFO app: Rate limiting enabled
+2025-08-22 09:56:43,655 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 09:56:43,738 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 09:56:43,739 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 09:56:43,744 INFO werkzeug:  * Restarting with stat
+2025-08-22 09:56:56,417 INFO app: Attempting to configure AI...
+2025-08-22 09:56:56,419 INFO app: AI configured successfully.
+2025-08-22 09:56:56,437 INFO app: Talisman enabled
+2025-08-22 09:56:56,440 INFO app: Rate limiting enabled
+2025-08-22 09:56:56,441 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 09:56:56,485 WARNING werkzeug:  * Debugger is active!
+2025-08-22 09:56:56,503 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 09:56:56,794 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:56:56] "GET / HTTP/1.1" 200 -
+2025-08-22 09:56:56,934 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:56:56] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 09:57:52,189 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:57:52] "POST / HTTP/1.1" 302 -
+2025-08-22 09:58:39,999 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:58:39] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-22 09:58:40,152 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:58:40] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 09:59:41,057 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:59:41] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-22 09:59:41,218 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 09:59:41] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:06:02,180 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 10:06:08,172 INFO werkzeug:  * Restarting with stat
+2025-08-22 10:06:25,577 INFO app: Attempting to configure AI...
+2025-08-22 10:06:25,579 INFO app: AI configured successfully.
+2025-08-22 10:06:25,600 INFO app: Talisman enabled
+2025-08-22 10:06:25,604 INFO app: Rate limiting enabled
+2025-08-22 10:06:25,606 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 10:06:25,657 WARNING werkzeug:  * Debugger is active!
+2025-08-22 10:06:25,670 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 10:06:53,219 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 10:06:54,320 INFO werkzeug:  * Restarting with stat
+2025-08-22 10:07:09,190 INFO app: Attempting to configure AI...
+2025-08-22 10:07:09,196 INFO app: AI configured successfully.
+2025-08-22 10:07:09,255 INFO app: Talisman enabled
+2025-08-22 10:07:09,285 INFO app: Rate limiting enabled
+2025-08-22 10:07:09,286 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 10:07:09,340 WARNING werkzeug:  * Debugger is active!
+2025-08-22 10:07:09,359 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 10:08:30,603 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 10:08:32,732 INFO werkzeug:  * Restarting with stat
+2025-08-22 10:08:46,987 INFO app: Attempting to configure AI...
+2025-08-22 10:08:46,988 INFO app: AI configured successfully.
+2025-08-22 10:08:47,016 INFO app: Talisman enabled
+2025-08-22 10:08:47,028 INFO app: Rate limiting enabled
+2025-08-22 10:08:47,030 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 10:08:47,076 WARNING werkzeug:  * Debugger is active!
+2025-08-22 10:08:47,086 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 10:10:39,988 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 10:10:45,466 INFO werkzeug:  * Restarting with stat
+2025-08-22 10:11:02,683 INFO app: Attempting to configure AI...
+2025-08-22 10:11:02,685 INFO app: AI configured successfully.
+2025-08-22 10:11:02,713 INFO app: Talisman enabled
+2025-08-22 10:11:02,717 INFO app: Rate limiting enabled
+2025-08-22 10:11:02,718 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 10:11:02,776 WARNING werkzeug:  * Debugger is active!
+2025-08-22 10:11:02,793 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 10:14:46,543 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 10:14:48,141 INFO werkzeug:  * Restarting with stat
+2025-08-22 10:15:01,713 INFO app: Attempting to configure AI...
+2025-08-22 10:15:01,715 INFO app: AI configured successfully.
+2025-08-22 10:15:01,739 INFO app: Talisman enabled
+2025-08-22 10:15:01,742 INFO app: Rate limiting enabled
+2025-08-22 10:15:01,743 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 10:15:01,785 WARNING werkzeug:  * Debugger is active!
+2025-08-22 10:15:01,794 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 10:15:28,589 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:15:28] "GET / HTTP/1.1" 200 -
+2025-08-22 10:15:29,034 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:15:29] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:15:54,656 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:15:54] "POST / HTTP/1.1" 302 -
+2025-08-22 10:17:58,006 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:17:58] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=240&contamination=0.02 HTTP/1.1" 200 -
+2025-08-22 10:17:58,393 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:17:58] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:28:22,164 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:28:22] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-22 10:28:22,386 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:28:22] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:29:58,564 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:29:58] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-22 10:29:58,768 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:29:58] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:35:45,643 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:35:45] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 10:35:45,792 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:35:45] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:36:41,964 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:36:41] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-22 10:36:42,148 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:36:42] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:37:44,512 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:37:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-22 10:37:44,685 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:37:44] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:43:59,497 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 10:44:05,547 INFO werkzeug:  * Restarting with stat
+2025-08-22 10:44:21,273 INFO app: Attempting to configure AI...
+2025-08-22 10:44:21,274 INFO app: AI configured successfully.
+2025-08-22 10:44:21,291 INFO app: Talisman enabled
+2025-08-22 10:44:21,294 INFO app: Rate limiting enabled
+2025-08-22 10:44:21,295 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 10:44:21,342 WARNING werkzeug:  * Debugger is active!
+2025-08-22 10:44:21,351 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 10:44:57,355 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 10:44:58,506 INFO werkzeug:  * Restarting with stat
+2025-08-22 10:45:10,497 INFO app: Attempting to configure AI...
+2025-08-22 10:45:10,498 INFO app: AI configured successfully.
+2025-08-22 10:45:10,512 INFO app: Talisman enabled
+2025-08-22 10:45:10,516 INFO app: Rate limiting enabled
+2025-08-22 10:45:10,517 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 10:45:10,565 WARNING werkzeug:  * Debugger is active!
+2025-08-22 10:45:10,571 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 10:45:19,746 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:45:19] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 302 -
+2025-08-22 10:45:19,808 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:45:19] "GET / HTTP/1.1" 200 -
+2025-08-22 10:45:20,031 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:45:20] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:45:35,594 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:45:35] "POST / HTTP/1.1" 302 -
+2025-08-22 10:47:39,628 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:47:39] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 200 -
+2025-08-22 10:47:39,845 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:47:39] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 10:53:38,706 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:53:38] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-22 10:53:38,948 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 10:53:38] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 11:14:57,759 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 11:15:06,861 INFO werkzeug:  * Restarting with stat
+2025-08-22 11:15:22,556 INFO app: Attempting to configure AI...
+2025-08-22 11:15:22,558 INFO app: AI configured successfully.
+2025-08-22 11:15:22,590 INFO app: Talisman enabled
+2025-08-22 11:15:22,595 INFO app: Rate limiting enabled
+2025-08-22 11:15:22,596 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 11:15:22,664 WARNING werkzeug:  * Debugger is active!
+2025-08-22 11:15:22,683 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 11:46:31,372 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 11:46:32,962 INFO werkzeug:  * Restarting with stat
+2025-08-22 11:46:45,305 INFO app: Attempting to configure AI...
+2025-08-22 11:46:45,307 INFO app: AI configured successfully.
+2025-08-22 11:46:45,328 INFO app: Talisman enabled
+2025-08-22 11:46:45,334 INFO app: Rate limiting enabled
+2025-08-22 11:46:45,336 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 11:46:45,378 WARNING werkzeug:  * Debugger is active!
+2025-08-22 11:46:45,389 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 11:47:07,887 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 11:47:07] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 302 -
+2025-08-22 11:47:07,957 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 11:47:07] "GET / HTTP/1.1" 200 -
+2025-08-22 11:47:08,260 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 11:47:08] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 11:47:30,447 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 11:47:30] "POST / HTTP/1.1" 302 -
+2025-08-22 11:48:21,701 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 11:48:21] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-22 11:48:22,688 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 11:48:22] "GET / HTTP/1.1" 200 -
+2025-08-22 11:48:23,586 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 11:48:23] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 12:20:11,252 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:20:11] "POST / HTTP/1.1" 302 -
+2025-08-22 12:20:41,491 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:20:41] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-22 12:20:41,513 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:20:41] "GET / HTTP/1.1" 200 -
+2025-08-22 12:20:41,574 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:20:41] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 12:21:02,949 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:21:02] "POST / HTTP/1.1" 302 -
+2025-08-22 12:21:33,597 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:21:33] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-22 12:21:33,615 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:21:33] "GET / HTTP/1.1" 200 -
+2025-08-22 12:21:33,682 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 12:21:33] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 13:24:42,390 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 13:24:42] "POST / HTTP/1.1" 302 -
+2025-08-22 13:25:14,565 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 13:25:14] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02 HTTP/1.1" 302 -
+2025-08-22 13:25:14,588 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 13:25:14] "GET / HTTP/1.1" 200 -
+2025-08-22 13:25:14,749 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 13:25:14] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 13:26:48,187 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 13:26:54,291 INFO werkzeug:  * Restarting with stat
+2025-08-22 13:27:22,729 INFO app: Attempting to configure AI...
+2025-08-22 13:27:22,730 INFO app: AI configured successfully.
+2025-08-22 13:27:55,880 INFO app: Attempting to configure AI...
+2025-08-22 13:27:55,881 INFO app: AI configured successfully.
+2025-08-22 13:48:31,863 INFO app: Attempting to configure AI...
+2025-08-22 13:48:31,864 INFO app: AI configured successfully.
+2025-08-22 13:48:31,875 INFO app: Talisman enabled
+2025-08-22 13:48:31,878 INFO app: Rate limiting enabled
+2025-08-22 13:48:31,878 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 13:48:31,991 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 13:48:31,991 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 13:48:31,996 INFO werkzeug:  * Restarting with stat
+2025-08-22 13:48:39,963 INFO app: Attempting to configure AI...
+2025-08-22 13:48:39,964 INFO app: AI configured successfully.
+2025-08-22 13:48:39,977 INFO app: Talisman enabled
+2025-08-22 13:48:39,980 INFO app: Rate limiting enabled
+2025-08-22 13:48:39,980 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 13:48:40,005 WARNING werkzeug:  * Debugger is active!
+2025-08-22 13:48:40,012 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 13:48:48,635 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 13:48:48] "POST / HTTP/1.1" 302 -
+2025-08-22 13:50:39,451 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 13:50:39] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 13:50:39,620 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 13:50:39] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 14:01:21,846 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 14:01:21] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-22 14:01:21,912 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 14:01:21] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 14:46:18,348 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 14:46:27,637 INFO werkzeug:  * Restarting with stat
+2025-08-22 14:46:47,719 INFO app: Attempting to configure AI...
+2025-08-22 14:46:47,720 INFO app: AI configured successfully.
+2025-08-22 14:46:47,743 INFO app: Talisman enabled
+2025-08-22 14:46:47,748 INFO app: Rate limiting enabled
+2025-08-22 14:46:47,748 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 14:46:47,788 WARNING werkzeug:  * Debugger is active!
+2025-08-22 14:46:47,803 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:18:09,839 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 15:18:11,973 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:18:25,651 INFO app: Attempting to configure AI...
+2025-08-22 15:18:25,652 INFO app: AI configured successfully.
+2025-08-22 15:18:25,670 INFO app: Talisman enabled
+2025-08-22 15:18:25,673 INFO app: Rate limiting enabled
+2025-08-22 15:18:25,674 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:18:25,713 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:18:25,720 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:19:19,903 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:19:19] "GET / HTTP/1.1" 200 -
+2025-08-22 15:19:21,563 INFO app: Attempting to configure AI...
+2025-08-22 15:19:21,565 INFO app: AI configured successfully.
+2025-08-22 15:19:21,623 INFO app: Talisman enabled
+2025-08-22 15:19:21,629 INFO app: Rate limiting enabled
+2025-08-22 15:19:21,631 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:19:21,817 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 15:19:21,818 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 15:19:21,824 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:19:34,519 INFO app: Attempting to configure AI...
+2025-08-22 15:19:34,520 INFO app: AI configured successfully.
+2025-08-22 15:19:34,538 INFO app: Talisman enabled
+2025-08-22 15:19:34,541 INFO app: Rate limiting enabled
+2025-08-22 15:19:34,542 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:19:34,585 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:19:34,594 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:19:43,298 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:19:43] "POST / HTTP/1.1" 302 -
+2025-08-22 15:20:42,184 WARNING app: AI summary failed, falling back. Error: name '_call_gemini' is not defined
+2025-08-22 15:20:42,281 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:20:42] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 15:20:58,790 WARNING app: AI Q&A failed, falling back. Error: name '_call_gemini' is not defined
+2025-08-22 15:20:58,793 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:20:58] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 302 -
+2025-08-22 15:20:58,815 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:20:58] "GET / HTTP/1.1" 200 -
+2025-08-22 15:23:52,301 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 15:23:52,385 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 15:23:55,248 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:23:57,874 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:24:15,116 INFO app: Attempting to configure AI...
+2025-08-22 15:24:15,116 INFO app: Attempting to configure AI...
+2025-08-22 15:24:15,117 INFO app: AI configured successfully.
+2025-08-22 15:24:15,117 INFO app: AI configured successfully.
+2025-08-22 15:24:15,139 INFO app: Talisman enabled
+2025-08-22 15:24:15,143 INFO app: Rate limiting enabled
+2025-08-22 15:24:15,144 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:24:15,195 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:24:15,195 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:24:15,205 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:24:15,541 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:24:15] "GET / HTTP/1.1" 200 -
+2025-08-22 15:24:36,702 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:24:36] "POST / HTTP/1.1" 302 -
+2025-08-22 15:26:12,010 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:26:12] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 15:29:26,602 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:29:26] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-22 15:31:21,874 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:31:21] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 15:38:19,629 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 15:38:20,515 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 15:38:28,864 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:38:30,788 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:38:54,456 INFO app: Attempting to configure AI...
+2025-08-22 15:38:54,458 INFO app: AI configured successfully.
+2025-08-22 15:38:54,457 INFO app: Attempting to configure AI...
+2025-08-22 15:38:54,461 INFO app: AI configured successfully.
+2025-08-22 15:38:54,578 INFO app: Talisman enabled
+2025-08-22 15:38:54,599 INFO app: Rate limiting enabled
+2025-08-22 15:38:54,601 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:38:54,609 INFO app: Talisman enabled
+2025-08-22 15:38:54,642 INFO app: Rate limiting enabled
+2025-08-22 15:38:54,643 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:38:54,701 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:38:54,724 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:40:41,241 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 15:40:41,388 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 15:40:43,867 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:40:43,903 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:41:00,807 INFO app: Attempting to configure AI...
+2025-08-22 15:41:00,808 INFO app: AI configured successfully.
+2025-08-22 15:41:00,839 INFO app: Talisman enabled
+2025-08-22 15:41:00,843 INFO app: Rate limiting enabled
+2025-08-22 15:41:00,845 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:41:00,892 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:41:00,901 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:41:00,925 INFO app: Attempting to configure AI...
+2025-08-22 15:41:00,927 INFO app: AI configured successfully.
+2025-08-22 15:41:00,954 INFO app: Talisman enabled
+2025-08-22 15:41:00,959 INFO app: Rate limiting enabled
+2025-08-22 15:41:00,960 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:41:01,004 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:41:01,014 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:42:08,396 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:42:08] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 302 -
+2025-08-22 15:42:08,464 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:42:08] "GET / HTTP/1.1" 200 -
+2025-08-22 15:42:18,246 INFO app: Attempting to configure AI...
+2025-08-22 15:42:18,248 INFO app: AI configured successfully.
+2025-08-22 15:42:18,266 INFO app: Talisman enabled
+2025-08-22 15:42:18,274 INFO app: Rate limiting enabled
+2025-08-22 15:42:18,275 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:42:18,377 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 15:42:18,378 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 15:42:18,385 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:42:31,241 INFO app: Attempting to configure AI...
+2025-08-22 15:42:31,243 INFO app: AI configured successfully.
+2025-08-22 15:42:31,259 INFO app: Talisman enabled
+2025-08-22 15:42:31,262 INFO app: Rate limiting enabled
+2025-08-22 15:42:31,263 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:42:31,303 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:42:31,310 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:42:34,012 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:42:34] "POST / HTTP/1.1" 302 -
+2025-08-22 15:43:32,321 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 3000000
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 26
+}
+]
+2025-08-22 15:43:32,747 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:43:32] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 15:51:35,947 INFO app: Attempting to configure AI...
+2025-08-22 15:51:35,948 INFO app: AI configured successfully.
+2025-08-22 15:51:35,978 INFO app: Talisman enabled
+2025-08-22 15:51:36,038 INFO app: Rate limiting enabled
+2025-08-22 15:51:36,040 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:51:36,212 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 15:51:36,216 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 15:51:36,239 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:51:46,754 INFO app: Attempting to configure AI...
+2025-08-22 15:51:46,755 INFO app: AI configured successfully.
+2025-08-22 15:51:46,771 INFO app: Talisman enabled
+2025-08-22 15:51:46,774 INFO app: Rate limiting enabled
+2025-08-22 15:51:46,774 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:51:46,809 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:51:46,816 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 15:53:29,381 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:53:29] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 15:54:44,031 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:54:44] "GET / HTTP/1.1" 200 -
+2025-08-22 15:54:53,114 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 15:54:53] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 302 -
+2025-08-22 15:57:11,380 INFO app: Attempting to configure AI...
+2025-08-22 15:57:11,382 INFO app: AI configured successfully.
+2025-08-22 15:57:11,400 INFO app: Talisman enabled
+2025-08-22 15:57:11,404 INFO app: Rate limiting enabled
+2025-08-22 15:57:11,405 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:57:11,533 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 15:57:11,534 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 15:57:11,539 INFO werkzeug:  * Restarting with stat
+2025-08-22 15:57:21,793 INFO app: Attempting to configure AI...
+2025-08-22 15:57:21,795 INFO app: AI configured successfully.
+2025-08-22 15:57:21,809 INFO app: Talisman enabled
+2025-08-22 15:57:21,816 INFO app: Rate limiting enabled
+2025-08-22 15:57:21,817 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 15:57:21,852 WARNING werkzeug:  * Debugger is active!
+2025-08-22 15:57:21,864 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 16:00:26,498 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:00:26] "POST / HTTP/1.1" 302 -
+2025-08-22 16:01:15,586 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:01:15] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 16:02:34,081 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:02:34] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-22 16:02:44,034 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:02:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 16:03:36,419 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:03:36] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 16:04:40,729 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:04:40] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-22 16:05:19,718 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:05:19] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 16:06:17,698 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:06:17] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-22 16:06:17,841 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:06:17] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 16:07:17,870 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:07:17] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-22 16:07:18,055 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:07:18] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 16:08:17,668 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:08:17] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 16:08:17,826 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:08:17] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 16:09:28,272 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:09:28] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-22 16:09:28,447 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 16:09:28] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-22 17:00:48,452 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:00:48] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-22 17:02:22,001 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:02:22] "GET / HTTP/1.1" 200 -
+2025-08-22 17:02:41,297 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:02:41] "POST / HTTP/1.1" 302 -
+2025-08-22 17:02:56,075 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:02:56] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-22 17:03:24,811 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:03:24] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 17:04:10,564 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:04:10] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 17:05:46,283 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:05:46] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 302 -
+2025-08-22 17:05:46,307 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:05:46] "GET / HTTP/1.1" 200 -
+2025-08-22 17:06:21,141 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:06:21] "POST / HTTP/1.1" 302 -
+2025-08-22 17:06:56,725 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:06:56] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=interactive HTTP/1.1" 302 -
+2025-08-22 17:06:56,746 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:06:56] "GET / HTTP/1.1" 200 -
+2025-08-22 17:52:02,773 INFO app: Attempting to configure AI...
+2025-08-22 17:52:02,776 INFO app: AI configured successfully.
+2025-08-22 17:58:30,397 INFO app: Attempting to configure AI...
+2025-08-22 17:58:30,398 INFO app: AI configured successfully.
+2025-08-22 17:58:30,406 INFO app: Talisman enabled.
+2025-08-22 17:58:30,412 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 17:58:30,413 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 17:58:30,511 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 17:58:30,512 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 17:58:30,516 INFO werkzeug:  * Restarting with stat
+2025-08-22 17:58:39,062 INFO app: Attempting to configure AI...
+2025-08-22 17:58:39,063 INFO app: AI configured successfully.
+2025-08-22 17:58:39,075 INFO app: Talisman enabled.
+2025-08-22 17:58:39,077 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 17:58:39,078 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 17:58:39,114 WARNING werkzeug:  * Debugger is active!
+2025-08-22 17:58:39,129 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 17:58:48,196 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:58:48] "POST / HTTP/1.1" 302 -
+2025-08-22 17:59:40,404 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 3000000
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 19
+}
+]
+2025-08-22 17:59:40,650 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:59:40] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 302 -
+2025-08-22 17:59:40,691 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 17:59:40] "GET / HTTP/1.1" 200 -
+2025-08-22 18:25:31,829 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:25:41,159 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:25:59,929 INFO app: Attempting to configure AI...
+2025-08-22 18:25:59,932 INFO app: AI configured successfully.
+2025-08-22 18:25:59,971 INFO app: Talisman enabled.
+2025-08-22 18:25:59,978 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:25:59,985 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:26:00,146 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:26:00,196 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:27:58,891 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:28:04,018 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:28:28,500 INFO app: Attempting to configure AI...
+2025-08-22 18:28:28,501 INFO app: AI configured successfully.
+2025-08-22 18:28:28,541 INFO app: Talisman enabled.
+2025-08-22 18:28:28,552 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:28:28,554 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:28:28,611 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:28:28,636 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:30:14,514 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:30:21,812 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:30:42,946 INFO app: Attempting to configure AI...
+2025-08-22 18:30:42,947 INFO app: AI configured successfully.
+2025-08-22 18:30:42,964 INFO app: Talisman enabled.
+2025-08-22 18:30:42,969 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:30:42,970 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:30:43,020 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:30:43,030 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:32:33,039 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:32:36,353 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:32:50,259 INFO app: Attempting to configure AI...
+2025-08-22 18:32:50,260 INFO app: AI configured successfully.
+2025-08-22 18:32:50,270 INFO app: Talisman enabled.
+2025-08-22 18:32:50,277 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:32:50,277 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:32:50,325 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:32:50,352 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:33:03,272 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:33:03] "GET / HTTP/1.1" 200 -
+2025-08-22 18:33:18,533 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:33:18] "POST / HTTP/1.1" 302 -
+2025-08-22 18:34:18,447 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 3000000
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 41
+}
+]
+2025-08-22 18:34:18,701 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:34:18] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 18:36:34,515 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:36:34] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 18:38:12,252 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:38:12] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-22 18:39:20,397 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:39:20] "GET /full_history_json?filename=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv&max_points=all HTTP/1.1" 200 -
+2025-08-22 18:40:24,245 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:40:24] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-22 18:41:31,949 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 18:41:31] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-22 18:51:47,810 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:51:55,403 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:52:09,840 INFO app: Attempting to configure AI...
+2025-08-22 18:52:09,841 INFO app: AI configured successfully.
+2025-08-22 18:52:09,850 INFO app: Talisman enabled.
+2025-08-22 18:52:09,852 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:52:09,854 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:52:09,887 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:52:09,900 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:52:17,508 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:52:18,226 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:52:30,882 INFO app: Attempting to configure AI...
+2025-08-22 18:52:30,884 INFO app: AI configured successfully.
+2025-08-22 18:52:30,899 INFO app: Talisman enabled.
+2025-08-22 18:52:30,903 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:52:30,905 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:52:30,944 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:52:30,953 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:52:51,486 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:52:52,117 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:53:09,196 INFO app: Attempting to configure AI...
+2025-08-22 18:53:09,197 INFO app: AI configured successfully.
+2025-08-22 18:53:09,236 INFO app: Talisman enabled.
+2025-08-22 18:53:09,265 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:53:09,285 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:53:09,359 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:53:09,403 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:55:03,412 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:55:08,016 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:55:21,526 INFO app: Attempting to configure AI...
+2025-08-22 18:55:21,559 INFO app: AI configured successfully.
+2025-08-22 18:55:21,648 INFO app: Talisman enabled.
+2025-08-22 18:55:21,686 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:55:21,687 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:55:21,745 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:55:21,781 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 18:58:22,465 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 18:58:27,795 INFO werkzeug:  * Restarting with stat
+2025-08-22 18:58:49,709 INFO app: Attempting to configure AI...
+2025-08-22 18:58:49,710 INFO app: AI configured successfully.
+2025-08-22 18:58:49,726 INFO app: Talisman enabled.
+2025-08-22 18:58:49,728 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 18:58:49,730 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 18:58:49,810 WARNING werkzeug:  * Debugger is active!
+2025-08-22 18:58:49,840 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 19:01:43,060 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-22 19:02:24,460 INFO werkzeug:  * Restarting with stat
+2025-08-22 19:10:33,608 INFO app: Attempting to configure AI...
+2025-08-22 19:10:33,610 INFO app: AI configured successfully.
+2025-08-22 19:10:33,622 INFO app: Talisman enabled.
+2025-08-22 19:10:33,625 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 19:10:33,626 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 19:10:33,738 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-22 19:10:33,738 INFO werkzeug: Press CTRL+C to quit
+2025-08-22 19:10:33,742 INFO werkzeug:  * Restarting with stat
+2025-08-22 19:10:42,563 INFO app: Attempting to configure AI...
+2025-08-22 19:10:42,564 INFO app: AI configured successfully.
+2025-08-22 19:10:42,579 INFO app: Talisman enabled.
+2025-08-22 19:10:42,582 INFO app: Rate limiting enabled: 120/hour
+2025-08-22 19:10:42,583 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-22 19:10:42,610 WARNING werkzeug:  * Debugger is active!
+2025-08-22 19:10:42,623 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-22 20:02:05,034 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:02:05] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 302 -
+2025-08-22 20:02:05,238 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:02:05] "GET / HTTP/1.1" 200 -
+2025-08-22 20:02:05,595 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:02:05] "GET /favicon.ico HTTP/1.1" 404 -
+2025-08-22 20:02:21,675 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:02:21] "POST / HTTP/1.1" 302 -
+2025-08-22 20:03:19,538 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 3000000
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 40
+}
+]
+2025-08-22 20:03:20,213 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:03:20] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-22 20:20:57,495 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:20:57] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-22 20:21:25,714 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:21:25] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/static_plots.zip?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-22 20:21:55,337 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:21:55] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-22 20:23:31,993 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:23:31] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-22 20:30:24,337 INFO werkzeug: 127.0.0.1 - - [22/Aug/2025 20:30:24] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-23 14:49:59,521 INFO app: Attempting to configure AI...
+2025-08-23 14:49:59,524 INFO app: AI configured successfully.
+2025-08-23 14:49:59,542 INFO app: Talisman enabled.
+2025-08-23 14:49:59,544 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 14:49:59,545 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 14:49:59,708 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-23 14:49:59,710 INFO werkzeug: Press CTRL+C to quit
+2025-08-23 14:49:59,715 INFO werkzeug:  * Restarting with stat
+2025-08-23 14:50:11,277 INFO app: Attempting to configure AI...
+2025-08-23 14:50:11,278 INFO app: AI configured successfully.
+2025-08-23 14:50:11,299 INFO app: Talisman enabled.
+2025-08-23 14:50:11,308 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 14:50:11,310 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 14:50:11,346 WARNING werkzeug:  * Debugger is active!
+2025-08-23 14:50:11,360 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 14:50:11,898 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:50:11] "GET / HTTP/1.1" 200 -
+2025-08-23 14:50:11,906 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:50:11] "GET / HTTP/1.1" 200 -
+2025-08-23 14:50:11,913 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:50:11] "GET / HTTP/1.1" 200 -
+2025-08-23 14:50:34,709 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:50:34] "POST / HTTP/1.1" 302 -
+2025-08-23 14:51:41,412 WARNING app: AI summary failed, falling back. Error: Invalid operation: The `response.text` quick accessor requires the response to contain a valid `Part`, but none were returned. The candidate's [finish_reason](https://ai.google.dev/api/generate-content#finishreason) is 1.
+2025-08-23 14:51:41,660 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:51:41] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 14:52:01,543 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:52:01] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-08-23 14:53:03,121 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:53:03] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-23 14:54:27,915 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:54:27] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-08-23 14:57:00,524 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:57:00] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-08-23 14:59:44,109 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:59:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 302 -
+2025-08-23 14:59:44,396 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 14:59:44] "GET / HTTP/1.1" 200 -
+2025-08-23 15:00:03,343 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 15:00:08,661 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:00:26,340 INFO app: Attempting to configure AI...
+2025-08-23 15:00:26,341 INFO app: AI configured successfully.
+2025-08-23 15:00:26,358 INFO app: Talisman enabled.
+2025-08-23 15:00:26,361 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:00:26,362 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:00:26,404 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:00:26,416 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:02:17,764 INFO app: Attempting to configure AI...
+2025-08-23 15:02:17,766 INFO app: AI configured successfully.
+2025-08-23 15:02:17,782 INFO app: Talisman enabled.
+2025-08-23 15:02:17,786 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:02:17,788 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:02:17,920 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-23 15:02:17,921 INFO werkzeug: Press CTRL+C to quit
+2025-08-23 15:02:17,929 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:02:29,991 INFO app: Attempting to configure AI...
+2025-08-23 15:02:29,992 INFO app: AI configured successfully.
+2025-08-23 15:02:30,006 INFO app: Talisman enabled.
+2025-08-23 15:02:30,014 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:02:30,015 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:02:30,062 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:02:30,079 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:02:32,430 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:02:32] "GET / HTTP/1.1" 200 -
+2025-08-23 15:02:58,636 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:02:58] "POST / HTTP/1.1" 302 -
+2025-08-23 15:05:36,068 WARNING app: Gemini response.text accessor failed: Invalid operation: The `response.text` quick accessor requires the response to contain a valid `Part`, but none were returned. The candidate's [finish_reason](https://ai.google.dev/api/generate-content#finishreason) is 1.
+2025-08-23 15:05:36,070 WARNING app: AI summary failed, falling back. Error: Empty AI response (finish_reason=1)
+2025-08-23 15:05:36,781 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:05:36] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 15:07:09,633 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:07:09] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-23 15:17:06,720 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 15:17:06,920 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 15:17:16,748 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:17:18,385 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:17:31,645 INFO app: Attempting to configure AI...
+2025-08-23 15:17:31,646 INFO app: AI configured successfully.
+2025-08-23 15:17:31,667 INFO app: Talisman enabled.
+2025-08-23 15:17:31,673 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:17:31,675 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:17:31,683 INFO app: Attempting to configure AI...
+2025-08-23 15:17:31,684 INFO app: AI configured successfully.
+2025-08-23 15:17:31,700 INFO app: Talisman enabled.
+2025-08-23 15:17:31,703 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:17:31,705 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:17:31,719 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:17:31,738 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:17:31,741 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:17:31,749 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:19:32,061 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 15:19:32,289 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 15:19:38,146 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:19:38,150 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:19:59,741 INFO app: Attempting to configure AI...
+2025-08-23 15:19:59,746 INFO app: AI configured successfully.
+2025-08-23 15:19:59,842 INFO app: Talisman enabled.
+2025-08-23 15:19:59,874 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:19:59,875 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:19:59,993 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:20:00,061 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:20:01,114 INFO app: Attempting to configure AI...
+2025-08-23 15:20:01,118 INFO app: AI configured successfully.
+2025-08-23 15:20:01,142 INFO app: Talisman enabled.
+2025-08-23 15:20:01,155 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:20:01,156 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:20:01,227 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:20:01,246 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:22:11,524 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 15:22:11,520 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 15:22:19,373 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:22:19,396 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:22:44,042 INFO app: Attempting to configure AI...
+2025-08-23 15:22:44,043 INFO app: AI configured successfully.
+2025-08-23 15:22:44,043 INFO app: Attempting to configure AI...
+2025-08-23 15:22:44,044 INFO app: AI configured successfully.
+2025-08-23 15:22:44,064 INFO app: Talisman enabled.
+2025-08-23 15:22:44,068 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:22:44,070 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:22:44,078 INFO app: Talisman enabled.
+2025-08-23 15:22:44,080 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:22:44,082 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:22:44,122 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:22:44,127 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:22:44,141 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:22:44,141 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:24:50,213 INFO app: Attempting to configure AI...
+2025-08-23 15:24:50,215 INFO app: AI configured successfully.
+2025-08-23 15:24:50,231 INFO app: Talisman enabled.
+2025-08-23 15:24:50,234 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:24:50,236 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:24:50,334 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-23 15:24:50,334 INFO werkzeug: Press CTRL+C to quit
+2025-08-23 15:24:50,339 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:24:56,633 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:24:56] "GET / HTTP/1.1" 200 -
+2025-08-23 15:25:03,717 INFO app: Attempting to configure AI...
+2025-08-23 15:25:03,718 INFO app: AI configured successfully.
+2025-08-23 15:25:03,733 INFO app: Talisman enabled.
+2025-08-23 15:25:03,736 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:25:03,738 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:25:03,780 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:25:03,797 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:25:16,087 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:25:16] "POST / HTTP/1.1" 302 -
+2025-08-23 15:26:04,298 WARNING app: AI summary failed, falling back. Error: name 'prompt' is not defined
+2025-08-23 15:26:04,779 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:26:04] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 15:27:45,003 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:27:45] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-08-23 15:29:52,467 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:29:52] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-23 15:33:27,126 INFO app: Attempting to configure AI...
+2025-08-23 15:33:27,127 INFO app: AI configured successfully.
+2025-08-23 15:33:27,149 INFO app: Talisman enabled.
+2025-08-23 15:33:27,152 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:33:27,154 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:33:27,275 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-23 15:33:27,276 INFO werkzeug: Press CTRL+C to quit
+2025-08-23 15:33:27,286 INFO werkzeug:  * Restarting with stat
+2025-08-23 15:33:43,431 INFO app: Attempting to configure AI...
+2025-08-23 15:33:43,432 INFO app: AI configured successfully.
+2025-08-23 15:33:43,456 INFO app: Talisman enabled.
+2025-08-23 15:33:43,460 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 15:33:43,461 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 15:33:43,522 WARNING werkzeug:  * Debugger is active!
+2025-08-23 15:33:43,540 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 15:34:49,124 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:34:49] "GET / HTTP/1.1" 200 -
+2025-08-23 15:35:04,718 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:35:04] "POST / HTTP/1.1" 302 -
+2025-08-23 15:36:07,134 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:36:07] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 15:37:08,872 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:37:08] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 302 -
+2025-08-23 15:37:08,911 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 15:37:08] "GET / HTTP/1.1" 200 -
+2025-08-23 16:02:10,300 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 16:02:10,539 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 16:02:26,845 INFO werkzeug:  * Restarting with stat
+2025-08-23 16:02:33,682 INFO werkzeug:  * Restarting with stat
+2025-08-23 16:09:10,756 INFO app: Attempting to configure AI...
+2025-08-23 16:09:10,757 INFO app: AI configured successfully.
+2025-08-23 16:09:10,766 INFO app: Talisman enabled.
+2025-08-23 16:09:10,768 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 16:09:10,769 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 16:09:10,881 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-23 16:09:10,881 INFO werkzeug: Press CTRL+C to quit
+2025-08-23 16:09:10,885 INFO werkzeug:  * Restarting with stat
+2025-08-23 16:09:16,958 INFO app: Attempting to configure AI...
+2025-08-23 16:09:16,958 INFO app: AI configured successfully.
+2025-08-23 16:09:16,966 INFO app: Talisman enabled.
+2025-08-23 16:09:16,968 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 16:09:16,969 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 16:09:16,991 WARNING werkzeug:  * Debugger is active!
+2025-08-23 16:09:16,999 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 16:10:05,669 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:10:05] "GET / HTTP/1.1" 200 -
+2025-08-23 16:10:06,590 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:10:06] "GET /favicon.ico HTTP/1.1" 404 -
+2025-08-23 16:10:20,918 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:10:20] "POST / HTTP/1.1" 302 -
+2025-08-23 16:10:51,464 WARNING app: AI summary failed, falling back. Error: name 'prompt' is not defined
+2025-08-23 16:10:51,600 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:10:51] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 16:11:08,724 WARNING app: AI Q&A failed; falling back. Error: 400 * GenerateContentRequest.generation_config.response_mime_type: allowed mimetypes are `text/plain`, `application/json`, `application/xml`, `application/yaml` and `text/x.enum`.
+
+2025-08-23 16:11:14,887 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:11:14] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 16:11:41,769 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:11:41] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-23 16:11:41,830 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:11:41] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 16:12:18,116 WARNING app: AI Q&A failed; falling back. Error: 400 * GenerateContentRequest.generation_config.response_mime_type: allowed mimetypes are `text/plain`, `application/json`, `application/xml`, `application/yaml` and `text/x.enum`.
+
+2025-08-23 16:12:48,191 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:12:48] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-23 16:12:48,255 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:12:48] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 16:59:00,590 INFO app: Attempting to configure AI...
+2025-08-23 16:59:01,065 WARNING app: Model candidate failed (models/gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 57
+}
+]
+2025-08-23 16:59:01,169 WARNING app: Model candidate failed (gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 57
+}
+]
+2025-08-23 16:59:01,261 WARNING app: Model candidate failed (gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 57
+}
+]
+2025-08-23 16:59:01,371 WARNING app: Model candidate failed (models/gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 57
+}
+]
+2025-08-23 16:59:01,904 WARNING app: Model candidate failed (gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 16:59:02,341 WARNING app: Model candidate failed (models/gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 16:59:02,435 WARNING app: Model candidate failed (gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 16:59:02,528 WARNING app: Model candidate failed (models/gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 16:59:02,529 WARNING app: Deferred model init; will attempt on first request. No working Gemini model available. Check API key/network or try a different model.
+2025-08-23 16:59:02,530 INFO app: AI configured successfully.
+2025-08-23 16:59:02,540 INFO app: Talisman enabled.
+2025-08-23 16:59:02,543 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 16:59:02,544 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 16:59:02,611 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-23 16:59:02,612 INFO werkzeug: Press CTRL+C to quit
+2025-08-23 16:59:02,615 INFO werkzeug:  * Restarting with stat
+2025-08-23 16:59:09,006 INFO app: Attempting to configure AI...
+2025-08-23 16:59:09,374 WARNING app: Model candidate failed (models/gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 49
+}
+]
+2025-08-23 16:59:09,477 WARNING app: Model candidate failed (gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 49
+}
+]
+2025-08-23 16:59:09,568 WARNING app: Model candidate failed (gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 49
+}
+]
+2025-08-23 16:59:09,688 WARNING app: Model candidate failed (models/gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 49
+}
+]
+2025-08-23 16:59:10,128 WARNING app: Model candidate failed (gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 16:59:10,525 WARNING app: Model candidate failed (models/gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 16:59:10,600 WARNING app: Model candidate failed (gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 16:59:10,719 WARNING app: Model candidate failed (models/gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 16:59:10,720 WARNING app: Deferred model init; will attempt on first request. No working Gemini model available. Check API key/network or try a different model.
+2025-08-23 16:59:10,721 INFO app: AI configured successfully.
+2025-08-23 16:59:10,733 INFO app: Talisman enabled.
+2025-08-23 16:59:10,735 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 16:59:10,736 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 16:59:10,759 WARNING werkzeug:  * Debugger is active!
+2025-08-23 16:59:10,770 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 16:59:21,077 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:59:21] "GET / HTTP/1.1" 200 -
+2025-08-23 16:59:21,285 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:59:21] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 16:59:33,834 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 16:59:33] "POST / HTTP/1.1" 302 -
+2025-08-23 16:59:36,847 WARNING app: Could not generate forecast for Temp_C: name 'ci' is not defined
+2025-08-23 16:59:43,726 WARNING app: Could not generate forecast for Dew Point Temp_C: name 'ci' is not defined
+2025-08-23 16:59:48,627 WARNING app: Could not generate forecast for Rel Hum_%: name 'ci' is not defined
+2025-08-23 16:59:54,589 WARNING app: Could not generate forecast for Wind Speed_km/h: name 'ci' is not defined
+2025-08-23 16:59:59,672 WARNING app: Could not generate forecast for Visibility_km: name 'ci' is not defined
+2025-08-23 17:00:04,929 WARNING app: Could not generate forecast for Press_kPa: name 'ci' is not defined
+2025-08-23 17:00:09,505 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:00:09] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 17:00:09,558 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:00:09] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:01:01,679 WARNING app: Could not generate forecast for Temp_C: name 'ci' is not defined
+2025-08-23 17:01:06,182 WARNING app: Could not generate forecast for Dew Point Temp_C: name 'ci' is not defined
+2025-08-23 17:01:10,901 WARNING app: Could not generate forecast for Rel Hum_%: name 'ci' is not defined
+2025-08-23 17:01:15,808 WARNING app: Could not generate forecast for Wind Speed_km/h: name 'ci' is not defined
+2025-08-23 17:01:19,759 WARNING app: Could not generate forecast for Visibility_km: name 'ci' is not defined
+2025-08-23 17:01:23,913 WARNING app: Could not generate forecast for Press_kPa: name 'ci' is not defined
+2025-08-23 17:01:27,501 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:01:27] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-23 17:01:27,647 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:01:27] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:09:57,247 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-08-23 17:10:04,625 INFO werkzeug:  * Restarting with stat
+2025-08-23 17:10:26,281 INFO app: Attempting to configure AI...
+2025-08-23 17:10:27,049 WARNING app: Model candidate failed (models/gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 31
+}
+]
+2025-08-23 17:10:27,158 WARNING app: Model candidate failed (gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 31
+}
+]
+2025-08-23 17:10:27,274 WARNING app: Model candidate failed (gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 31
+}
+]
+2025-08-23 17:10:27,376 WARNING app: Model candidate failed (models/gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 31
+}
+]
+2025-08-23 17:10:27,866 WARNING app: Model candidate failed (gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 17:10:28,286 WARNING app: Model candidate failed (models/gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 17:10:28,369 WARNING app: Model candidate failed (gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 17:10:28,472 WARNING app: Model candidate failed (models/gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 17:10:28,473 WARNING app: Deferred model init; will attempt on first request. No working Gemini model available. Check API key/network or try a different model.
+2025-08-23 17:10:28,474 INFO app: AI configured successfully.
+2025-08-23 17:10:28,495 INFO app: Talisman enabled.
+2025-08-23 17:10:28,499 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 17:10:28,500 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 17:10:28,561 WARNING werkzeug:  * Debugger is active!
+2025-08-23 17:10:28,592 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 17:10:29,447 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:10:29] "GET / HTTP/1.1" 200 -
+2025-08-23 17:10:30,169 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:10:30] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:10:47,761 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:10:47] "POST / HTTP/1.1" 302 -
+2025-08-23 17:11:30,699 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:11:30] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 17:11:31,518 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:11:31] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:12:30,471 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:12:30] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-23 17:12:31,700 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:12:31] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:14:06,388 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:14:06] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-23 17:14:07,312 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:14:07] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:14:49,571 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:14:49] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-08-23 17:14:49,740 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:14:49] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:49:19,471 INFO app: Attempting to configure AI...
+2025-08-23 17:49:20,230 WARNING app: Model candidate failed (models/gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 38
+}
+]
+2025-08-23 17:49:20,372 WARNING app: Model candidate failed (gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 38
+}
+]
+2025-08-23 17:49:20,538 WARNING app: Model candidate failed (gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 38
+}
+]
+2025-08-23 17:49:20,676 WARNING app: Model candidate failed (models/gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 38
+}
+]
+2025-08-23 17:49:21,099 WARNING app: Model candidate failed (gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 17:49:21,552 WARNING app: Model candidate failed (models/gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 17:49:21,709 WARNING app: Model candidate failed (gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 17:49:21,929 WARNING app: Model candidate failed (models/gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 17:49:21,930 WARNING app: Deferred model init; will attempt on first request. No working Gemini model available. Check API key/network or try a different model.
+2025-08-23 17:49:21,931 INFO app: AI configured successfully.
+2025-08-23 17:49:21,950 INFO app: Talisman enabled.
+2025-08-23 17:49:21,953 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 17:49:21,954 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 17:49:22,052 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-08-23 17:49:22,053 INFO werkzeug: Press CTRL+C to quit
+2025-08-23 17:49:22,057 INFO werkzeug:  * Restarting with stat
+2025-08-23 17:49:34,019 INFO app: Attempting to configure AI...
+2025-08-23 17:49:34,578 WARNING app: Model candidate failed (models/gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 24
+}
+]
+2025-08-23 17:49:34,685 WARNING app: Model candidate failed (gemini-2.5-pro-preview-06-05): 429 Gemini 2.5 Pro Preview doesn't have a free quota tier. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro-exp"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 24
+}
+]
+2025-08-23 17:49:34,780 WARNING app: Model candidate failed (gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 24
+}
+]
+2025-08-23 17:49:34,886 WARNING app: Model candidate failed (models/gemini-1.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 23
+}
+]
+2025-08-23 17:49:35,374 WARNING app: Model candidate failed (gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 17:49:35,777 WARNING app: Model candidate failed (models/gemini-1.5-flash): name '_extract_text_from_gemini_response' is not defined
+2025-08-23 17:49:35,865 WARNING app: Model candidate failed (gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 17:49:35,956 WARNING app: Model candidate failed (models/gemini-pro): 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-08-23 17:49:35,958 WARNING app: Deferred model init; will attempt on first request. No working Gemini model available. Check API key/network or try a different model.
+2025-08-23 17:49:35,959 INFO app: AI configured successfully.
+2025-08-23 17:49:35,980 INFO app: Talisman enabled.
+2025-08-23 17:49:35,985 INFO app: Rate limiting enabled: 120/hour
+2025-08-23 17:49:35,987 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-08-23 17:49:36,034 WARNING werkzeug:  * Debugger is active!
+2025-08-23 17:49:36,044 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-08-23 17:49:38,102 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:49:38] "GET / HTTP/1.1" 200 -
+2025-08-23 17:49:38,297 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:49:38] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:49:58,007 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:49:58] "POST / HTTP/1.1" 302 -
+2025-08-23 17:50:46,399 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:50:46] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-08-23 17:50:46,490 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:50:46] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -
+2025-08-23 17:52:32,426 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:52:32] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-08-23 17:52:32,563 INFO werkzeug: 127.0.0.1 - - [23/Aug/2025 17:52:32] "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 -

@@ -1,71 +1,52 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Analysis – {{ display_name }}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <!-- fallback -->
-  <script>window.Plotly||document.write('<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.35.2/plotly.min.js"><\/script>')</script>
+  <meta charset="utf-8" />
+  <title>Analysis - {{ display_name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark">
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
-    .row { display:flex; gap:1rem; flex-wrap:wrap; }
-    .col { flex: 1 1 520px; min-width: 320px; }
-    .card { border:1px solid #ddd; border-radius:8px; padding:1rem; margin-bottom:1rem; }
-    .chart { width:100%; height:420px; }
-    .controls { display:flex; gap:1rem; align-items: center; flex-wrap: wrap; }
-    label { margin-right:.5rem; }
-    table { border-collapse: collapse; }
-    th, td { border:1px solid #ddd; padding:.25rem .5rem; }
-  </style>
-  <style>
-    :root {
-      --bg: #ffffff;
-      --text: #0f172a;
-      --muted: #475569;
-      --card: #f8fafc;
-      --border: #e2e8f0;
-      --accent: #0ea5e9;
-      --button-text: #ffffff;
+    /* Theme variables */
+    :root[data-theme="light"] {
+      --bg: #ffffff; --panel: #f8fafc; --text: #0f172a; --muted: #475569;
+      --border: #e2e8f0; --link: #0ea5e9; --accent: #0ea5e9; --accent-2: #f97316;
     }
     :root[data-theme="dark"] {
-      --bg: #0b1220;
-      --text: #e5e7eb;
-      --muted: #9ca3af;
-      --card: #111827;
-      --border: #1f2937;
-      --accent: #38bdf8;
-      --button-text: #0b1220;
+      --bg: #0b1220; --panel: #111827; --text: #e5e7eb; --muted: #9ca3af;
+      --border: #1f2937; --link: #93c5fd; --accent: #60a5fa; --accent-2: #f97316;
     }
-    
-    html, body { background: var(--bg); color: var(--text); }
-    .topbar { display:flex; align-items:center; gap:10px; padding:10px 0; }
+    html, body { background: var(--bg); color: var(--text); margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { position: sticky; top: 0; z-index: 10; background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .title { font-size: 18px; font-weight: 600; color: var(--text); margin-right: 8px; }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .pill { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .pill.active { color: var(--text); background: color-mix(in oklab, var(--panel) 80%, var(--bg)); border-color: color-mix(in oklab, var(--border) 80%, var(--bg)); }
     .spacer { flex: 1; }
-    .btn {
-      display:inline-block; padding:8px 12px; border:1px solid var(--border);
-      background: var(--accent); color: var(--button-text);
-      border-radius:6px; text-decoration:none; cursor:pointer;
-    }
-    .btn.secondary { background: transparent; color: var(--text); }
-    .card { background: var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; }
-    input[type="file"], input[type="number"], input[type="text"], button {
-      color: var(--text); background: var(--bg); border:1px solid var(--border);
-      border-radius:6px; padding:8px;
-    }
-    label { color: var(--muted); }
-    /* REMOVE the following line: */
-    /* .js-plotly-plot .plotly .main-svg { background: var(--card) !important; } */
-  </style>
-  <style>
-    /* keep your existing CSS vars */
-    /* Ensure the SVG background matches the card for both themes */
-    /* REMOVE the following line: */
-    /* .js-plotly-plot .plotly .main-svg { background: var(--card) !important; } */
-  </style>
+    .btn { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+    .content { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 16px; }
+    @media (min-width: 900px) { .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    img.plot { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); }
+    .muted { color: var(--muted); }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 
-  <meta name="color-scheme" content="light dark">
-
+    /* Center header cells for Preview/Description tables on Overview */
+    .table-center table { width: 100%; }
+    .table-center table th,
+    .table-center table thead th { text-align: center !important; }
+  </style>
+  {% set active_view = request.args.get('view', 'overview') %}
+  {% if active_view in ['interactive', 'correlation'] %}
+    <!-- Load synchronously so Plotly is ready before inline scripts below -->
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  {% endif %}
   <script>
+    // Theme bootstrap + utilities
     (function() {
       const saved = localStorage.getItem('theme') || 'light';
       document.documentElement.setAttribute('data-theme', saved);
@@ -74,911 +55,419 @@
         const next = cur === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
-        const btn = document.getElementById('themeToggle');
-        if (btn) btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
-        // Add this:
-        if (window.rethemeExistingPlots) window.rethemeExistingPlots();
+        // Live-update plots on theme change
+        if (window.applyThemeToPlots) window.applyThemeToPlots();
       };
-      window.addEventListener('DOMContentLoaded', function() {
-        const btn = document.getElementById('themeToggle');
-        if (btn) btn.textContent = (localStorage.getItem('theme') || 'light') === 'light' ? 'Dark mode' : 'Light mode';
-        if (window.rethemeExistingPlots) window.rethemeExistingPlots(); // initial sync for DR
-      });
+      window.getThemeVars = function() {
+        const s = getComputedStyle(document.documentElement);
+        const pick = n => (s.getPropertyValue(n) || '').trim();
+        return {
+          bg: pick('--bg'),
+          panel: pick('--panel'),
+          text: pick('--text'),
+          border: pick('--border'),
+          accent: pick('--accent'),
+          accent2: pick('--accent-2')
+        };
+      };
     })();
   </script>
-
-  <!-- Replace your getThemeColors() function with this stronger version -->
   <script>
-    function getThemeColors() {
-      const siteTheme = document.documentElement.getAttribute('data-theme') || 'light';
-      if (siteTheme === 'dark') {
-        return {
-          paper: '#111827',
-          plot:  '#111827',
-          text:  '#e5e7eb',
-          grid:  '#334155',
-          accent:'#38bdf8',
-          // add soft surfaces for controls
-          subtle: '#0b1220'
-        };
-      } else {
-        return {
-          paper: '#ffffff',
-          plot:  '#ffffff',
-          text:  '#0f172a',
-          grid:  '#cbd5e1',
-          accent:'#0ea5e9',
-          subtle: '#f8fafc'
-        };
-      }
-    }
-
-    function themedLayout(base) {
-      const t = getThemeColors();
-      const merged = Object.assign({
-        paper_bgcolor: t.paper,
-        plot_bgcolor: t.plot,
-        font: { color: t.text },
-        legend: { bgcolor: t.paper, font: { color: t.text } },
-        xaxis: {
-          showgrid: true,
-          gridcolor: t.grid, zerolinecolor: t.grid, linecolor: t.grid,
-          tickfont: { color: t.text }, title: { font: { color: t.text } }
-        },
-        yaxis: {
-          showgrid: true,
-          gridcolor: t.grid, zerolinecolor: t.grid, linecolor: t.grid,
-          tickfont: { color: t.text }, title: { font: { color: t.text } }
-        },
-        margin: { l: 40, r: 10, t: 120, b: 80 } // more top room for legend
-      }, base || {});
-
-      // Preserve axis titles
-      if (base && base.xaxis && base.xaxis.title && base.xaxis.title.text) merged.xaxis.title.text = base.xaxis.title.text;
-      if (base && base.yaxis && base.yaxis.title && base.yaxis.title.text) merged.yaxis.title.text = base.yaxis.title.text;
-
-      // Legend ABOVE the plotting area, horizontal
-      merged.legend = Object.assign(
-        { orientation: 'h', bgcolor: t.paper, font: { color: t.text }, x: 0, xanchor: 'left', y: 1.12, yanchor: 'bottom' },
-        merged.legend || {}
-      );
-      merged.margin = Object.assign({ l: 40, r: 10, t: 120, b: 80 }, merged.margin || {});
-      merged.margin.t = Math.max(merged.margin.t, 120);
-
-      // Range selector/slider theming stays
-      merged.xaxis = merged.xaxis || {};
-      merged.xaxis.rangeselector = Object.assign(
-        { bgcolor: t.subtle, activecolor: t.accent, bordercolor: t.grid, font: { color: t.text } },
-        (merged.xaxis.rangeselector || {})
-      );
-      merged.xaxis.rangeslider = Object.assign(
-        { bgcolor: t.paper, bordercolor: t.grid },
-        (merged.xaxis.rangeslider || {})
-      );
-
-      merged.title = Object.assign({ x: 0.02, y: 0.98, font: { color: t.text } }, merged.title || {});
-      if (merged.title.font) merged.title.font.color = t.text;
-
-      return merged;
-    }
-  </script>
-
-  <script>
-    // Minimal palette for consistent colors
-    function __palette() {
-      return ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#17becf','#e377c2','#8c564b','#bcbd22','#7f7f7f'];
-    }
-
-    // Define renderPlot so callers below can use it
-    function renderPlot(host, traces, layout, config) {
-      const el = (typeof host === 'string') ? document.getElementById(host) : host;
-      if (!el || !window.Plotly) return Promise.resolve();
-
-      const t = (typeof getThemeColors === 'function') ? getThemeColors() : {
-        paper: '#fff', plot: '#fff', text: '#111', grid: '#ddd', accent: '#0ea5e9'
-      };
-      const palette = __palette();
-
-      const titleText = (layout && layout.title && layout.title.text) || el.getAttribute('data-title') || 'Chart';
-      const fileName = (typeof safeName === 'function')
-        ? `${safeName(DISPLAY_NAME)} - ${safeName(titleText)}`
-        : 'chart';
-
-      const baseCfg = {
-        displayModeBar: true,
-        responsive: true,
-        displaylogo: false,
-        modeBarButtonsToAdd: ['lasso2d', 'select2d'],
-        toImageButtonOptions: { format: 'png', filename: fileName, scale: 2 }
-      };
-      const cfg = Object.assign({}, baseCfg, config || {});
-
-      // Theme + ensure markers for selection
-      const themedTraces = (traces || []).map((tr, i) => {
-        const c = JSON.parse(JSON.stringify(tr || {}));
-        const nextColor = palette[i % palette.length];
-
-        if (c.type === 'scatter' || !c.type) {
-          if (!c.mode) c.mode = 'lines+markers';
-          else if (c.mode.includes('lines') && !c.mode.includes('markers')) c.mode += '+markers';
-
-          c.line = c.line || {};
-          if (!c.line.color) c.line.color = nextColor;
-          c.line.width = Math.max(c.line.width || 2, 2);
-
-          c.marker = c.marker || {};
-          if (!c.marker.color) c.marker.color = c.line.color;
-          if (c.marker.size == null) c.marker.size = 4;
-          if (c.marker.opacity == null) c.marker.opacity = 0.6;
-          c.marker.line = c.marker.line || { width: 0 };
-        } else if (c.type === 'bar' || c.type === 'histogram') {
-          c.marker = c.marker || {};
-          if (!c.marker.color) c.marker.color = nextColor;
-          c.marker.line = c.marker.line || { color: t.grid, width: 0 };
-          if (typeof c.opacity !== 'number') c.opacity = 0.95;
-        } else if (c.type === 'heatmap') {
-          c.colorscale = c.colorscale || 'RdBu';
-          if (typeof c.zmin === 'undefined') c.zmin = -1;
-          if (typeof c.zmax === 'undefined') c.zmax = 1;
-          c.showscale = true;
-          c.colorbar = c.colorbar || {};
-          c.colorbar.tickfont = Object.assign({ color: t.text }, c.colorbar.tickfont || {});
-          c.colorbar.title = Object.assign({ text: (c.colorbar.title && c.colorbar.title.text) || 'ρ', font: { color: t.text } }, c.colorbar.title || {});
-        }
-        return c;
-      });
-
-      const themed = (typeof themedLayout === 'function') ? themedLayout(layout || {}) : (layout || {});
-      return Plotly.newPlot(el, themedTraces, themed, cfg);
-    }
-
-    // Expose globally now that it exists
-    window.renderPlot = renderPlot;
-  </script>
-
-  <script>
-    function rethemeExistingPlots() {
-      const t = getThemeColors();
-      document.querySelectorAll('.js-plotly-plot').forEach(div => {
-        Plotly.relayout(div, {
-          paper_bgcolor: t.paper,
-          plot_bgcolor: t.plot,
-          'font.color': t.text,
-          'legend.bgcolor': t.paper,
-          'legend.font.color': t.text,
-          'legend.x': 0,
-          'legend.xanchor': 'left',
-          'legend.y': 1.12,
-          'legend.yanchor': 'bottom',
-          'margin.t': 120,
-          'xaxis.gridcolor': t.grid,
-          'xaxis.linecolor': t.grid,
-          'xaxis.zerolinecolor': t.grid,
-          'xaxis.tickfont.color': t.text,
-          'xaxis.title.font.color': t.text,
-          'xaxis.rangeselector.bgcolor': t.subtle,
-          'xaxis.rangeselector.activecolor': t.accent,
-          'xaxis.rangeselector.bordercolor': t.grid,
-          'xaxis.rangeselector.font.color': t.text,
-          'xaxis.rangeslider.bgcolor': t.paper,
-          'xaxis.rangeslider.bordercolor': t.grid,
-          'yaxis.gridcolor': t.grid,
-          'yaxis.linecolor': t.grid,
-          'yaxis.zerolinecolor': t.grid,
-          'yaxis.tickfont.color': t.text,
-          'yaxis.title.font.color': t.text
-        }).catch(()=>{});
-
-        try {
-          const data = div.data || [];
-          const heatIdx = data.map((tr, i) => tr.type === 'heatmap' ? i : null).filter(i => i !== null);
-          if (heatIdx.length) {
-            Plotly.restyle(div, {
-              'colorbar.tickfont.color': t.text,
-              'colorbar.title.font.color': t.text
-            }, heatIdx);
-          }
-        } catch (e) {}
-      });
-    }
-    window.renderPlot = renderPlot;
-    window.rethemeExistingPlots = rethemeExistingPlots;
-  </script>
-
-  <!-- Add after your existing style blocks in <head> -->
-  <style>
-    /* Keep toolbars inside charts so they can’t overlap page UI above */
-    .chart { width: 100%; height: 420px; min-height: 320px; position: relative; overflow: hidden; }
-
-    /* Nudge Plotly toolbar fully inside the plot area */
-    .js-plotly-plot .modebar-container { top: 6px !important; right: 6px !important; }
-
-    /* Make topbar stay above plots and remain clickable */
-    .topbar { position: sticky; top: 0; z-index: 1000; background: var(--bg); }
-  </style>
-
-  <script>
-    window.addEventListener('load', function() {
-      if (window.rethemeExistingPlots) window.rethemeExistingPlots();
-    });
-  </script>
-
-  <!-- put near other scripts in <head> -->
-  <script id="display-name-data" type="application/json">{{ display_name | tojson }}</script>
-  <script>
-    // Safe display name for filenames
-    const DISPLAY_NAME = JSON.parse(document.getElementById('display-name-data').textContent || '""');
-    function safeName(s) {
-      return String(s || '')
-        .replace(/[<>:"/\\|?*\x00-\x1F]+/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-  </script>
-
-  <script>
-    const plotRegistry = [];
-    let isSyncing = false;
-    function registerForSync(div) {
-      plotRegistry.push(div);
-      div.on?.('plotly_relayout', ev => {
-        const link = document.getElementById('linkZoom');
-        if (!link || !link.checked) return;
-        const r0 = ev && (ev['xaxis.range[0]'] || (ev['xaxis']?.range?.[0]));
-        const r1 = ev && (ev['xaxis.range[1]'] || (ev['xaxis']?.range?.[1]));
-        if (!r0 || !r1 || isSyncing) return;
-        isSyncing = true;
-        try {
-          plotRegistry.forEach(other => {
-            if (other === div) return;
-            Plotly.relayout(other, { 'xaxis.range': [r0, r1] }).catch(()=>{});
-          });
-        } finally { isSyncing = false; }
-      });
-    }
-  </script>
-
-  <!-- NEW: backend endpoint for full-history data (safe to leave even if route not added yet) -->
-  <script id="full-data-endpoint" type="application/json">
-    {{ url_for('full_history_json', filename=filename, display=display_name) | tojson }}
-  </script>
-</head>
-<body>
-  <div class="topbar">
-    <h2 style="margin:0;">Analysis – {{ display_name }}</h2>
-    <div class="spacer"></div>
-
-    <!-- New: Download cleaned CSV -->
-    <a class="btn" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Download cleaned CSV</a>
-
-    <!-- New: Link zoom/pan toggle -->
-    <label class="btn secondary" style="display:flex; align-items:center; gap:.5rem;">
-      <!-- remove 'checked' so linking is OFF by default -->
-      <input id="linkZoom" type="checkbox"> Link zoom/pan
-    </label>
-
-    <!-- Existing quick upload -->
-    <form method="post" action="{{ url_for('upload_file') }}" enctype="multipart/form-data" style="display:flex; align-items:center; gap:8px;">
-      <input type="file" name="file" accept=".csv,.xlsx,.json,.txt">
-      <!-- Preserve current preferred defaults when uploading -->
-      <input type="hidden" name="forecast_horizon" value="{{ analysis.controls.forecast_horizon }}">
-      <input type="hidden" name="contamination" value="{{ analysis.controls.contamination }}">
-      <button class="btn" type="submit">Upload new file</button>
-    </form>
-
-    <!-- Also provide a simple link back to the main upload page -->
-    <a class="btn secondary" href="{{ url_for('upload_file') }}">Go to upload</a>
-
-    <!-- Theme toggle -->
-    <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()">Dark mode</button>
-  </div>
-
-  <div class="card">
-    <div class="controls">
-      <form method="post">
-        <input type="hidden" name="display" value="{{ display_name }}">
-        <label>Forecast horizon
-          <input type="number" name="forecast_horizon" min="10" max="240" value="{{ analysis.controls.forecast_horizon }}">
-        </label>
-        <label>Contamination
-          <input type="number" step="0.001" min="0.001" max="0.2" name="contamination" value="{{ analysis.controls.contamination }}">
-        </label>
-        <button type="submit">Re-run</button>
-      </form>
-
-      <form method="post" style="margin-left:auto">
-        <input type="hidden" name="display" value="{{ display_name }}">
-        <!-- preserve current analysis controls so a POST from this form doesn't revert them -->
-        <input type="hidden" name="forecast_horizon" value="{{ analysis.controls.forecast_horizon }}">
-        <input type="hidden" name="contamination" value="{{ analysis.controls.contamination }}">
-        <label style="margin-right:.5rem">Ask AI</label>
-        <input type="text" name="question" placeholder="Your question…" style="min-width:260px">
-        <button type="submit">Ask</button>
-      </form>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="col card">
-      <h3>AI summary</h3>
-      <div id="ai-summary">{{ analysis.ai_summary | safe }}</div>
-      <div class="controls" style="margin-top:.5rem;">
-        <button class="btn secondary" type="button" onclick="dlHTML('#ai-summary','AI summary')">Download HTML</button>
-      </div>
-    </div>
-    {% if analysis.ai_answer %}
-    <div class="col card">
-      <h3>AI answer</h3>
-      <div id="ai-answer">{{ analysis.ai_answer | safe }}</div>
-      <div class="controls" style="margin-top:.5rem;">
-        <button class="btn secondary" type="button" onclick="dlHTML('#ai-answer','AI answer')">Download HTML</button>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <h3>Interactive charts</h3>
-    <div id="charts"></div>
-  </div>
-
-  <!-- NEW: Full-history interactive charts -->
-  <div class="card">
-    <h3>Full-history interactive charts (fast)</h3>
-    <div class="controls">
-      <button id="loadFullBtn" class="btn" type="button">Load full charts</button>
-      <span style="opacity:.8">Uses WebGL + downsampling. Zoom in for more detail.</span>
-    </div>
-    <div id="fullCharts"></div>
-  </div>
-
-  <div class="card">
-    <h3>Compare two columns</h3>
-    <div class="controls">
-      <label>A
-        <select id="cmpA"></select>
-      </label>
-      <label>B
-        <select id="cmpB"></select>
-      </label>
-      <button id="cmpGo">Plot</button>
-    </div>
-    <div id="cmpChart" class="chart"></div>
-  </div>
-
-  <div class="row">
-    <div class="col card">
-      <h3>Distributions</h3>
-      <div id="dists"></div>
-    </div>
-    <div class="col card">
-      <h3>Correlation</h3>
-      <div id="corr" class="chart"></div>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="col card">
-      <h3>Head</h3>
-      {{ analysis.head | safe }}
-    </div>
-    <div class="col card">
-      <h3>Describe</h3>
-      {{ analysis.description | safe }}
-    </div>
-  </div>
-
-  {% if analysis.missing_values %}
-  <div class="card">
-    <h3>Missing values</h3>
-    <div id="missing-table">{{ analysis.missing_values | safe }}</div>
-    <div class="controls" style="margin-top:.5rem;">
-      <button class="btn secondary" type="button" onclick="dlHTML('#missing-table','Missing values')">Download HTML</button>
-      <button class="btn secondary" type="button" onclick="dlCSV('#missing-table','Missing values')">Download CSV</button>
-    </div>
-  </div>
-  {% endif %}
-
-  <div class="card">
-    <h3>Static trend & forecast images</h3>
-    <div class="row">
-      {% for p in analysis.plots %}
-      <div class="col">
-        <h4>{{ p.title }}</h4>
-        <img id="trend_img_{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
-        <div class="controls" style="margin-top:.5rem;">
-          <button class="btn secondary" type="button" onclick="dlImg('#trend_img_{{ loop.index0 }}','{{ p.title }}')">Download PNG</button>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="row">
-      {% for p in analysis.forecast_plots %}
-      <div class="col">
-        <h4>{{ p.title }}</h4>
-        <img id="forecast_img_{{ loop.index0 }}" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" style="max-width:100%" />
-        <div class="controls" style="margin-top:.5rem;">
-          <button class="btn secondary" type="button" onclick="dlImg('#forecast_img_{{ loop.index0 }}','{{ p.title }}')">Download PNG</button>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-
-  <!-- keep your CDN + fallback scripts -->
-  <script id="data-payload" type="application/json">{{ analysis.interactive | tojson }}</script>
-  <script id="data-columns" type="application/json">{{ analysis.columns | tojson }}</script>
-  <script id="data-corr" type="application/json">{{ analysis.corr | tojson }}</script>
-  <script>
-    // Basic diagnostics to surface issues beyond the extension warning
-    if (!window.Plotly) {
-      console.error('Plotly failed to load. Check network/CSP or CDN.');
-    }
-    const chartsRoot = document.getElementById('charts');
-
-    let payload = null, columns = null, corr = null;
-    try {
-      payload = JSON.parse(document.getElementById('data-payload').textContent);
-      columns = JSON.parse(document.getElementById('data-columns').textContent);
-      corr = JSON.parse(document.getElementById('data-corr').textContent);
-      // NEW: expose to window for full-history fallback
-      window.payload = payload;
-    } catch (e) {
-      console.error('Failed to parse interactive payload:', e);
-    }
-
-    if (!Array.isArray(payload) || payload.length === 0) {
-      chartsRoot.innerHTML = '<p style="opacity:.8">No interactive data available (no numeric-like columns detected). Try increasing contamination or ensure numeric columns are parseable.</p>';
-    } else {
-      // Render per-column interactive charts
-      payload.forEach((it, idx) => {
-        const host = document.createElement('div');
-        host.className = 'chart';
-        host.id = 'chart_' + idx;
-        // Give a filename-friendly title, e.g., "Trend for <column>"
-        host.setAttribute('data-title', 'Trend for ' + it.column);
-        chartsRoot.appendChild(host);
-        try {
-          renderPlot(host, it.traces, it.layout, { displayModeBar: true, responsive: true })
-            .then(() => registerForSync(host))
-            .catch(() => registerForSync(host));
-        } catch (e) {
-          console.error('Plotly render error for', it, e);
-        }
-      });
-    }
-
-    // Compare two columns (overlay of interactive history only)
-    const selectA = document.getElementById('cmpA');
-    const selectB = document.getElementById('cmpB');
-    columns.forEach(c => {
-      const o1 = document.createElement('option'); o1.value = c; o1.textContent = c; selectA.appendChild(o1);
-      const o2 = document.createElement('option'); o2.value = c; o2.textContent = c; selectB.appendChild(o2);
-    });
-    if (columns.length) { selectA.value = columns[0]; selectB.value = columns[Math.min(1, columns.length-1)] }
-
-    function findSeries(col){
-      return payload.find(p => p.column === col);
-    }
-
-    document.getElementById('cmpGo').addEventListener('click', () => {
-      const a = findSeries(selectA.value);
-      const b = findSeries(selectB.value);
-      const traces = [];
-      if (a) traces.push({
-        ...a.traces[0],
-        name: a.column,
-        mode: 'lines+markers',
-        marker: { size: 4, opacity: 0.6 }
-      });
-      if (b) traces.push({
-        ...b.traces[0],
-        name: b.column,
-        yaxis: 'y2',
-        line: { color: 'orangered', width: 2 },
-        mode: 'lines+markers',
-        marker: { size: 4, opacity: 0.6 }
-      });
-      const layout = {
-        title: {text: 'Compare ' + selectA.value + ' vs ' + selectB.value, x: 0.02},
-        xaxis: {title: 'Index/Timestamp'},
-        yaxis: {title: selectA.value, showgrid: true},
-        yaxis2: {title: selectB.value, overlaying: 'y', side: 'right', showgrid: false},
-        legend: {orientation: 'h'}, margin: {l:40,r:40,t:40,b:40}
-      };
-      const cmpDiv = document.getElementById('cmpChart');
-      cmpDiv.setAttribute('data-title', 'Compare ' + selectA.value + ' vs ' + selectB.value);
-      renderPlot('cmpChart', traces, {
-        title: {text: 'Compare ' + selectA.value + ' vs ' + selectB.value, x: 0.02},
-        xaxis: {title: 'Index/Timestamp'},
-        yaxis: {title: selectA.value, showgrid: true},
-        yaxis2: {title: selectB.value, overlaying: 'y', side: 'right', showgrid: false},
-        legend: {orientation: 'h'}, margin: {l:40,r:40,t:40,b:40}
-      }, {displayModeBar:true, responsive:true})
-      .then(() => registerForSync(cmpDiv))
-      .catch(() => registerForSync(cmpDiv));
-    });
-
-    // Distributions (histograms) – no sync registration (not time-based)
-    const dists = document.getElementById('dists');
-    const tColors = getThemeColors();
-    payload.forEach((it, idx) => {
-      const host = document.createElement('div');
-      host.className = 'chart';
-      host.id = 'dist_' + idx;
-      host.setAttribute('data-title', 'Distribution ' + it.column);
-      dists.appendChild(host);
-      const vals = it.distribution.values;
-      if (!vals || !vals.length) return;
-      renderPlot(host, [{
-        type: 'histogram',
-        name: it.column,
-        x: vals,
-        marker: { color: tColors.accent }
-      }], {
-        title: { text: 'Distribution: ' + it.column, x: 0.02 },
-        bargap: 0.05
-      }, {
-        displayModeBar: true,
-        responsive: true,
-        scrollZoom: true
-      });
-    });
-
-    // Correlation heatmap – increase left margin for long y labels
-    if (corr && corr.z && corr.z.length) {
-      const corrDiv = document.getElementById('corr');
-      corrDiv.setAttribute('data-title', 'Correlation (Spearman)');
-      const t = getThemeColors();
-      const corrTrace = {
-        type: 'heatmap',
-        z: corr.z, x: corr.x, y: corr.y,
-        zmin: -1, zmax: 1, colorscale: 'RdBu',
-        showscale: true,
-        colorbar: { tickfont: { color: t.text }, title: { text: 'ρ', font: { color: t.text } } }
-      };
-      renderPlot('corr', [corrTrace], {
-        title: { text: 'Correlation (Spearman)' },
-        yaxis: { automargin: true },
-        margin: { l: 140, r: 40, t: 40, b: 40 }
-      }, { displayModeBar: true, responsive: true });
-    }
-  </script>
-
-  <div style="margin: 8px 0;">
-    <button id="download-report-btn" type="button" onclick="downloadFullReport()">Download full report (HTML)</button>
-  </div>
-
-  <style>
-/* Ensure colors in print and reasonable margins */
-@page { size: A4; margin: 12mm; }
-@media print {
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .no-print, .modebar-container, .plotly .modebar { display: none !important; }
-  /* Make charts white only in print so they contrast on paper */
-  .js-plotly-plot .plotly .main-svg { background: #ffffff !important; }
-}
-/* REMOVE the next global rule (it made charts look like white blocks on screen) */
-/* .js-plotly-plot .plotly .main-svg { background: #ffffff !important; } */
-</style>
-
-<div style="margin: 8px 0;">
-  <!-- Add alongside your existing HTML report button -->
-  <button id="download-pdf-btn" type="button" class="no-print" onclick="downloadPDF()">Download as PDF</button>
-</div>
-
-<script>
+// Simple, idempotent Plotly loader Promise
 (function () {
-  window.downloadPDF = function () {
-    try {
-      // Build a nice filename via the document title (browsers use it for Save as PDF)
-      var disp = (window.display_name || '{{ display_name|e }}' || 'report');
-      var base = String(disp).replace(/\.[^.]+$/, '');
-      if (typeof safeName === 'function') base = safeName(base);
-      var prevTitle = document.title;
-      document.title = base + '_report';
-      // Trigger browser print dialog; choose “Save as PDF”
-      window.print();
-      // Restore title after print
-      setTimeout(function(){ document.title = prevTitle; }, 1000);
-    } catch (e) {
-      alert('Print to PDF failed: ' + e);
-    }
+  let p;
+  window.loadPlotly = function loadPlotly() {
+    if (window.Plotly) return Promise.resolve(window.Plotly);
+    if (p) return p;
+    p = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
+      s.async = true;
+      s.onload = () => resolve(window.Plotly);
+      s.onerror = (e) => reject(new Error('Failed to load Plotly'));
+      document.head.appendChild(s);
+    });
+    return p;
   };
 })();
 </script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="title">Analysis: {{ display_name }}</div>
+      <nav class="nav">
+        <a class="pill {{ 'active' if active_view == 'overview' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}">Overview</a>
+        <a class="pill {{ 'active' if active_view == 'static' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='static') }}">Static</a>
+        <a class="pill {{ 'active' if active_view == 'interactive' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive') }}">Interactive</a>
+        <a class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast') }}">Forecast</a>
+        <a class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation') }}">Correlation</a>
+      </nav>
+      <div class="nav" style="gap:8px; flex-wrap:wrap">
+        <a class="pill" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">Download AI summary</a>
+        <a class="pill" href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Download static images (ZIP)</a>
+        <a class="pill" href="{{ url_for('download_full_report_html', filename=filename, display=display_name) }}">Download full report</a>
+      </div>
+      <div class="spacer"></div>
+      <a class="pill" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Download cleaned CSV</a>
+      <button class="btn" type="button" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+  </header>
 
-  <script>
-  // Reuse existing helpers if present
-  (function(){
-    window.downloadFullReport = function() {
-      try {
-        var html = '<!doctype html>\n' + document.documentElement.outerHTML;
-        var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        var a = document.createElement('a');
-        var disp = (window.display_name || '{{ display_name|e }}' || 'report');
-        var base = String(disp).replace(/\.[^.]+$/, '');
-        a.download = (typeof safeName === 'function' ? safeName(base) : base) + '_report.html';
-        a.href = URL.createObjectURL(blob);
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-      } catch (e) {
-        alert('Failed to build report: ' + e);
-      }
-    };
-  })();
-  </script>
+  <main class="container" style="max-width: 1200px; margin: 0 auto; padding: 16px">
 
-  <!-- JS helpers: place near the bottom, before </body> -->
-  <script>
-    function suggestName(title, ext) {
-      try {
-        const base = (typeof safeName === 'function' ? safeName(DISPLAY_NAME) : (DISPLAY_NAME || 'report'));
-        const part = (typeof safeName === 'function' ? safeName(title) : String(title||'item'));
-        return base + ' - ' + part + '.' + ext;
-      } catch (e) {
-        return 'download.' + ext;
-      }
-    }
-    function downloadBlob(blob, filename) {
-      const a = document.createElement('a');
-      a.download = filename; a.href = URL.createObjectURL(blob);
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
-    }
-    function dlHTML(selector, title) {
-      const el = document.querySelector(selector);
-      if (!el) return alert('Element not found: ' + selector);
-      const html = '<!doctype html><html><head><meta charset="utf-8"><title>'+ (title||'snippet') +'</title></head><body>' + el.outerHTML + '</body></html>';
-      downloadBlob(new Blob([html], {type:'text/html;charset=utf-8'}), suggestName(title, 'html'));
-    }
-    function dlCSV(selector, title) {
-      const root = document.querySelector(selector);
-      if (!root) return alert('Table not found: ' + selector);
-      const table = root.tagName === 'TABLE' ? root : root.querySelector('table');
-      if (!table) return alert('No table inside: ' + selector);
-      const rows = Array.from(table.querySelectorAll('tr'));
-      const csv = rows.map(tr => {
-        const cells = Array.from(tr.querySelectorAll('th,td')).map(td => {
-          let v = td.textContent || '';
-          v = v.replace(/\r?\n+/g, ' ').trim();
-          v = '"' + v.replace(/"/g, '""') + '"';
-          return v;
-        });
-        return cells.join(',');
-      }).join('\r\n');
-      downloadBlob(new Blob([csv], {type:'text/csv;charset=utf-8'}), suggestName(title, 'csv'));
-    }
-    function dlImg(selector, title) {
-      const img = document.querySelector(selector);
-      if (!img) return alert('Image not found: ' + selector);
-      const src = img.getAttribute('src');
-      if (!src) return alert('Image has no source');
-      const a = document.createElement('a');
-      a.download = suggestName(title, 'png');
-      a.href = src;
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { a.remove(); }, 200);
-    }
-  </script>
+    <!-- Removed global AI assistant (will show only on Overview now) -->
+    <!--
+    <section id="ai-assistant" class="panel" style="margin-bottom: 16px;">
+      ...
+    </section>
+    {% if analysis.ai_answer %}
+    <script> ... </script>
+    {% endif %}
+    -->
 
-  <script>
-  // Full-history charts: fetch all data, LTTB downsampling, lazy render, zoom refine
-  (function fullHistorySection() {
-    const root = document.getElementById('fullCharts');
-    const btn = document.getElementById('loadFullBtn');
-    if (!root || !btn) return;
+    {% if active_view == 'overview' %}
 
-    const ENDPOINT_BASE = JSON.parse(document.getElementById('full-data-endpoint')?.textContent || 'null');
+      <!-- AI assistant (Overview only) -->
+      <section id="ai-assistant" class="panel" style="margin-bottom: 16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <h2 style="margin:0;">AI assistant</h2>
+          <div>
+            <a class="pill" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">Download AI summary</a>
+            <a class="pill" href="{{ url_for('download_ai_summary_pdf', filename=filename, display=display_name) }}">Download AI summary (PDF)</a>
+          </div>
+        </div>
 
-    const MAX_POINTS = 1800;  // client-side target per chart for responsiveness
-    const MIN_POINTS = 600;
+        <h3 style="margin-top:10px;">AI summary</h3>
+        <div>{{ analysis.ai_summary | safe }}</div>
 
-    function withMaxPoints(url) {
-      const target = Math.min(6000, Math.max(1500, Math.floor((window.innerWidth || 1200) * 2)));
-      const sep = url.includes('?') ? '&' : '?';
-      return `${url}${sep}max_points=${target}`;
-    }
+        <h3 style="margin-top:16px;">Ask the AI about this dataset</h3>
+        <form method="POST" action="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}"
+              style="display:flex; gap:8px; align-items:center;">
+          <input type="text" name="question" value="{{ analysis.user_question or '' }}"
+                 placeholder="e.g., What drives the recent spikes?"
+                 style="flex:1; background: var(--panel); color: var(--text); border:1px solid var(--border); border-radius:8px; padding:8px" />
+          <button type="submit" class="btn">Ask</button>
+        </form>
 
-    function lowerBound(arr, target) { let lo=0, hi=arr.length; while (lo<hi){const m=(lo+hi)>>>1; if (arr[m]<target) lo=m+1; else hi=m;} return lo; }
-    function upperBound(arr, target) { let lo=0, hi=arr.length; while (lo<hi){const m=(lo+hi)>>>1; if (arr[m]<=target) lo=m+1; else hi=m;} return lo; }
+        {% if analysis.user_question %}
+          <div class="muted" style="margin-top:8px">Question: {{ analysis.user_question }}</div>
+        {% endif %}
+        {% if analysis.ai_answer %}
+          <div style="margin-top:8px">{{ analysis.ai_answer | safe }}</div>
+        {% endif %}
+      </section>
 
-    function lttbMs(xMs, y, threshold) {
-      const n = xMs.length;
-      if (threshold >= n || threshold <= 0) return { xMs, y };
-      const valid = []; for (let i=0;i<n;i++){ if (isFinite(xMs[i]) && isFinite(y[i])) valid.push(i); }
-      const m = valid.length; if (m <= threshold) { const xo=new Array(m), yo=new Array(m); for (let k=0;k<m;k++){const i=valid[k]; xo[k]=xMs[i]; yo[k]=y[i]; } return { xMs: xo, y: yo }; }
-      const sampled = new Array(threshold); sampled[0]=valid[0]; const every=(m-2)/(threshold-2); let a=0;
-      for (let i=0;i<threshold-2;i++){
-        const avgStart = Math.floor((i+1)*every)+1, avgEnd=Math.min(Math.floor((i+2)*every)+1, m), avgLen=Math.max(1, avgEnd-avgStart);
-        let avgX=0, avgY=0; for (let j=avgStart;j<avgEnd;j++){ const idx=valid[j]; avgX+=xMs[idx]; avgY+=y[idx]; } avgX/=avgLen; avgY/=avgLen;
-        const r0=Math.floor(i*every)+1, r1=Math.min(Math.floor((i+1)*every)+1, m); let maxA=-1, nextA=r0; const aIdx=valid[a];
-        for (let j=r0;j<r1;j++){ const idx=valid[j]; const A=Math.abs((xMs[aIdx]-avgX)*(y[idx]-y[aIdx]) - (xMs[idx]-xMs[aIdx])*(avgY-y[aIdx])); if (A>maxA){maxA=A; nextA=j;} }
-        a=nextA; sampled[i+1]=valid[a];
-      }
-      sampled[threshold-1]=valid[m-1];
-      const outX=new Array(threshold), outY=new Array(threshold); for (let i=0;i<threshold;i++){ const idx=sampled[i]; outX[i]=xMs[idx]; outY[i]=y[idx]; }
-      return { xMs: outX, y: outY };
-    }
+      {% if analysis.ai_answer %}
+      <script>
+        try { document.getElementById('ai-assistant').scrollIntoView({behavior:'smooth', block:'start'}); } catch(e) {}
+      </script>
+      {% endif %}
 
-    const toDateArray = msArr => msArr.map(ms => new Date(ms));
-    const makeFullTrace = (ds, isTime) => ({
-      type: 'scattergl',
-      mode: 'lines',
-      name: 'Full history',
-      x: isTime ? toDateArray(ds.xMs) : ds.xMs,
-      y: ds.y,
-      line: { width: 1.6 },
-      hovertemplate: isTime ? '%{x}<br>%{y}<extra></extra>' : 'x=%{x}<br>%{y}<extra></extra>'
-    });
+      <div class="grid">
+        <section class="panel">
+          <h3>Preview</h3>
+          <div class="muted">Top rows of your dataset</div>
+          <div class="table-center">
+            {{ analysis.head | safe }}
+          </div>
+        </section>
 
-    function themedBaseLayout(title, yTitle, isTime) {
-      const base = themedLayout({
-        title: { text: title, x: 0.02 },
-        xaxis: { title: isTime ? 'Timestamp' : 'Index', type: isTime ? 'date' : 'linear' },
-        yaxis: { title: yTitle || title, showgrid: true },
-        legend: { orientation: 'h' },
-        margin: { l: 40, r: 10, t: 80, b: 60 },
-        hovermode: 'x unified'
-      });
-      base.legend = Object.assign({}, base.legend, { y: 1.05, yanchor: 'bottom' });
-      return base;
-    }
+        <section class="panel">
+          <h3>Description</h3>
+          <div class="muted">Pandas describe()</div>
+          <div class="table-center">
+            {{ analysis.description | safe }}
+          </div>
+        </section>
 
-    function decimateForRange(series, xrangeMs) {
-      const xMs = series.xMs, y = series.y, isTime = series.isTime !== false;
-      let start=0, end=xMs.length;
-      if (xrangeMs && isTime) { const [x0,x1]=xrangeMs; start=lowerBound(xMs,x0); end=upperBound(xMs,x1); }
-      const len = Math.max(0, end - start);
-      const target = Math.min(MAX_POINTS, Math.max(MIN_POINTS, Math.floor((window.innerWidth || 1200) * 1.25)));
-      if (len <= target) return { xMs: xMs.slice(start, end), y: y.slice(start, end) };
-      return lttbMs(xMs.slice(start, end), y.slice(start, end), target);
-    }
+        <section class="panel">
+          <h3>Info</h3>
+          <pre style="white-space:pre-wrap">{{ analysis.info }}</pre>
+        </section>
 
-    function buildPlaceholders(fullSeries) {
-      root.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      fullSeries.forEach((s, idx) => {
-        const host = document.createElement('div');
-        host.className = 'chart';
-        host.id = 'full_' + idx;
-        host.style.minHeight = '320px';
-        host.__series = s; // keep full series for zoom refinement
-        frag.appendChild(host);
-      });
-      root.appendChild(frag);
-    }
+        {% if analysis.missing_values %}
+          <section class="panel">
+            <h3>Missing values</h3>
+            {{ analysis.missing_values | safe }}
+          </section>
+        {% endif %}
+      </div>
 
-    function setupVirtualizedRender() {
-      const io = new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-          const el = entry.target;
-          if (entry.isIntersecting && !el.__rendered && el.__series) {
-            el.__rendered = true;
-            const col = el.__series.column || 'Series';
-            renderOne(el, el.__series, 'Full history – ' + col, col).catch(e => console.error('Full chart render error', e));
-          }
-        });
-      }, { root: null, rootMargin: '200px 0px', threshold: 0 });
+    {% elif active_view == 'static' %}
+      <section class="panel">
+        <h3>Static trends</h3>
+        <div class="muted">Full-history PNGs with anomaly markers</div>
+        {% if analysis.plots %}
+          <div class="grid grid-2">
+            {% for p in analysis.plots %}
+              <figure class="panel">
+                <figcaption style="margin-bottom:8px">{{ p.title }}</figcaption>
+                <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
+              </figure>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="muted">No numeric columns to plot.</div>
+        {% endif %}
+      </section>
 
-      document.querySelectorAll('#fullCharts .chart').forEach(el => io.observe(el));
+    {% elif active_view == 'forecast' %}
+      <section class="panel">
+        <h3>Forecasts</h3>
+        <div class="muted">Full-history context with forecast and 95% CI</div>
+        {% if analysis.forecast_plots %}
+          <div class="grid grid-2">
+            {% for p in analysis.forecast_plots %}
+              <figure class="panel">
+                <figcaption style="margin-bottom:8px">{{ p.title }}</figcaption>
+                <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
+              </figure>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="muted">No timeseries forecasts available.</div>
+        {% endif %}
+      </section>
 
-      // Render first two immediately for a quick preview
-      Array.from(document.querySelectorAll('#fullCharts .chart')).slice(0, 2).forEach(el => {
-        if (el.__series && !el.__rendered) {
-          el.__rendered = true;
-          const col = el.__series.column || 'Series';
-          renderOne(el, el.__series, 'Full history – ' + col, col).catch(e => console.error('Full chart render error', e));
-        }
-      });
-    }
+    {% elif active_view == 'interactive' %}
+      <section class="panel">
+        <h3>Interactive charts</h3>
+        <div class="row" style="margin-bottom:8px">
+          <label for="colPick">Column</label>
+          <select id="colPick">
+            {% for col in analysis.columns %}
+              <option value="{{ col }}">{{ col }}</option>
+            {% endfor %}
+          </select>
+          <span class="muted">Only the selected column is rendered to keep things fast.</span>
+        </div>
+        <div id="chart" class="panel" style="min-height:420px"></div>
+        <div id="dist" class="panel" style="min-height:220px"></div>
+      </section>
 
-    async function fetchFullSeries() {
-      if (!ENDPOINT_BASE) return null;
-      const res = await fetch(withMaxPoints(ENDPOINT_BASE), { credentials: 'same-origin', cache: 'no-store' });
-      if (!res.ok) throw new Error('Full history fetch failed: ' + res.status);
-      const json = await res.json();
-      const out = [];
-      const arr = Array.isArray(json.series) ? json.series : [];
-      for (const s of arr) {
-        const xMs = Array.isArray(s.x_ms) ? s.x_ms : (Array.isArray(s.x) ? s.x : []);
-        const y = Array.isArray(s.y) ? s.y : [];
-        const colName = s.column || s.name || 'Series';
-        const isTime = (s.is_time !== false);
-        if (xMs.length && y.length && xMs.length === y.length) {
-          out.push({ column: colName, xMs, y, isTime });
-        }
-      }
-      return out;
-    }
+      <script id="interactivePayload" type="application/json">{{ (analysis.interactive or []) | tojson }}</script>
+      <script id="interactiveConfig" type="application/json">{{ {'filename': filename, 'fullHistoryUrl': url_for('full_history_json')} | tojson }}</script>
 
-    function fallbackFromInteractive() {
-      try {
-        const txt = document.getElementById('data-payload')?.textContent || '[]';
-        const items = JSON.parse(txt);
-        const derived = [];
-        items.forEach(it => {
-          const tr = (it.traces || [])[0];
-          if (!tr || !Array.isArray(tr.x) || !Array.isArray(tr.y)) return;
-          const xMs = tr.x.map(v => (v instanceof Date) ? v.getTime() : new Date(v).getTime());
-          const y = tr.y.slice();
-          const good = [];
-          for (let i=0;i<xMs.length;i++){ if (isFinite(xMs[i]) && isFinite(y[i])) good.push(i); }
-          if (good.length) {
-            derived.push({
-              column: it.column || it.title || 'Series',
-              xMs: good.map(i => xMs[i]),
-              y: good.map(i => y[i]),
-              isTime: true
-            });
-          }
-        });
-        return derived;
-      } catch {
-        return [];
-      }
-    }
+      <script>
+        const ipEl = document.getElementById('interactivePayload');
+        const interactivePayload = JSON.parse((ipEl && ipEl.textContent) || '[]');
+        const cfgEl = document.getElementById('interactiveConfig');
+        const config = JSON.parse((cfgEl && cfgEl.textContent) || '{}');
+        const filename = config.filename || null;
+        const fullHistoryUrl = config.fullHistoryUrl || null;
+        const interactiveMap = {};
+        for (const item of interactivePayload) interactiveMap[item.column] = item;
 
-    function renderOne(el, series, title, yTitle) {
-      const isTime = series.isTime !== false;
-      const ds = decimateForRange(series, null);
-      el.setAttribute('data-title', title);
-      let rafToken = null;
+        function applyThemeLayoutDefaults(layout) {
+          const t = getThemeVars();
+          layout.paper_bgcolor = t.panel;
+          layout.plot_bgcolor = t.panel;
+          layout.font = { color: t.text };
+          layout.margin = layout.margin || { l: 40, r: 10, t: 20, b: 40 };
+          layout.legend = Object.assign({ orientation: 'h' }, layout.legend || {});
+          // Remove inner figure title (use section heading)
+          layout.title = null;
 
-      return renderPlot(el, [makeFullTrace(ds, isTime)], themedBaseLayout(title, yTitle, isTime), {
-        displayModeBar: true, responsive: true, scrollZoom: true,
-        modeBarButtonsToRemove: ['lasso2d','select2d'],
-        toImageButtonOptions: { filename: (typeof safeName==='function' ? `${safeName(DISPLAY_NAME)} - ${safeName(title)}` : 'full-history') }
-      }).then(() => {
-        registerForSync(el);
-        if (isTime) {
-          el.on?.('plotly_relayout', ev => {
-            const x0 = ev && (ev['xaxis.range[0]'] || ev['xaxis']?.range?.[0]);
-            const x1 = ev && (ev['xaxis.range[1]'] || ev['xaxis']?.range?.[1]);
-            if (!x0 || !x1) return;
-            const x0ms = (x0 instanceof Date) ? x0.getTime() : new Date(x0).getTime();
-            const x1ms = (x1 instanceof Date) ? x1.getTime() : new Date(x1).getTime();
-            if (!isFinite(x0ms) || !isFinite(x1ms)) return;
-
-            if (rafToken) cancelAnimationFrame(rafToken);
-            rafToken = requestAnimationFrame(() => {
-              const ds2 = decimateForRange(series, [x0ms, x1ms]);
-              Plotly.restyle(el, { x: [toDateArray(ds2.xMs)], y: [ds2.y] }, [0]).catch(()=>{});
-              rafToken = null;
-            });
+          if (!layout.xaxis) layout.xaxis = {};
+          layout.xaxis.showgrid = true;
+          layout.xaxis.automargin = true;
+          // Ensure dark-mode readable range selector buttons
+          if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
+          Object.assign(layout.xaxis.rangeselector, {
+            visible: true,
+            bgcolor: t.panel,
+            activecolor: t.border,
+            font: { color: t.text },
+            buttons: [
+              {count: 1, label: '1m', step: 'month', stepmode: 'backward'},
+              {count: 6, label: '6m', step: 'month', stepmode: 'backward'},
+              {step: 'year', stepmode: 'todate', label: 'YTD'},
+              {count: 1, label: '1y', step: 'year', stepmode: 'backward'},
+              {step: 'all', label: 'All'}
+            ]
           });
-        }
-      });
-    }
 
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      const prev = btn.textContent;
-      btn.textContent = 'Loading...';
-      try {
-        let fullSeries = await fetchFullSeries();
-        if (!fullSeries || !fullSeries.length) {
-          console.warn('Full endpoint unavailable or empty; falling back to interactive payload (likely truncated).');
-          fullSeries = fallbackFromInteractive();
+          if (!layout.yaxis) layout.yaxis = {};
+          layout.yaxis.showgrid = true;
+          layout.yaxis.automargin = true;
         }
-        if (!fullSeries.length) {
-          btn.textContent = 'No data';
-          return;
+
+        function renderFromPayload(item) {
+          const traces = item.traces || [];
+          const layout = Object.assign({}, item.layout || {});
+          applyThemeLayoutDefaults(layout);
+          Plotly.newPlot('chart', traces, layout, { displayModeBar: true, responsive: true });
+
+          const dist = item.distribution || null;
+          if (dist && Array.isArray(dist.values)) {
+            const t = getThemeVars();
+            Plotly.newPlot('dist', [{
+              type: 'histogram', name: dist.name, x: dist.values, marker: { color: t.accent }
+            }], {
+              title: null,
+              paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
+              margin: { l: 40, r: 10, t: 20, b: 40 }
+            }, { responsive: true });
+          } else {
+            document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
+          }
         }
-        buildPlaceholders(fullSeries);
-        setupVirtualizedRender();
-        btn.textContent = 'Loaded';
-      } catch (e) {
-        console.error(e);
-        btn.textContent = 'Failed';
-        btn.disabled = false;
-        alert('Could not load full charts: ' + e.message);
-      } finally {
-        setTimeout(() => { if (btn.textContent==='Loaded') btn.disabled = false; }, 1000);
-      }
-    });
-  })();
-  </script>
+
+        async function renderByFetch(column) {
+          try {
+            const u = new URL(fullHistoryUrl, window.location.origin);
+            u.searchParams.set('filename', filename);
+            u.searchParams.set('max_points', 'all');
+            const res = await fetch(u.toString(), { cache: 'no-store' });
+            const data = await res.json();
+            const found = (data.series || []).find(s => s.name === column);
+            if (!found) throw new Error('Series not found: ' + column);
+
+            const t = getThemeVars();
+            const hist = {
+              type: 'scatter',
+              mode: 'lines',
+              name: 'History',
+              x: found.x,
+              y: found.y,
+              line: { color: 'rgb(31,119,180)', width: 2 }
+            };
+            const layout = {
+              xaxis: { title: found.x_is_time ? 'Timestamp' : 'Index', type: found.x_is_time ? 'date' : undefined },
+              yaxis: { title: column }
+            };
+            applyThemeLayoutDefaults(layout);
+            Plotly.newPlot('chart', [hist], layout, { responsive: true });
+
+            const vals = (found.y || []).filter(v => Number.isFinite(v));
+            if (vals.length) {
+              Plotly.newPlot('dist', [{
+                type: 'histogram', name: column, x: vals, marker: { color: t.accent }
+              }], {
+                title: null,
+                paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
+                margin: { l: 40, r: 10, t: 20, b: 40 }
+              }, { responsive: true });
+            } else {
+              document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
+            }
+          } catch (e) {
+            document.getElementById('chart').innerHTML = '<div class="muted">Failed to load interactive data.</div>';
+            document.getElementById('dist').innerHTML = '';
+          }
+        }
+
+        function onPickChange() {
+          const col = document.getElementById('colPick').value;
+          if (interactiveMap[col]) renderFromPayload(interactiveMap[col]);
+          else renderByFetch(col);
+        }
+
+        // Re-apply theme styles to existing plots on theme change
+        window.applyThemeToPlots = function() {
+          const t = getThemeVars();
+          const chart = document.getElementById('chart');
+          const dist = document.getElementById('dist');
+          const relayout = {
+            paper_bgcolor: t.panel,
+            plot_bgcolor: t.panel,
+            font: { color: t.text },
+            'xaxis.rangeselector.bgcolor': t.panel,
+            'xaxis.rangeselector.activecolor': t.border,
+            'xaxis.rangeselector.font.color': t.text
+          };
+          if (chart && chart.data) Plotly.relayout(chart, relayout);
+          if (dist && dist.data) Plotly.relayout(dist, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
+          const corrEl = document.getElementById('corr');
+          if (corrEl && corrEl.data) Plotly.relayout(corrEl, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
+          const pear = document.getElementById('pearson');
+          if (pear && pear.data) Plotly.relayout(pear, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+          const sel = document.getElementById('colPick');
+          if (sel && sel.options.length) {
+            onPickChange();
+            sel.addEventListener('change', onPickChange);
+          } else {
+            document.getElementById('chart').innerHTML = '<div class="muted">No interactive columns available.</div>';
+          }
+        });
+      </script>
+
+    {% elif active_view == 'correlation' %}
+      <section class="panel">
+        <h3>Correlation</h3>
+        {% if analysis.corr and analysis.corr.z %}
+          <div id="corr" class="panel" style="min-height:520px"></div>
+          <script id="corrPayload" type="application/json">{{ analysis.corr | tojson }}</script>
+          <script>
+            const corrPayloadEl = document.getElementById('corrPayload');
+            const corrData = JSON.parse((corrPayloadEl && corrPayloadEl.textContent) || '{}');
+            const t = getThemeVars();
+            const spearmanData = [{
+              z: corrData.z,
+              x: corrData.x,
+              y: corrData.y,
+              type: 'heatmap',
+              colorscale: [
+                [0, '#0b1327'],
+                [0.5, t.accent],
+                [1, t.accent2]
+              ],
+              zmin: -1, zmax: 1
+            }];
+            const spearmanLayout = {
+              title: { text: 'Spearman correlation', x: 0.02 },
+              xaxis: { side: 'top', automargin: true },
+              yaxis: { autorange: 'reversed', automargin: true },
+              paper_bgcolor: t.panel,
+              plot_bgcolor: t.panel,
+              font: { color: t.text },
+              // extra space for long y labels
+              margin: { l: 120, r: 10, t: 60, b: 60 }
+            };
+            Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
+
+            // Pearson heatmap (same theming and margins)
+            if (corrData && corrData.pearson && corrData.pearson.z) {
+              const pearDiv = document.createElement('div');
+              pearDiv.id = 'pearson';
+              pearDiv.className = 'panel';
+              pearDiv.style.minHeight = '520px';
+              // Append right after the current script's parent (section)
+              document.currentScript.parentElement.appendChild(pearDiv);
+
+              const pearData = [{
+                z: corrData.pearson.z,
+                x: corrData.pearson.x,
+                y: corrData.pearson.y,
+                type: 'heatmap',
+                colorscale: [
+                  [0, '#0b1327'],
+                  [0.5, t.accent],
+                  [1, t.accent2]
+                ],
+                zmin: -1, zmax: 1
+              }];
+              const pearLayout = {
+                title: { text: 'Pearson correlation', x: 0.02 },
+                xaxis: { side: 'top', automargin: true },
+                yaxis: { autorange: 'reversed', automargin: true },
+                paper_bgcolor: t.panel,
+                plot_bgcolor: t.panel,
+                font: { color: t.text },
+                margin: { l: 120, r: 10, t: 60, b: 60 }
+              };
+              Plotly.newPlot('pearson', pearData, pearLayout, { responsive: true });
+            }
+          </script>
+        {% else %}
+          <div class="muted">Not enough numeric columns to compute correlation.</div>
+        {% endif %}
+      </section>
+    {% endif %}
+  </main>
 </body>
 </html>

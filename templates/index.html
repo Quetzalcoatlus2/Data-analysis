@@ -7,47 +7,24 @@
   <meta name="color-scheme" content="light dark">
   <style>
     :root {
-      --bg: #ffffff;
-      --text: #0f172a;
-      --muted: #475569;
-      --card: #f8fafc;
-      --border: #e2e8f0;
-      --accent: #0ea5e9;
-      --button-text: #ffffff;
+      --bg: #ffffff; --text: #0f172a; --muted: #475569; --card: #f8fafc; --border: #e2e8f0; --accent: #0ea5e9; --button-text: #ffffff;
     }
     :root[data-theme="dark"] {
-      --bg: #0b1220;
-      --text: #e5e7eb;
-      --muted: #9ca3af;
-      --card: #111827;
-      --border: #1f2937;
-      --accent: #38bdf8;
-      --button-text: #0b1220;
+      --bg: #0b1220; --text: #e5e7eb; --muted: #9ca3af; --card: #111827; --border: #1f2937; --accent: #38bdf8; --button-text: #0b1220;
     }
-    html, body {
-      background: var(--bg);
-      color: var(--text);
-    }
-    .topbar {
-      display:flex; align-items:center; gap:10px; padding:10px 0;
-    }
+    html, body { background: var(--bg); color: var(--text); }
+    .topbar { display:flex; align-items:center; gap:10px; padding:10px 0; }
     .spacer { flex: 1; }
-    .btn {
-      display:inline-block; padding:8px 12px; border:1px solid var(--border);
-      background: var(--accent); color: var(--button-text);
-      border-radius:6px; text-decoration:none; cursor:pointer;
+    .btn { display:inline-block; padding:8px 12px; border:1px solid var(--border); background: var(--accent); color: var(--button-text); border-radius:6px; text-decoration:none; cursor:pointer; }
+    .btn.secondary { background: transparent; color: var(--text); }
+    .card { background: var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; max-width: 800px; }
+    form { display: grid; gap: 12px; }
+    input[type="file"], input[type="number"], input[type="text"], select, button {
+      color: var(--text); background: var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px;
     }
-    .btn.secondary {
-      background: transparent; color: var(--text);
-    }
-    .card {
-      background: var(--card); border:1px solid var(--border); border-radius:8px; padding:12px;
-    }
-    input[type="file"], input[type="number"], input[type="text"], button {
-      color: var(--text); background: var(--bg); border:1px solid var(--border);
-      border-radius:6px; padding:8px;
-    }
-    label { color: var(--muted); }
+    label { color: var(--muted); display: grid; gap: 6px; }
+    fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+    legend { color: var(--muted); padding: 0 6px; }
   </style>
   <script>
     (function() {
@@ -75,6 +52,19 @@
     <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()">Dark mode</button>
   </div>
 
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul class="flash" style="list-style:none; padding:0; margin:0 0 1rem 0;">
+        {% for msg in messages %}
+          <li style="background: var(--card); border:1px solid var(--border); padding:.5rem .75rem; border-radius:6px; margin-bottom:.5rem;">
+            {{ msg }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
   <div class="card">
     <h2>Upload a dataset</h2>
     <form method="post" enctype="multipart/form-data">
@@ -82,7 +72,7 @@
         <input type="file" name="file" required />
       </label>
 
-      <fieldset style="margin-top:1rem">
+      <fieldset>
         <legend>Options</legend>
 
         <label>Forecast horizon (steps)
@@ -92,9 +82,19 @@
         <label>Anomaly contamination (0.001–0.2)
           <input type="number" step="0.001" min="0.001" max="0.2" name="contamination" value="0.02" />
         </label>
+
+        <label>Start in view
+          <select name="view">
+            <option value="overview" selected>Overview</option>
+            <option value="static">Static</option>
+            <option value="interactive">Interactive</option>
+            <option value="forecast">Forecast</option>
+            <option value="correlation">Correlation</option>
+          </select>
+        </label>
       </fieldset>
 
-      <button type="submit" style="margin-top:1rem">Analyze</button>
+      <button type="submit" style="margin-top:0.5rem">Analyze</button>
     </form>
   </div>
 </body>

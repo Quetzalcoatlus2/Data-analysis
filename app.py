@@ -1,6 +1,7 @@
 import os
 import io
 import base64
+import zipfile
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
 
 from datetime import datetime, timedelta
@@ -73,6 +74,10 @@ app.config.setdefault('MAX_CACHE_ITEMS', int(os.getenv("MAX_CACHE_ITEMS", "6")))
 app.config.setdefault('DEFAULT_FORECAST_STEPS', int(os.getenv("DEFAULT_FORECAST_STEPS", "30")))
 app.config.setdefault('DEFAULT_CONTAMINATION', float(os.getenv("DEFAULT_CONTAMINATION", "0.02")))
 app.config.setdefault('PLOTLY_TAIL', int(os.getenv("PLOTLY_TAIL", "800")))
+# Add AI call behavior knobs
+app.config.setdefault('AI_TIMEOUT_SECONDS', int(os.getenv("AI_TIMEOUT_SECONDS", "30")))
+app.config.setdefault('AI_RETRY_ATTEMPTS', int(os.getenv("AI_RETRY_ATTEMPTS", "2")))
+app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACKOFF_SECONDS", "2.0")))
 
 import logging
 import re
@@ -107,24 +112,140 @@ for h in (file_handler, console_handler):
 
 app.logger.setLevel(log_level)
 
-# Also forward Werkzeug logs to both handlers
+# Also forward Werkzeug logs to both handlers (once)
 werk = logging.getLogger("werkzeug")
 werk.setLevel(log_level)
 for h in (file_handler, console_handler):
     if not any(type(x) is type(h) for x in werk.handlers):
         werk.addHandler(h)
 
-# --- AI Configuration with Debugging ---  (moved below logging)
+# --- AI model selection & caching ---
+DEFAULT_AI_MODEL = (
+    os.getenv("GENAI_MODEL")
+    or os.getenv("GOOGLE_MODEL")
+    or "models/gemini-2.5-pro-preview-06-05"   # default (typo-safe normalization below)
+)
+MODEL_CACHE = {}          # name -> GenerativeModel instance
+CURRENT_MODEL_NAME = None # the last-resolved working model name
+
+def _normalize_model_aliases(name: str) -> list[str]:
+    """
+    Produce a robust list of candidate identifiers for a requested model name:
+    - fix common 'odels/' typo to 'models/'
+    - try both with and without 'models/' prefix
+    - include a couple stable fallbacks at the end
+    """
+    if not name:
+        return []
+    n = name.strip()
+    if n.startswith("odels/"):  # fix missing 'm'
+        n = "m" + n
+    candidates = [n]
+    # try toggling the 'models/' prefix
+    if n.startswith("models/"):
+        candidates.append(n.replace("models/", "", 1))
+    else:
+        candidates.append("models/" + n)
+    # stable fallbacks (only if not already present)
+    for fb in ("gemini-1.5-pro", "models/gemini-1.5-pro", "gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-pro", "models/gemini-pro"):
+        if fb not in candidates:
+            candidates.append(fb)
+    # de-dup preserving order
+    seen = set(); out = []
+    for c in candidates:
+        if c and c not in seen:
+            out.append(c); seen.add(c)
+    return out
+
+def _make_model(name: str):
+    m = genai.GenerativeModel(name)
+    # quick ping to confirm it actually responds
+    resp = m.generate_content("OK", request_options={"timeout": 15}, generation_config={"response_mime_type": "text/plain"})
+    _ = _extract_text_from_gemini_response(resp)  # ignore the content
+    return m
+
+def get_or_create_model(preferred: str | None = None):
+    """
+    Return a working GenerativeModel instance for the preferred name, trying
+    normalized aliases and a few stable fallbacks. Caches instances.
+    """
+    global CURRENT_MODEL_NAME
+    if not AI_ENABLED:
+        raise RuntimeError("AI is disabled or not configured.")
+    for nm in _normalize_model_aliases(preferred or DEFAULT_AI_MODEL):
+        try:
+            if nm in MODEL_CACHE:
+                CURRENT_MODEL_NAME = nm
+                return MODEL_CACHE[nm]
+            m = _make_model(nm)
+            MODEL_CACHE[nm] = m
+            CURRENT_MODEL_NAME = nm
+            app.logger.info("Using Gemini model: %s", nm)
+            return m
+        except Exception as e:
+            app.logger.warning("Model candidate failed (%s): %s", nm, e)
+            continue
+    raise RuntimeError("No working Gemini model available. Check API key/network or try a different model.")
+
+# --- AI Configuration (lazy model init) ---
 app.logger.info("Attempting to configure AI...")
-try:
-    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    model = genai.GenerativeModel('models/gemini-2.5-pro')
-    AI_ENABLED = True
-    app.logger.info("AI configured successfully.")
-except Exception:
-    app.logger.exception("AI configuration failed")
-    model = None
-    AI_ENABLED = False
+
+def configure_ai():
+    global model, AI_ENABLED
+    try:
+        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        AI_ENABLED = True
+        # lazily initialize the default model; if it fails, defer to first call
+        try:
+            model = get_or_create_model(DEFAULT_AI_MODEL)
+        except Exception as e:
+            model = None
+            app.logger.warning("Deferred model init; will attempt on first request. %s", e)
+        app.logger.info("AI configured successfully.")
+    except Exception:
+        app.logger.exception("AI configuration failed")
+        model = None
+        AI_ENABLED = False
+
+configure_ai()
+
+def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, retries: int | None = None, generation_config: dict | None = None):
+    """
+    Thin wrapper around Gemini calls that supports optional file context,
+    retry/backoff, a request timeout, and generation config, returning the raw response object.
+    """
+    if not AI_ENABLED or model is None:
+        raise RuntimeError("AI is disabled or not configured.")
+    attempts = int(app.config.get('AI_RETRY_ATTEMPTS', 2)) if retries is None else int(retries)
+    backoff = float(app.config.get('AI_RETRY_BACKOFF_SECONDS', 2.0))
+    timeout = int(app.config.get('AI_TIMEOUT_SECONDS', 30)) if timeout is None else int(timeout)
+    last_err = None
+    for i in range(max(1, attempts + 1)):
+        try:
+            content = [file_asset, prompt] if file_asset is not None else [prompt]
+            resp = model.generate_content(
+                content,
+                request_options={"timeout": timeout},
+                generation_config=(generation_config or {})
+            )
+            # If blocked, bubble up to trigger fallback
+            try:
+                pf = getattr(resp, "prompt_feedback", None)
+                if pf and getattr(pf, "block_reason", None):
+                    br = pf.block_reason
+                    raise RuntimeError(f"Content blocked: {getattr(br, 'name', br)}")
+            except Exception:
+                pass
+            return resp
+        except Exception as e:
+            last_err = e
+            if i < attempts:
+                try:
+                    time.sleep(backoff * (i + 1))
+                except Exception:
+                    pass
+                continue
+            raise last_err
 
 # Replace plain dict with tiny LRU using OrderedDict
 class TinyLRU(OrderedDict):
@@ -237,39 +358,114 @@ def sanitize_ai_html(raw: str) -> str:
         s = "<p>" + "</p><p>".join(lines) + "</p>" if lines else "<p></p>"
     return s
 
+def html_to_pdf_bytes(html: str) -> bytes:
+    """
+    Convert an HTML string to PDF bytes using the best-available backend.
+    Tries WeasyPrint, then pdfkit (wkhtmltopdf), then xhtml2pdf; raises if none are available.
+    """
+    # 1) WeasyPrint (pure-Python API; requires cairo/pango libs in environment)
+    try:
+        import weasyprint  # type: ignore
+        return weasyprint.HTML(string=html).write_pdf()
+    except Exception:
+        pass
+
+    # 2) pdfkit (requires wkhtmltopdf installed on the system PATH)
+    try:
+        import pdfkit  # type: ignore
+        return pdfkit.from_string(html, False)
+    except Exception:
+        pass
+
+    # 3) xhtml2pdf (pure-Python fallback)
+    try:
+        from xhtml2pdf import pisa  # type: ignore
+        buf = io.BytesIO()
+        # pisa expects a text stream for the HTML source
+        status = pisa.CreatePDF(io.StringIO(html), dest=buf)
+        if getattr(status, "err", 0):
+            raise RuntimeError("xhtml2pdf failed to render HTML to PDF")
+        return buf.getvalue()
+    except Exception:
+        pass
+
+    raise RuntimeError("No HTML-to-PDF backend available. Install one of: weasyprint, pdfkit (with wkhtmltopdf), or xhtml2pdf.")
+
+def _extract_text_from_gemini_response(resp) -> str:
+    """
+    Robustly extract plain text from a Gemini response.
+    Falls back to concatenating candidate parts if .text isn't available.
+    Returns '' if nothing textual is found.
+    """
+    # Try the SDK convenience accessor first
+    try:
+        t = getattr(resp, "text", None)
+        if t:
+            return str(t)
+    except Exception as e:
+        app.logger.warning("Gemini response.text accessor failed: %s", e)
+
+    # Try candidates -> content.parts
+    try:
+        candidates = getattr(resp, "candidates", None) or []
+        for cand in candidates:
+            content = getattr(cand, "content", None)
+            parts = getattr(content, "parts", None)
+            if not parts:
+                continue
+            texts = []
+            for part in parts:
+                if isinstance(part, dict):
+                    if "text" in part and part["text"]:
+                        texts.append(str(part["text"]))
+                else:
+                    pt = getattr(part, "text", None)
+                    if pt:
+                        texts.append(str(pt))
+            if texts:
+                return "\n".join(texts)
+    except Exception as e:
+        app.logger.warning("Gemini candidate parts extraction failed: %s", e)
+
+    return ""
+
 def get_ai_summary(dataframe_description):
     app.logger.debug("Calling get_ai_summary")
     if not AI_ENABLED or model is None:
         app.logger.debug("AI disabled; skipping get_ai_summary")
         return "AI analysis is disabled. Please check your Google API key and terminal for configuration errors."
-    
     try:
         app.logger.debug("Preparing to call Google API for summary")
         prompt = f"""
-        You are a data analyst. Based on the following statistical description of a dataset, 
-        provide a brief summary and highlight potential insights, trends, or anomalies.
-        The user is interested in conclusions, prognostics, and anomalies.
-        Keep your analysis concise and easy to understand.
-
-        Strict formatting instructions:
-        - Output strictly as an HTML snippet (no <html> or <body> tags).
-        - Use <h3>, <p>, <ul><li>, and <strong> for structure.
-        - Do NOT use Markdown symbols like #, *, or ```; no code fences.
-
-        Data Description:
-        {dataframe_description}
-        """
+You are an expert data analyst. Given the following dataset profile, write a clear, rich, and structured HTML summary...
+{dataframe_description}
+"""
         response = model.generate_content(prompt)
         app.logger.debug("AI summary call successful")
 
-        if not response.parts:
-            block_reason = response.prompt_feedback.block_reason.name
-            app.logger.warning("AI analysis blocked: %s", block_reason)
-            return f"AI analysis was blocked by the content filter. Reason: {block_reason}"
+        # Safety blocks (unchanged)
+        if hasattr(response, "prompt_feedback"):
+            pf = getattr(response, "prompt_feedback", None)
+            if pf and getattr(pf, "block_reason", None):
+                block_reason = getattr(pf, "block_reason", None)
+                app.logger.warning("AI analysis blocked: %s", block_reason)
+                return f"AI analysis was blocked by the content filter. Reason: {block_reason}"
+
+        # NEW: safe extraction
+        text = _extract_text_from_gemini_response(response).strip()
+        if not text:
+            # Attempt to log finish_reason for debugging
+            fr = None
+            try:
+                cs = getattr(response, "candidates", None) or []
+                if cs:
+                    fr = getattr(cs[0], "finish_reason", None)
+            except Exception:
+                pass
+            raise RuntimeError(f"Empty AI response (finish_reason={fr})")
 
         app.logger.debug("Successfully got AI summary")
-        return sanitize_ai_html(response.text)
-        
+        return sanitize_ai_html(text)
     except Exception as e:
         app.logger.exception("AI summary call failed")
         return f"An error occurred during AI analysis. Check the terminal for more details. Error: {e}"
@@ -278,98 +474,157 @@ def get_ai_answer(dataframe, question):
     """Generates a specific answer to a user's question about the dataframe."""
     if not AI_ENABLED or model is None:
         return "AI analysis is disabled."
-    
-    # Give the AI context with the dataframe's structure and a summary
-    df_head = dataframe.head().to_string()
-    df_description = dataframe.describe().to_string()
 
+    # Give the AI context with structure and a summary (prompt omitted here for brevity)
     try:
+        # Build a concise prompt with dataset context and the user's question
+        df_desc = describe_for_ai(dataframe)
         prompt = f"""
-        You are a helpful data analyst. A user has a specific question about a dataset.
-        Use the following information to answer the question.
+You are a senior data scientist. Answer the user's question about the dataset clearly and precisely.
+Respond strictly in HTML (no Markdown), using tags like <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, and <em>.
+Cite concrete numbers or ranges from the provided context when relevant. If something is uncertain, say so briefly.
 
-        Data Summary:
-        {df_description}
+Context:
+{df_desc}
 
-        First 5 rows of the dataset:
-        {df_head}
+Question:
+{question}
+""".strip()
 
-        Answer the user's question strictly as an HTML snippet (no <html> or <body> tags).
-        Use <h4>, <p>, <ul><li>, and <strong>. Do NOT use Markdown symbols.
-
-        User's Question: "{question}"
-        """
-        
         response = model.generate_content(prompt)
-        return sanitize_ai_html(response.text)
+        # NEW: safe extraction
+        text = _extract_text_from_gemini_response(response).strip()
+        if not text:
+            fr = None
+            try:
+                cs = getattr(response, "candidates", None) or []
+                if cs:
+                    fr = getattr(cs[0], "finish_reason", None)
+            except Exception:
+                pass
+            raise RuntimeError(f"Empty AI response (finish_reason={fr})")
+        return sanitize_ai_html(text)
     except Exception as e:
-        return f"<p>Error while answering the question: {e}</p>"
+        return f"An error occurred while generating the AI answer. Error: {e}"
 
 def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
     if not AI_ENABLED or model is None:
         return "AI analysis is disabled."
-    # concise stats context + prefer attaching the full file if available
-    df_description = describe_for_ai(df)
-    prompt = f"""
-    You are a senior data scientist. Produce an in-depth, expert-level analysis.
-    Output strictly an HTML snippet (no <html> or <body>).
-    Use semantic structure with <h3>, <h4>, <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, and <em>.
-    Avoid Markdown or code fences.
 
-    Include these sections when relevant:
-    - Executive overview (1-3 paragraphs).
-    - Data quality and coverage (missingness, types, ranges, outliers).
-    - Key drivers and relationships (strongest correlations and plausible causality; note spurious risks).
-    - Time-series patterns (trend, seasonality, changepoints; specify frequency/periods if known).
-    - Anomalies and hypotheses (counts per metric, plausible root causes, impact).
-    - Forecast outlook and assumptions (direction, uncertainty drivers; tie to recent slope/volatility).
-    - Risks, limitations, and caveats (data issues, sampling bias, non-stationarity).
-    - Actionable recommendations (prioritized, concrete next steps).
-    - Next data to collect to reduce uncertainty.
+    # Build long-form prompt for the model (HTML-only response)
+    try:
+        df_desc = describe_for_ai(df)
+    except Exception:
+        df_desc = ""
+    prompt = (
+        "You are an expert data analyst. Provide a clear, rich, and structured HTML summary of the dataset. "
+        "Respond strictly in HTML (no Markdown) using tags like <p>, <ul><li>, <table><thead><tbody><tr><th><td>, "
+        "<strong>, and <em>. Keep it concise but informative; mention notable trends, missingness, and caveats.\n\n"
+        "Context:\n" + df_desc + ("\n\nAdditional context:\n" + extra_context if extra_context else "")
+    )
 
-    Base all quantitative claims on the provided statistics/context. Cite numbers inline where helpful.
+    gen_cfg = {
+        "max_output_tokens": 2048,
+        "temperature": 0.4,
+        "top_p": 0.95,
+        "top_k": 40,
+        # Encourage the SDK to produce HTML directly when supported
+        "response_mime_type": "text/html",
+    }
 
-    Context statistics:
-    {df_description}
-
-    Additional context:
-    {extra_context}
+    try:
+        resp = _call_gemini(prompt, file_asset=file_asset, generation_config=gen_cfg)
+        text = _extract_text_from_gemini_response(resp).strip()
+        if not text:
+            # one-shot simplified retry with smaller output to coax a textual reply
+            try:
+                simple_cfg = {"max_output_tokens": 512, "temperature": 0.2, "response_mime_type": "text/html"}
+                simple_prompt = "Provide a concise HTML summary of the dataset using <p> and <ul><li> only."
+                simple = _call_gemini(simple_prompt + "\n\n" + extra_context, file_asset=file_asset, generation_config=simple_cfg)
+                text2 = _extract_text_from_gemini_response(simple).strip()
+                if text2:
+                    return sanitize_ai_html(text2)
+            except Exception:
+                pass
+            # If still empty, fall back
+            raise RuntimeError("Empty AI response")
+        return sanitize_ai_html(text)
+    except Exception as e:
+        app.logger.warning("AI summary failed, falling back. Error: %s", e)
+        return offline_answer(df, "summary", error=e)
+    
+def get_ai_answer_with_file(df: pd.DataFrame, question: str, file_asset=None) -> str:
+    """
+    Answer a user's question about the dataset.
+    - Uses the uploaded file as context if available (file_asset).
+    - Returns sanitized HTML.
+    - Falls back to an offline deterministic answer on error or empty AI response.
     """
     try:
-        if file_asset:
-            resp = model.generate_content([file_asset, prompt])
-        else:
-            resp = model.generate_content(prompt)
-        return sanitize_ai_html(resp.text)
+        if not AI_ENABLED or model is None:
+            return offline_answer(df, question, error="AI disabled.")
+
+        # Build a concise but structured prompt with context
+        df_desc = describe_for_ai(df)
+        prompt = f"""
+You are a senior data scientist. Answer the user's question about the dataset clearly and precisely.
+Respond strictly in HTML (no Markdown), using tags like <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, and <em>.
+Cite concrete numbers or ranges from the provided context when relevant. If something is uncertain, say so briefly.
+
+Context:
+{df_desc}
+
+Question:
+{question}
+""".strip()
+
+        # First attempt
+        resp = _call_gemini(prompt, file_asset=file_asset, generation_config={
+            "max_output_tokens": 1024,
+            "temperature": 0.3,
+            "top_p": 0.95,
+            "top_k": 40,
+            "response_mime_type": "text/html",
+        })
+        text = _extract_text_from_gemini_response(resp).strip()
+
+        # If we got no textual parts, try a simplified one-shot retry
+        if not text:
+            try:
+                simple = _call_gemini(
+                    f"Answer briefly in HTML (<p>, <ul><li>) only: {question}\n\nContext:\n{df_desc}",
+                    file_asset=file_asset,
+                    generation_config={"max_output_tokens": 512, "temperature": 0.2, "response_mime_type": "text/html"},
+                )
+                text2 = _extract_text_from_gemini_response(simple).strip()
+                if text2:
+                    return sanitize_ai_html(text2)
+            except Exception:
+                pass
+            # If still empty, fall back offline
+            return offline_answer(df, question, error="Empty AI response")
+
+        return sanitize_ai_html(text)
+
     except Exception as e:
-        return f"<p>Error during AI summary: {e}</p>"
+        app.logger.warning("AI Q&A failed; falling back. Error: %s", e)
+        return offline_answer(df, question, error=e)
 
-def get_ai_answer_with_file(df, question, file_asset=None):
-    if not AI_ENABLED or model is None:
-        return "AI analysis is disabled."
-    df_head = df.head().to_string()
-    df_description = df.describe().to_string()
-    prompt = f"""
-    You are a helpful data analyst. Answer as an HTML snippet (no <html>/<body>).
-    Use <h4>, <p>, <ul><li>, and <strong>. No Markdown.
-
-    Context:
-    Data Summary:
-    {df_description}
-
-    First 5 rows:
-    {df_head}
-
-    Question: "{question}"
+def get_or_cache_ai_summary_for(filename: str, df: pd.DataFrame, extra_context: str = "") -> str:
+    """
+    Return the AI summary for this file, generating it once and caching it.
+    Never regenerates on subsequent calls to avoid API limits.
     """
     try:
-        if file_asset:
-            resp = model.generate_content([file_asset, prompt])
-        else:
-            resp = model.generate_content(prompt)
-        return sanitize_ai_html(resp.text)
+        cached = AI_SUMMARY_CACHE.get(filename)
+        if isinstance(cached, str) and cached.strip():
+            return cached
+        file_asset = AI_FILE_MAP.get(filename) if 'AI_FILE_MAP' in globals() else None
+        ai_html = get_ai_summary_with_file(df, file_asset=file_asset, extra_context=extra_context)
+        AI_SUMMARY_CACHE[filename] = ai_html
+        return ai_html
     except Exception as e:
-        return f"<p>Error while answering the question: {e}</p>"
+        return f"<p>AI summary unavailable: {e}</p>"
 
 def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None):
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -382,6 +637,32 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None):
     ax.legend(); ax.grid(True, alpha=0.3)
     buf = io.BytesIO(); fig.savefig(buf, format='png', bbox_inches='tight'); buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8'); plt.close(fig); return img
+
+def _ensure_plot_dicts(items):
+    """
+    Normalize plot items into [{'title': str, 'img': base64}, ...]
+    Accepts dicts, tuples, or raw base64 strings; drops invalid entries.
+    """
+    out = []
+    if not items:
+        return out
+    for p in items:
+        try:
+            if isinstance(p, dict) and 'img' in p:
+                title = p.get('title', '')
+                if not isinstance(title, str):
+                    title = '' if title is None else str(title)
+                out.append({'title': title, 'img': p['img']})
+            elif isinstance(p, (list, tuple)) and len(p) >= 2:
+                title, img = p[0], p[1]
+                out.append({'title': '' if title is None else str(title), 'img': img})
+            elif isinstance(p, str):
+                # Assume raw base64 image; synthesize empty title
+                out.append({'title': '', 'img': p})
+        except Exception:
+            # Skip invalid entries quietly
+            continue
+    return out
 
 # ADD: STL decomposition helper (static PNG like other plots)
 def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
@@ -521,10 +802,11 @@ def _recent_slope_forecast(series, steps, window=None, damping=None):
     ci.columns = ['lower', 'upper']
     return fc_mean, ci
 
-def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=200):
+def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None):
     fig, ax = plt.subplots(figsize=(10, 4))
 
-    history_tail_series = history.tail(history_tail)
+    # Use full history by default; limit only if a positive tail is provided
+    history_tail_series = history if not history_tail or history_tail <= 0 else history.tail(history_tail)
     history_tail_series.plot(ax=ax, label='History', color='tab:blue', linewidth=1.8)
 
     forecast_series.plot(
@@ -722,16 +1004,39 @@ def _bootstrap_natural_path(series, steps, window=None, base_slope=None, n_sampl
     return median_series, conf_df
 
 def detect_anomalies(series: pd.Series, contamination=0.02):
-    y = series.dropna().astype(float).values.reshape(-1, 1)
-    if len(y) < 20:
-        return pd.Index([]), pd.Series(dtype=float)
+    """
+    IsolationForest-based anomaly detection.
+    Returns a tuple: (anomalies_index: pd.Index, anomaly_scores: np.ndarray|None)
+    - anomalies_index: index labels corresponding to detected anomalies
+    - anomaly_scores: anomaly scores for those points (higher = more anomalous), or None if unavailable
+    """
     try:
-        iso = IsolationForest(n_estimators=200, contamination=contamination, random_state=42)
-        scores = iso.fit_predict(y)  # -1 = anomaly
-        anomalies = series.dropna().index[np.where(scores == -1)[0]]
-        return anomalies, pd.Series(iso.decision_function(y), index=series.dropna().index)
+        s = pd.to_numeric(series, errors='coerce').dropna()
     except Exception:
-        return pd.Index([]), pd.Series(dtype=float)
+        return pd.Index([]), None
+
+    if s.empty or s.shape[0] < 20:
+        return pd.Index([]), None
+
+    try:
+        iso = IsolationForest(n_estimators=200, contamination=float(contamination), random_state=42)
+        X = s.values.reshape(-1, 1)
+        preds = iso.fit_predict(X)  # -1 = anomaly
+        # Decision function: lower = more abnormal; invert so higher is more anomalous
+        try:
+            scores_all = -iso.decision_function(X)
+        except Exception:
+            scores_all = None
+
+        mask = preds == -1
+        anomalies_idx = s.index[mask]
+        if scores_all is not None:
+            scores = scores_all[mask]
+        else:
+            scores = None
+        return anomalies_idx, scores
+    except Exception:
+        return pd.Index([]), None
 
 def normalize_timeseries(series: pd.Series):
     s = series.dropna()
@@ -947,8 +1252,15 @@ def upload_file():
                 # forward user controls for immediate use
                 fh = request.form.get('forecast_horizon')
                 cont = request.form.get('contamination')
-                return redirect(url_for('analyze_file', filename=storage_name, display=orig_name,
-                                        forecast_horizon=fh, contamination=cont))
+                start_view = request.form.get('view') or 'overview'
+                return redirect(url_for(
+                    'analyze_file',
+                    filename=storage_name,
+                    display=orig_name,
+                    forecast_horizon=fh,
+                    contamination=cont,
+                    view=start_view
+                ))
             except Exception as e:
                 app.logger.exception("Upload failed")
                 try:
@@ -1023,6 +1335,102 @@ def read_excel_smart(path: str):
         except Exception:
             raise e
 
+# ADD: central DataFrame loader for download/report endpoints (read-only; no deletions)
+def get_dataframe_for(filename):
+    """
+    Best-effort loader for an uploaded dataset by hashed filename.
+    - Prefer the in-memory `DATAFRAME_CACHE`.
+    - Fallback to reading from `app.config['UPLOADS_DIR']` using robust readers.
+    - Infers a datetime index when obvious and sorts time indexes.
+    - Drops fully empty columns.
+    - Caches the DataFrame for subsequent use.
+    Returns: pandas.DataFrame or None if not found/unreadable.
+    """
+    try:
+        # 1) Cache fast-path
+        df = DATAFRAME_CACHE.get(filename)
+        if df is not None:
+            return df
+
+        # 2) Disk path
+        uploads_dir = app.config.get('UPLOADS_DIR', UPLOAD_FOLDER)
+        path = os.path.join(uploads_dir, filename)
+        if not os.path.exists(path):
+            app.logger.info("get_dataframe_for: file not found on disk: %s", path)
+            return None
+
+        _, ext = os.path.splitext(filename)
+        ext = (ext or "").lower()
+
+        # 3) Read using robust helpers
+        if ext == ".csv":
+            df = read_csv_fallback(path)
+        elif ext == ".xlsx":
+            df = read_excel_smart(path)
+        elif ext == ".json":
+            df = read_json_fallback(path)
+        elif ext == ".txt":
+            # Try Python engine with sep=None to sniff dialect; fallback to whitespace
+            try:
+                df = read_csv_fallback(path, sep=None, engine="python")
+            except Exception:
+                df = read_csv_fallback(path, delim_whitespace=True)
+        else:
+            # Unknown extension; try CSV as a last resort
+            try:
+                df = read_csv_fallback(path)
+            except Exception as e:
+                app.logger.warning("get_dataframe_for: unsupported extension %s; error: %s", ext, e)
+                return None
+
+        if not isinstance(df, pd.DataFrame):
+            app.logger.info("get_dataframe_for: reader returned non-DataFrame for %s", filename)
+            return None
+
+        # 4) Basic cleanup: drop fully empty columns
+        try:
+            df = df.dropna(axis=1, how='all')
+        except Exception:
+            pass
+
+        # 5) Infer datetime index (common first-column timestamp)
+        try:
+            if not isinstance(df.index, pd.DatetimeIndex) and df.shape[1] >= 1:
+                candidate_cols = []
+                # Prefer obvious datetime-named columns
+                for c in df.columns:
+                    lc = str(c).strip().lower()
+                    if any(tok in lc for tok in ("date", "time", "timestamp", "datetime")):
+                        candidate_cols.append(c)
+                # Fallback to the first column
+                if not candidate_cols:
+                    candidate_cols = [df.columns[0]]
+
+                picked = None
+                for c in candidate_cols:
+                    ts = pd.to_datetime(df[c], errors="coerce", utc=False, infer_datetime_format=True)
+                    if ts.notna().sum() >= max(5, int(0.6 * len(ts))):
+                        picked = c
+                        break
+                if picked is not None:
+                    ts = pd.to_datetime(df[picked], errors="coerce", utc=False, infer_datetime_format=True)
+                    df = df.drop(columns=[picked])
+                    df.index = ts
+                    # sort by time for consistency
+                    try:
+                        df = df[ts.notna()].sort_index()
+                    except Exception:
+                        pass
+        except Exception as e:
+            app.logger.debug("get_dataframe_for: datetime inference skipped: %s", e)
+
+        # 6) Cache and return
+        DATAFRAME_CACHE.set(filename, df)
+        return df
+    except Exception as e:
+        app.logger.exception("get_dataframe_for failed for %s", filename)
+        return None
+
 def safe_df_head_html(df: pd.DataFrame) -> str:
     try:
         if df is None or df.shape[1] == 0:
@@ -1064,6 +1472,108 @@ def describe_for_ai(df: pd.DataFrame) -> str:
             return "Columns and dtypes:\n" + str(df.dtypes)
         except Exception:
             return "No structured information available."
+
+def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> str:
+    """
+    Lightweight, deterministic HTML answer when AI is unavailable.
+    - For 'summary', returns dataset overview, missingness, and recent trends.
+    - For other questions, provides basic stats for mentioned columns (best-effort).
+    """
+    try:
+        q = (str(question or "")).strip().lower()
+        parts = []
+        parts.append("<h3>Offline analysis</h3>")
+        # Friendlier banner (hide low-level error details from the UI)
+        if error:
+            try:
+                parts.append("<p><em>AI response unavailable. Showing a quick offline analysis instead.</em></p>")
+            except Exception:
+                parts.append("<p><em>AI response unavailable. Showing a quick offline analysis instead.</em></p>")
+
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            parts.append("<p>No data available.</p>")
+            return "".join(parts)
+
+        # Overview
+        try:
+            parts.append(f"<p><strong>Shape:</strong> {tuple(df.shape)}</p>")
+            dtypes = ", ".join([f"{htmllib.escape(str(c))}: {htmllib.escape(str(t))}" for c, t in df.dtypes.items()])
+            parts.append(f"<p><strong>Dtypes:</strong> {dtypes}</p>")
+        except Exception:
+            pass
+
+        # Missingness
+        try:
+            mv = df.isna().mean().sort_values(ascending=False)
+            mv = mv[mv > 0].head(10)
+            if not mv.empty:
+                parts.append("<h4>Top missingness</h4><ul>")
+                for col, frac in mv.items():
+                    parts.append(f"<li><strong>{htmllib.escape(str(col))}</strong>: {round(float(frac)*100,2)}%</li>")
+                parts.append("</ul>")
+        except Exception:
+            pass
+
+        # Numeric trends
+        try:
+            df_num = coerce_numeric_df(df)
+            sel = df_num.select_dtypes(include='number')
+            if not sel.empty:
+                parts.append("<h4>Recent trends (last window)</h4><ul>")
+                shown = 0
+                for col in sel.columns:
+                    s = pd.to_numeric(sel[col], errors='coerce').dropna()
+                    if len(s) < 5:
+                        continue
+                    w = min(len(s), max(20, len(s)//5))
+                    y = s.iloc[-w:]
+                    x = np.arange(len(y), dtype=float)
+                    slope, intercept = np.polyfit(x, y.values, 1)
+                    change = float(y.iloc[-1] - y.iloc[0])
+                    pct = (change / (abs(y.iloc[0]) + 1e-12)) * 100.0
+                    parts.append(f"<li><strong>{htmllib.escape(str(col))}</strong>: slope {slope:.4g}, change {change:.4g} ({pct:.2f}%)</li>")
+                    shown += 1
+                    if shown >= 8:
+                        break
+                parts.append("</ul>")
+        except Exception:
+            pass
+
+        # If it's a specific question (non-summary), show simple stats for mentioned columns
+        if q and q != "summary":
+            try:
+                mentioned = []
+                q_low = q.lower()
+                for col in df.columns:
+                    name = str(col)
+                    if name.lower() in q_low:
+                        mentioned.append(col)
+                # Fallback: top 3 numeric columns if nothing is detected
+                if not mentioned:
+                    df_num = coerce_numeric_df(df).select_dtypes(include='number')
+                    mentioned = list(df_num.columns[:3]) if df_num is not None else []
+                if mentioned:
+                    parts.append("<h4>Quick stats for relevant columns</h4><ul>")
+                    for col in mentioned[:6]:
+                        try:
+                            s = pd.to_numeric(df[col], errors='coerce').dropna()
+                            if s.empty:
+                                parts.append(f"<li><strong>{htmllib.escape(str(col))}</strong>: no numeric data</li>")
+                                continue
+                            parts.append(
+                                f"<li><strong>{htmllib.escape(str(col))}</strong>: "
+                                f"mean={float(s.mean()):.4g}, median={float(s.median()):.4g}, "
+                                f"std={float(s.std(ddof=1)):.4g}, min={float(s.min()):.4g}, max={float(s.max()):.4g}</li>"
+                            )
+                        except Exception:
+                            parts.append(f"<li><strong>{htmllib.escape(str(col))}</strong>: unable to compute stats</li>")
+                    parts.append("</ul>")
+            except Exception:
+                pass
+
+        return "".join(parts)
+    except Exception:
+        return "<p>Offline analysis is unavailable due to an internal error.</p>"
 
 def _get_arg_float(name, default):
     try:
@@ -1145,58 +1655,75 @@ def analyze_file(filename):
         user_question = None
         ai_answer = None
         if request.method == 'POST':
-            user_question = request.form.get('question')
+            user_question = (request.form.get('question') or '').strip()
+            ai_answer_html = ""
             if user_question:
-                ai_answer = get_ai_answer_with_file(df, user_question, file_asset)
+                # file_asset assumed available from earlier logic; if not, set to None
+                ai_answer_html = get_ai_answer_with_file(df, user_question, file_asset=file_asset)
+            ai_answer = ai_answer_html  # <-- ensure the template gets the answer
 
-        # --- Data Analysis & Plotting ---
         analysis = {}
         plots = []
         forecast_plots = []
-        anomalies_found = {}
+        anomalies_found = {}  # collect anomalies per column
         is_timeseries = isinstance(df.index, pd.DatetimeIndex)
-        used_cols = []  # columns that actually yielded numeric data
+        used_cols = []  # track columns actually plotted
 
         # Precompute correlation for advanced view
         corr_payload = None
         try:
-            # robust numeric coercion (handles comma-decimals, percents, units)
-            df_num = coerce_numeric_df(df)
+            num_df = coerce_numeric_df(df).select_dtypes(include='number')
+            # Drop columns that are entirely NaN or nearly constant
+            if num_df is not None and not num_df.empty:
+                # Require at least 3 non-null values
+                valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
+                num_df = num_df[valid]
+                # Drop near-constant columns
+                keep = []
+                for c in num_df.columns:
+                    s = pd.to_numeric(num_df[c], errors='coerce').dropna()
+                    if s.empty:
+                        continue
+                    if float(s.max()) == float(s.min()):
+                        continue
+                    keep.append(c)
+                num_df = num_df[keep] if keep else num_df
+            if num_df is not None and not num_df.empty and len(num_df.columns) >= 2:
+                cols = list(num_df.columns)
+                payload = {}
 
-            # filter to numeric columns with enough data and non-constant
-            sel = df_num.select_dtypes(include='number')
-            if not sel.empty:
-                # drop columns with too few non-nulls
-                sel = sel.loc[:, sel.count() >= 3]
-                # drop near-constant columns
+                # Spearman (default for z)
                 try:
-                    sel = sel.loc[:, sel.std(skipna=True) > 0]
+                    spearman = num_df.corr(method='spearman')
                 except Exception:
-                    # fallback if std fails
-                    nunique = sel.nunique(dropna=True)
-                    sel = sel.loc[:, nunique > 1]
+                    spearman = None
 
-            if sel.shape[1] >= 2:
-                corr_df = sel.corr(method='spearman', min_periods=3)
-                # drop rows/cols that are all NaN
-                corr_df = corr_df.dropna(axis=0, how='all').dropna(axis=1, how='all')
-                # ensure at least 2x2 left
-                if corr_df.shape[0] >= 2 and corr_df.shape[1] >= 2:
-                    corr_payload = {
-                        "z": corr_df.values.tolist(),
-                        "x": corr_df.columns.tolist(),
-                        "y": corr_df.index.tolist(),
+                # Pearson (also requested)
+                try:
+                    pearson = num_df.corr(method='pearson')
+                except Exception:
+                    pearson = None
+
+                if spearman is not None:
+                    payload["z"] = [[float(v) if pd.notna(v) else None for v in spearman.loc[r, cols].tolist()] for r in cols]
+                if pearson is not None:
+                    payload["pearson"] = {
+                        "x": cols,
+                        "y": cols,
+                        "z": [[float(v) if pd.notna(v) else None for v in pearson.loc[r, cols].tolist()] for r in cols]
                     }
-                else:
-                    corr_payload = None
+                corr_payload = payload if ("z" in payload or "pearson" in payload) else None
             else:
                 corr_payload = None
         except Exception as e:
-            app.logger.info("Correlation build skipped: %s", e)
+            app.logger.warning("Correlation computation failed: %s", e)
             corr_payload = None
 
         interactive = []  # payload for Plotly charts
-        PLOTLY_TAIL = int(os.getenv("PLOTLY_TAIL", "800"))
+        # Use full series by default for interactive traces; allow optional tail by env if needed
+        # Accept: "all", "", "0", "-1", "none", "false" => full; else parse int
+        raw_tail = (os.getenv("PLOTLY_TAIL", "all") or "all").strip().lower()
+
         for column in df.columns:
             # Coerce series to numeric where possible
             series_raw = df[column]
@@ -1206,12 +1733,20 @@ def analyze_file(filename):
                 series = pd.Series(dtype=float)
             if series.empty:
                 continue
-            used_cols.append(column)
-
+            plots.append(column)  # <-- track all columns for plots
             # Detect anomalies first so we can overlay on both static and interactive
             an_idx, an_score = detect_anomalies(series, contamination=user_contam)
+            if len(an_idx):
+                try:
+                    anomalies_found[str(column)] = [str(i) for i in an_idx]
+                except Exception:
+                    try:
+                        anomalies_found[str(column)] = [str(i) for i in list(an_idx)]
+                    except Exception:
+                        anomalies_found[str(column)] = []
 
-            # Static trend with anomalies overlay
+            # Static trend with anomalies overlay (already full series)
+            title_trend = f"Trend for {column}"
             title_trend = f"Trend for {column}"
             plots.append({
                 "img": generate_plot(
@@ -1229,7 +1764,7 @@ def analyze_file(filename):
                     steps = max(10, min(240, user_steps))
                     conf_df = None
                     fc_mean = None
-                    # Holt-Winters damped
+                    # Holt-Winters + slope/naturalization (unchanged)
                     try:
                         hw = ExponentialSmoothing(
                             series, trend='add', damped_trend=True, seasonal=None,
@@ -1254,7 +1789,6 @@ def analyze_file(filename):
                         slope_fc = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
                         flat_by_range = np.allclose(fc_mean.values, fc_mean.values[0], rtol=1e-3, atol=1e-6)
                         flat_by_slope = (recent_step > 0 and abs(slope_fc) < 0.25 * recent_step)
-                        need_slope = flat_by_range or flat_by_slope
                     if fc_mean is None or need_slope:
                         fc_mean, conf_df = _recent_slope_forecast(series, steps, window=min(len(series), 200), damping=None)
                     # Naturalize if too straight
@@ -1269,6 +1803,7 @@ def analyze_file(filename):
                         app.logger.warning("Naturalization failed for %s: %s", column, e_nat)
 
                     # Build arrays for interactive forecast
+                    # Build arrays for interactive forecast
                     split_x = str(series.index[-1])
                     fc_x = [str(i) for i in fc_mean.index]
                     fc_y = [float(v) for v in fc_mean.values]
@@ -1276,7 +1811,7 @@ def analyze_file(filename):
                         ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
                         ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
 
-                    # Keep static forecast image too
+                    # Keep static forecast image too — now with full history
                     title_fc = f"Forecast for {column}"
                     forecast_plots.append({
                         "img": generate_forecast_plot(
@@ -1286,46 +1821,37 @@ def analyze_file(filename):
                             'Timestamp',
                             column,
                             conf_int=conf_df,
-                            history_tail=300
+                            history_tail=None  # full history
                         ),
                         "title": title_fc
                     })
                 except Exception as e:
                     app.logger.warning("Could not generate forecast for %s: %s", column, e)
 
-            # Record anomaly summary (already computed)
-            if len(an_idx):
-                try:
-                    aligned_idx = series.index.intersection(an_idx)
-                    an_values = series.loc[aligned_idx].astype(float)
-                    min_v = float(np.nanmin(an_values.values))
-                    max_v = float(np.nanmax(an_values.values))
-                    anomalies_found[column] = {
-                        "count": int(len(aligned_idx)),
-                        "min_value": min_v,
-                        "max_value": max_v,
-                        "indices": [str(i) for i in aligned_idx[:50]]
-                    }
-                except Exception:
-                    anomalies_found[column] = {
-                        "count": int(len(an_idx)),
-                        "indices": [str(i) for i in an_idx[:50]]
-                    }
-
-            # ----- STL decomposition (static) -----
+            # ----- STL decomposition (static) ----- (unchanged)
             if is_timeseries and len(series) >= 10:
                 try:
                     s_norm = normalize_timeseries(series)
                     sp = _infer_seasonal_period(s_norm.index) if isinstance(s_norm.index, pd.DatetimeIndex) else None
                     if sp:
                         stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=sp)
+                       
                         if stl_img:
                             forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
                 except Exception:
                     pass
 
             # ----- Interactive traces -----
-            s_tail = series.tail(PLOTLY_TAIL)
+            # Use full series unless PLOTLY_TAIL is set to a positive integer
+            if raw_tail in ("all", "", "0", "-1", "none", "false"):
+                s_tail = series
+            else:
+                try:
+                    tail_n = int(raw_tail)
+                    s_tail = series.tail(max(1, tail_n))
+                except Exception:
+                    s_tail = series
+
             x_hist = [str(i) for i in s_tail.index]
             y_hist = [float(v) for v in s_tail.values]
             traces = [{
@@ -1338,7 +1864,7 @@ def analyze_file(filename):
                 "marker": {"size": 4, "opacity": 0.6}
             }]
 
-            # anomalies in tail
+            # anomalies in full or tail (s_tail may be full now)
             if len(an_idx):
                 an_tail_idx = [i for i in an_idx if i in s_tail.index]
                 if an_tail_idx:
@@ -1352,7 +1878,7 @@ def analyze_file(filename):
                         "hovertemplate": "Anomaly<br>%{x}<br>%{y}<extra></extra>"
                     })
 
-            # forecast for interactive
+            # forecast for interactive (unchanged)
             fc_x = fc_y = ci_lower = ci_upper = split_x = None
             if is_timeseries and len(series) >= 10:
                 try:
@@ -1417,7 +1943,6 @@ def analyze_file(filename):
             xaxis = {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True}
             if is_timeseries:
                 xaxis.update({
-                    "type": "date",
                     "rangeslider": {"visible": True},
                     "rangeselector": {
                         "buttons": [
@@ -1442,8 +1967,22 @@ def analyze_file(filename):
                 "legend": {"orientation": "h", "groupclick": "togglegroup"},
                 "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
             }
+            if is_timeseries:
+                layout["xaxis"].update({
+                    "rangeslider": {"visible": True},
+                    "rangeselector": {
+                        "buttons": [
+                            {"count": 1, "label": "1m", "step": "month", "stepmode": "backward"},
+                            {"count": 6, "label": "6m", "step": "month", "stepmode": "backward"},
+                            {"step": "year", "stepmode": "todate", "label": "YTD"},
+                            {"count": 1, "label": "1y", "step": "year", "stepmode": "backward"},
+                            {"step": "all", "label": "All"}
+                        ]
+                    }
+                })
 
-            dist = {"name": column, "values": [float(v) for v in series.dropna().tail(5000).values]}
+            # Use full values for the distribution
+            dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
             interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
 
         # Compute info(), missing values, and AI summary safely
@@ -1466,10 +2005,11 @@ def analyze_file(filename):
 
         # With this cached/skip-on-POST logic:
         # Build richer AI context from current analysis artifacts
+        used_cols = list(df.columns)
         ai_context = build_ai_context(
             df=df,
             anomalies_found=anomalies_found,
-            corr_payload=analysis.get('corr') if 'corr' in locals() else locals().get('corr_payload'),
+            corr_payload=corr_payload,
             used_cols=used_cols,
             is_timeseries=is_timeseries,
             forecast_horizon=user_steps,
@@ -1537,32 +2077,23 @@ def analyze_file(filename):
 
 @app.route('/health', methods=['GET'])
 def health():
-    return "ok", 200
+    return jsonify({"status": "ok"}), 200
 
 @app.route('/download/<filename>/cleaned.csv', methods=['GET'])
 def download_cleaned_csv(filename):
     # Only allow app-managed hashed uploads
     if not HASHED_UPLOAD_RE.match(filename):
         return ("Not found", 404)
-    path = os.path.join(app.config['UPLOADS_DIR'], filename)
     df = DATAFRAME_CACHE.get(filename)
     if df is None:
+        uploads_dir = app.config.get('UPLOADS_DIR', UPLOAD_FOLDER)
+        path = os.path.join(uploads_dir, filename)
         if not os.path.exists(path):
             return ("Not found", 404)
         # Re-read using the same heuristics
-        try:
-            if filename.endswith('.csv'):
-                df = read_csv_fallback(path, index_col=0, parse_dates=True)
-            elif filename.endswith('.xlsx'):
-                df = read_excel_smart(path)
-            elif filename.endswith('.json'):
-                df = read_json_fallback(path)
-            elif filename.endswith('.txt'):
-                df = read_csv_fallback(path, sep=',', index_col=0, parse_dates=True)
-            else:
-                return ("Unsupported type", 400)
-        except Exception as e:
-            return (f"Failed to load: {e}", 500)
+        df = get_dataframe_for(filename)
+        if df is None:
+            return ("Not found", 404)
 
     # Build a “cleaned” version: robust numeric coercion but keep non-numeric columns
     cleaned = df.copy()
@@ -1574,6 +2105,7 @@ def download_cleaned_csv(filename):
             else:
                 coerced = _try_parse_numeric_series(ser)
                 # Replace only if coercion meaningfully helps
+
                 if coerced.notna().sum() >= pd.to_numeric(ser, errors='coerce').notna().sum():
                     cleaned[col] = coerced
         # Sort by time if datetime index
@@ -1593,256 +2125,427 @@ def download_cleaned_csv(filename):
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
     return resp
 
-def get_dataframe_for(filename: str):
-    """
-    Load the full DataFrame for a hashed upload filename.
-    Reuses DATAFRAME_CACHE and the same read_* heuristics as analyze_file.
-    Returns None if the file is missing or unsupported.
-    """
-    if not filename:
-        return None
+# --- AI summary as HTML download ---
+@app.route('/download/<filename>/ai_summary.html', methods=['GET'])
+def download_ai_summary_html(filename):
+    # Only allow app-managed hashed uploads
+    if not HASHED_UPLOAD_RE.match(filename):
+        return ("Not found", 404)
 
-    # Only allow app-managed hashed uploads for safety
-    try:
-        if not HASHED_UPLOAD_RE.match(filename):
-            # If you also want to allow non-hashed files in UPLOADS_DIR, remove this guard.
-            return None
-    except Exception:
-        # If regex not defined yet at import time, we still try a best-effort read.
-        pass
-
-    path = os.path.join(app.config.get('UPLOADS_DIR', UPLOAD_FOLDER), filename)
-    # Use cache first
-    df = DATAFRAME_CACHE.get(filename)
-    if df is not None:
-        return df
-
-    if not os.path.exists(path):
-        return None
-
-    try:
-        if filename.lower().endswith('.csv'):
-            df = read_csv_fallback(path, index_col=0, parse_dates=True)
-        elif filename.lower().endswith('.xlsx'):
-            df = read_excel_smart(path)
-        elif filename.lower().endswith('.json'):
-            df = read_json_fallback(path)
-            # Best-effort: set index to a time-like column if present
-            for col in ('timestamp', 'date', 'time'):
-                if col in df.columns:
-                    try:
-                        dt = pd.to_datetime(df[col], errors='coerce')
-                        if dt.notna().any():
-                            df = df.set_index(dt)
-                            break
-                    except Exception:
-                        pass
-        elif filename.lower().endswith('.txt'):
-            df = read_csv_fallback(path, sep=',', index_col=0, parse_dates=True)
-        else:
-            return None
-
-        # Cache for later use
-        DATAFRAME_CACHE.set(filename, df)
-        return df
-    except Exception as e:
-        app.logger.exception("get_dataframe_for failed for %s: %s", filename, e)
-        return None
-
-# After DATAFRAME_CACHE, add a small cache for prepped series
-SERIES_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'] * 3)
-
-def _lttb_downsample(x, y, threshold: int):
-    """
-    Largest-Triangle-Three-Buckets downsampling.
-    Returns (x_ds, y_ds) lists. Keeps first and last points.
-    """
-    n = len(x)
-    if n <= 2 or threshold >= n or threshold < 3:
-        return x, y
-
-    x_arr = np.asarray(x, dtype=np.float64)
-    y_arr = np.asarray(y, dtype=np.float64)
-
-    bucket_size = (n - 2) / (threshold - 2)
-    a = 0
-    x_ds = [x_arr[0]]
-    y_ds = [y_arr[0]]
-
-    for i in range(0, threshold - 2):
-        # Current bucket range
-        start = int(np.floor((i + 1) * bucket_size)) + 1
-        end = int(np.floor((i + 2) * bucket_size)) + 1
-        end = min(end, n - 1)
-        if start >= end:
-            start = max(1, start - 1)
-
-        # Next bucket average
-        avg_start = int(np.floor((i + 2) * bucket_size)) + 1
-        avg_end = int(np.floor((i + 3) * bucket_size)) + 1
-        avg_start = min(max(avg_start, start), n - 1)
-        avg_end = min(max(avg_end, avg_start + 1), n)
-        if avg_start < avg_end:
-            avg_x = float(np.mean(x_arr[avg_start:avg_end]))
-            avg_y = float(np.mean(y_arr[avg_start:avg_end]))
-        else:
-            avg_x = float(x_arr[avg_start - 1])
-            avg_y = float(y_arr[avg_start - 1])
-
-        # Pick point with largest triangle area
-        ax = x_arr[a]; ay = y_arr[a]
-        sel = start
-        max_area = -1.0
-        for idx in range(start, end):
-            area = abs((ax - avg_x) * (y_arr[idx] - ay) - (ax - x_arr[idx]) * (avg_y - ay))
-            if area > max_area:
-                max_area = area
-                sel = idx
-
-        x_ds.append(x_arr[sel])
-        y_ds.append(y_arr[sel])
-        a = sel
-
-    # Include last point
-    x_ds.append(x_arr[-1])
-    y_ds.append(y_arr[-1])
-
-    # Cast x back: prefer ints when close, to keep epoch-ms precise
-    out_x = []
-    for v in x_ds:
-        iv = int(round(float(v)))
-        out_x.append(iv if abs(iv - float(v)) < 1e-9 else float(v))
-    out_y = [float(v) for v in y_ds]
-    return out_x, out_y
-
-
-@app.route('/full_history_json')
-def full_history_json():
-    filename = request.args.get('filename')
-    display = request.args.get('display')  # kept for parity with UI
-
-    # Allow disabling downsampling with 'all' (or 0/-1/none/false/"")
-    raw_mp = (request.args.get('max_points') or os.getenv("FULL_HISTORY_MAX_POINTS", "6000")).strip().lower()
-    if raw_mp in ("all", "0", "-1", "none", "false", ""):
-        max_points = None  # no downsampling
-    else:
+    # Try cache first
+    ai_html = AI_SUMMARY_CACHE.get(filename)
+    if ai_html is None:
+        # Best effort to generate now
+        df = get_dataframe_for(filename)
+        if df is None:
+            return ("Not found", 404)
         try:
-            max_points = int(raw_mp)
+            file_asset = AI_FILE_MAP.get(filename)
+            ai_html = get_ai_summary_with_file(df, file_asset, extra_context=describe_for_ai(df))
         except Exception:
-            max_points = 6000
-        max_points = max(500, min(20000, max_points))  # clamp when active
+            ai_html = "<p>AI summary temporarily unavailable.</p>"
+        AI_SUMMARY_CACHE[filename] = ai_html
+
+    resp = make_response(ai_html if isinstance(ai_html, str) else str(ai_html))
+    resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+    display = request.args.get('display') or filename
+    base = os.path.splitext(display)[0]
+    out_name = secure_filename(f"{base}_ai_summary.html")
+    resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
+    return resp
+
+@app.route('/download/<filename>/ai_summary.pdf', methods=['GET'])
+def download_ai_summary_pdf(filename):
+    # Only allow app-managed hashed uploads
+    if not HASHED_UPLOAD_RE.match(filename):
+        return jsonify({"ok": False, "message": "Invalid filename."}), 400
+
+    # Reuse cached summary or generate on demand
+    ai_html = AI_SUMMARY_CACHE.get(filename)
+    if ai_html is None or not isinstance(ai_html, str) or not ai_html.strip():
+        df = get_dataframe_for(filename)
+        if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+            return jsonify({"ok": False, "message": "Dataset not found or empty."}), 404
+        # Never re-generate more than once per file: use cache-first wrapper
+        ai_html = get_or_cache_ai_summary_for(filename, df)
+
+    # Wrap into a minimal printable HTML doc
+    doc_html = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>AI Summary</title>
+<style>
+  body {{ font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#0f172a; }}
+  h1,h2,h3 {{ color:#0f172a; }}
+  @page {{ size: A4; margin: 14mm; }}
+</style></head><body>
+<h1>AI Summary</h1>
+{ai_html}
+</body></html>
+"""
+    try:
+        pdf_bytes = html_to_pdf_bytes(doc_html)
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"PDF rendering failed: {e}"}), 500
+
+    resp = make_response(pdf_bytes)
+    resp.headers['Content-Type'] = 'application/pdf'
+    display = request.args.get('display') or filename
+    base = os.path.splitext(display)[0]
+    out_name = secure_filename(f"{base}_ai_summary.pdf")
+    resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
+    return resp
+
+@app.route('/download/<filename>/static_plots.zip', methods=['GET'])
+def download_static_plots_zip(filename):
+    if not HASHED_UPLOAD_RE.match(filename):
+        return ("Not found", 404)
+
+    df = get_dataframe_for(filename)
+    if df is None or df.empty:
+        return ("Not found", 404)
+
+    is_timeseries = isinstance(df.index, pd.DatetimeIndex)
+    bio = io.BytesIO()
+    with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for col in df.columns:
+            # Build a static trend plot for each numeric column
+            try:
+                s = pd.to_numeric(df[col], errors='coerce').dropna()
+            except Exception:
+                s = pd.Series(dtype=float)
+            if s.empty:
+                continue
+            title = f"Trend for {col}"
+            img_b64 = generate_plot(
+                s,
+                title,
+                'Timestamp' if is_timeseries else 'Index',
+                col,
+                anomalies_idx=None
+            )
+            try:
+                raw = base64.b64decode(img_b64.encode('utf-8'))
+                zf.writestr(f"{secure_filename(str(col))}_trend.png", raw)
+            except Exception:
+                # Skip this column on any failure
+                continue
+
+    bio.seek(0)
+    display = request.args.get('display') or filename
+    base = os.path.splitext(display)[0]
+    out_name = secure_filename(f"{base}_static_plots.zip")
+    resp = make_response(bio.read())
+    resp.headers['Content-Type'] = 'application/zip'
+    resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
+    return resp
+
+# --- Full report (single HTML including overview, plots, forecasts, correlation) ---
+@app.route('/download/<filename>/report.html', methods=['GET'])
+def download_full_report_html(filename):
+    if not HASHED_UPLOAD_RE.match(filename):
+        return ("Not found", 404)
 
     df = get_dataframe_for(filename)
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
-        return jsonify(series=[])
+        return ("Not found", 404)
+
+    # Overview
+    head_html = safe_df_head_html(df)
+    desc_html = safe_df_description_html(df)
+    buf = io.StringIO()
+    try:
+        df.info(buf=buf)
+        info_str = buf.getvalue()
+    except Exception:
+        info_str = "Unable to render DataFrame info()."
+    try:
+        mv = df.isnull().sum()
+        mvf = mv[mv > 0]
+        missing_html = mvf.to_frame('missing_count').to_html() if not mvf.empty else ""
+    except Exception:
+        missing_html = ""
+
+    # AI summary (cached or on-demand)
+    ai_html = AI_SUMMARY_CACHE.get(filename)
+    if ai_html is None:
+        try:
+            file_asset = AI_FILE_MAP.get(filename)
+            ai_html = get_ai_summary_with_file(df, file_asset, extra_context=describe_for_ai(df))
+            AI_SUMMARY_CACHE[filename] = ai_html
+        except Exception:
+            ai_html = "<p>AI summary temporarily unavailable.</p>"
+
+    # Static plots and forecasts
+    is_ts = isinstance(df.index, pd.DatetimeIndex)
+    static_sections = []
+    forecast_sections = []
+    for col in df.columns:
+        try:
+            s = pd.to_numeric(df[col], errors='coerce').dropna()
+        except Exception:
+            s = pd.Series(dtype=float)
+        img_b64 = generate_plot(s, f"Trend for {col}", 'Timestamp' if is_ts else 'Index', col, anomalies_idx=None)
+        static_sections.append(f'<figure><figcaption>Trend for {col}</figcaption><img style="max-width:100%" src="data:image/png;base64,{img_b64}" /></figure>')
+        if is_ts and len(s) >= 10:
+            try:
+                fc_mean, ci = _bootstrap_natural_path(s, steps=app.config.get('DEFAULT_FORECAST_STEPS', 30))
+            except Exception:
+                fc_mean, ci = _recent_slope_forecast(s, steps=app.config.get('DEFAULT_FORECAST_STEPS', 30))
+            fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast for {col}", 'Timestamp', col, conf_int=ci, history_tail=None)
+            forecast_sections.append(f'<figure><figcaption>Forecast for {col}</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
+
+    # Correlation table (robust)
+    corr_html = ""
+    try:
+        df_num = coerce_numeric_df(df)
+        sel = df_num.select_dtypes(include='number')
+        if not sel.empty:
+            # drop constant columns
+            nunique = sel.nunique(dropna=True)
+            sel = sel.loc[:, nunique > 1]
+        if sel.shape[1] >= 2:
+            corr = sel.corr(method='spearman').round(3)
+            corr_html = corr.to_html()
+    except Exception:
+        pass
+
+    # Build HTML document
+    display = request.args.get('display') or filename
+    title = f"Analysis report — {display}"
+    html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>{title}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body {{ font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#0f172a; background:#ffffff; }}
+  h1,h2,h3 {{ color:#0f172a; }}
+  .muted {{ color:#475569; }}
+  figure {{ margin: 0 0 16px 0; }}
+  figcaption {{ margin: 8px 0; font-weight: 600; }}
+  pre {{ white-space: pre-wrap; }}
+  table {{ border-collapse: collapse; }}
+  td, th {{ border:1px solid #e2e8f0; padding:4px 6px; }}
+  img {{ max-width: 100%; }}
+  @page {{ size: A4; margin: 14mm; }}
+</style></head>
+<body>
+  <h1>{title}</h1>
+
+  <h2>Overview</h2>
+  <h3>Preview</h3>{head_html}
+  <h3>Description</h3>{desc_html}
+  <h3>Info</h3><pre>{info_str}</pre>
+  {"<h3>Missing values</h3>" + missing_html if missing_html else ""}
+
+  <h2>AI Summary</h2>
+  {ai_html}
+
+  <h2>Static trends</h2>
+  {''.join(static_sections) if static_sections else '<div class="muted">No numeric columns to plot.</div>'}
+
+  <h2>Forecasts</h2>
+  {''.join(forecast_sections) if forecast_sections else '<div class="muted">No timeseries forecasts available.</div>'}
+
+  <h2>Correlation</h2>
+  {corr_html if corr_html else '<div class="muted">Not enough numeric columns to compute correlation.</div>'}
+</body></html>
+"""
+    resp = make_response(html)
+    resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+    base = os.path.splitext(display)[0]
+    out_name = secure_filename(f"{base}_report.html")
+    resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
+    return resp
+
+@app.route('/download/<filename>/report.pdf', methods=['GET'])
+def download_full_report_pdf(filename):
+    # Only allow app-managed hashed uploads
+    if not HASHED_UPLOAD_RE.match(filename):
+        return jsonify({"ok": False, "message": "Invalid filename."}), 400
+
+    # Reuse the HTML builder to avoid duplicating content logic
+    html_resp = download_full_report_html(filename)
+    try:
+        # If the HTML route returned an error Response, propagate it
+        if getattr(html_resp, "status_code", 200) != 200:
+            return html_resp
+        html_doc = html_resp.get_data(as_text=True)
+    except Exception:
+        return jsonify({"ok": False, "message": "Failed to obtain HTML report"}), 500
 
     try:
-        # Base x-axis determination
-        is_dt_index = isinstance(df.index, pd.DatetimeIndex)
-        x_base = None
-        time_col = None
-        time_ms = None  # pandas Series of epoch-ms if time-like column used
+        pdf_bytes = html_to_pdf_bytes(html_doc)
+    except Exception as e:
+        return jsonify({"ok": False, "message": f"PDF rendering failed: {e}"}), 500
 
-        if is_dt_index:
+    resp = make_response(pdf_bytes)
+    resp.headers['Content-Type'] = 'application/pdf'
+    display = request.args.get('display') or filename
+    base = os.path.splitext(display)[0]
+    out_name = secure_filename(f"{base}_report.pdf")
+    resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
+    return resp
+
+@app.route('/full_history_json', methods=['GET'])
+def full_history_json():
+    """
+    Return full-history numeric series for interactive charts.
+    Query params:
+      - filename: required, hashed upload filename (e.g., 40-hex.csv/xlsx/json/txt)
+      - display: optional, original filename for UI context
+      - max_points: optional int; if provided and smaller than length, uniformly thin the points
+    Response JSON:
+      {
+        "ok": true/false,
+        "message": optional on errors,
+        "is_timeseries": bool,
+        "display": str,
+        "length": int (number of rows serialized),
+        "columns": [str, ...],  # numeric columns included
+        "x": [ ... ],           # ISO timestamps or index values
+        "series": { "col": [y0, y1, ...], ... }
+      }
+    """
+    try:
+        filename = request.args.get('filename', '').strip()
+        display = (request.args.get('display') or filename or '').strip()
+        max_points = request.args.get('max_points', type=int)
+
+        if not filename:
+            return jsonify({"ok": False, "message": "Missing 'filename' parameter."}), 400
+        if not HASHED_UPLOAD_RE.match(filename):
+            return jsonify({"ok": False, "message": "Invalid filename format."}), 400
+
+        df = get_dataframe_for(filename)  # uses cache/disk; see get_dataframe_for
+        if df is None or df.empty:
+            return jsonify({"ok": False, "message": "Dataset not found or empty."}), 404
+
+        # Ensure deterministic order for plotting
+        try:
+            df = df.sort_index()
+        except Exception:
+            pass
+
+        is_ts = isinstance(df.index, pd.DatetimeIndex)
+
+        # Build x-axis values
+        if is_ts:
             idx = df.index
+            # Remove timezone if present for stable JSON
             try:
-                if idx.tz is not None:
-                    idx = idx.tz_convert("UTC").tz_localize(None)
+                idx = idx.tz_convert(None)
             except Exception:
                 try:
                     idx = idx.tz_localize(None)
                 except Exception:
                     pass
-            time_ms = (idx.astype("int64") // 10**6)  # ns -> ms
-            x_base = time_ms.tolist()
+            try:
+                x_all = [ts.isoformat() for ts in idx.to_pydatetime()]
+            except Exception:
+                # Fallback to string format
+                x_all = [str(v) for v in idx.astype('datetime64[ns]').tolist()]
         else:
-            # Try common time-like columns
-            for cand in ("timestamp", "datetime", "date", "time"):
-                if cand in df.columns:
-                    try:
-                        parsed = pd.to_datetime(df[cand], errors="coerce", utc=True)
-                        parsed = parsed.dt.tz_convert("UTC").dt.tz_localize(None)
-                    except Exception:
-                        parsed = pd.to_datetime(df[cand], errors="coerce")
-                        try:
-                            parsed = parsed.dt.tz_localize(None)
-                        except Exception:
-                            pass
-                    if parsed.notna().any():
-                        time_col = cand
-                        time_ms = (parsed.astype("int64") // 10**6)
-                        break
-            if time_ms is None:
-                # fallback: positional index
-                x_base = list(range(len(df)))
+            # Use index if json-serializable; otherwise fall back to 0..N-1
+            try:
+                x_all_raw = df.index.tolist()
+                x_all = []
+                for v in x_all_raw:
+                    if isinstance(v, (int, float, str)):
+                        x_all.append(v)
+                    elif isinstance(v, (np.integer,)):
+                        x_all.append(int(v))
+                    elif isinstance(v, (np.floating,)):
+                        x_all.append(float(v))
+                    else:
+                        x_all.append(str(v))
+            except Exception:
+                x_all = list(range(len(df)))
 
-        # Numeric columns only, drop the time column if numeric
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        if time_col in (numeric_cols or []):
-            numeric_cols = [c for c in numeric_cols if c != time_col]
+        n = len(x_all)
+        # Default: full data; thin only if asked and beneficial
+        step = 1
+        if max_points and max_points > 0 and n > max_points:
+            # uniform thinning stride
+            step = max(1, n // max_points)
 
-        # If none detected, try to coerce object columns that look numeric
+        # Build numeric series payload
+        num_df = coerce_numeric_df(df)  # robust numeric parsing from strings
+        numeric_cols = [c for c in num_df.columns if pd.api.types.is_numeric_dtype(num_df[c])]
+        # If nothing numeric detected, try a best-effort pass per column
         if not numeric_cols:
             for c in df.columns:
-                if c == time_col:
-                    continue
                 try:
-                    test = pd.to_numeric(df[c], errors="coerce")
-                    if test.notna().sum() >= 2:
-                        numeric_cols.append(c)
+                    parsed = _try_parse_numeric_series(df[c])
+                    num_df[c] = parsed
                 except Exception:
                     continue
+            numeric_cols = [c for c in num_df.columns if pd.api.types.is_numeric_dtype(num_df[c])]
 
-        series = []
-        for col in numeric_cols:
-            y_raw = pd.to_numeric(df[col], errors="coerce")
+        # Align X and Y lengths; thin consistently using 'step'
+        x_vals = x_all[::step] if step > 1 else x_all
+        series = {}
+        for c in numeric_cols:
+            try:
+                y_all = num_df[c].astype(float).tolist()
+            except Exception:
+                # keep NaNs as None in JSON
+                y_all = [float(v) if pd.notna(v) else None for v in num_df[c].tolist()]
+            y_vals = y_all[::step] if step > 1 else y_all
 
-            if is_dt_index:
-                mask = y_raw.notna()
-                if not mask.any():
-                    continue
-                idxs = np.flatnonzero(mask.values)
-                x_vals = [x_base[i] for i in idxs]
-                y_vals = y_raw.iloc[idxs].astype(float).tolist()
-            elif time_ms is not None:
-                mask = y_raw.notna() & time_ms.notna()
-                if not mask.any():
-                    continue
-                tm = time_ms[mask].astype("int64").tolist()
-                x_vals = tm
-                y_vals = y_raw[mask].astype(float).tolist()
-            else:
-                mask = y_raw.notna()
-                if not mask.any():
-                    continue
-                idxs = list(np.flatnonzero(mask.values))
-                x_vals = idxs
-                y_vals = y_raw.iloc[idxs].astype(float).tolist()
+            # Ensure alignment (trim to same length as x)
+            if len(y_vals) != len(x_vals):
+                m = min(len(y_vals), len(x_vals))
+                y_vals = y_vals[:m]
+                x_vals = x_vals[:m]
+            series[c] = y_vals
 
-            # Apply LTTB only if enabled and necessary
-            if (max_points is not None) and len(x_vals) > max_points:
-                x_use, y_use = _lttb_downsample(x_vals, y_vals, max_points)
-            else:
-                x_use, y_use = x_vals, y_vals
+        payload = {
+            "ok": True,
+            "message": None,
+            "is_timeseries": bool(is_ts),
+            "display": display,
+            "length": len(x_vals),
+            "columns": numeric_cols,
+            "x": x_vals,
+            "series": series,
+        }
+        return jsonify(payload), 200
 
-            series.append({
-                "name": col,
-                "is_time": bool(is_dt_index or (time_ms is not None)),
-                "x": x_use,
-                "y": y_use
-            })
-
-        return jsonify(series=series)
     except Exception as e:
-        app.logger.exception("full_history_json failed for %s: %s", filename, e)
-        # Return empty gracefully to avoid breaking the UI
-        return jsonify(series=[]), 200
+        # Log and return error
+        try:
+            app.logger.exception("full_history_json failed: %s", e)
+        except Exception:
+            pass
+        return jsonify({"ok": False, "message": f"Internal error: {e}"}), 500
+
+@app.after_request
+def _sanitize_permissions_policy(resp):
+    try:
+        if 'Permissions-Policy' in resp.headers:
+            pol = str(resp.headers.get('Permissions-Policy', ''))
+            # Remove a few commonly unsupported/legacy directives
+            bad_bits = ['interest-cohort', 'browsing-topics', 'join-ad-interest-group', 'run-ad-auction']
+            cleaned = "; ".join(seg for seg in pol.split(';') if seg and not any(b in seg for b in bad_bits)).strip()
+            if cleaned:
+                resp.headers['Permissions-Policy'] = cleaned
+            else:
+                # If nothing usable remains, drop the header entirely
+                del resp.headers['Permissions-Policy']
+    except Exception:
+        # Never fail a response due to header cleanup
+        pass
+    return resp
 
 if __name__ == "__main__":
+    pass
     # Read basic server config from env (with safe defaults)
-    host = os.getenv("HOST", "127.0.0.1")
-    port = int(os.getenv("PORT", "5000"))
     debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on")
+    # Read basic server config from env (with safe defaults)
+    debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on")
+    host = os.getenv("FLASK_HOST", os.getenv("HOST", "0.0.0.0"))
+    try:
+        port = int(os.getenv("FLASK_PORT", os.getenv("PORT", "5000")))
+    except Exception:
+        port = 5000
 
     # Optional: enable security headers only when explicitly requested
     if Talisman and str(os.getenv("USE_TALISMAN", "0")).strip().lower() in ("1", "true", "yes", "on"):
