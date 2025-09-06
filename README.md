@@ -2,18 +2,18 @@
 
 # Data Analysis & AI Insight Platform
 
-Multi‑format exploratory data analysis, statistical insights, anomaly & trend detection, and Gemini‑powered narrative summaries – all in a single lightweight Flask app.
+Multi‑format exploratory data analysis, statistical insights, anomaly & trend detection and Gemini‑powered narrative summaries – all in a single lightweight Flask app.
 
 </div>
 
 ## 1. Overview
-This project started as a quick way to upload sensor or tabular datasets (CSV, Excel, TXT, JSON) and get fast, readable analysis. It has evolved into a modular data insight tool with AI summaries, question answering, forecasting visuals, decomposition plots, correlation exploration, and performance-aware caching. The application is intentionally self-contained (`app.py` drives everything) to keep iteration speed high.
+This project started as a quick way to upload sensor or tabular datasets (CSV, Excel, TXT, JSON) and get fast, readable analysis. It has evolved into a modular data insight tool with AI summaries, question answering, forecasting visuals, decomposition plots, correlation exploration and performance-aware caching. The application is intentionally self-contained (`app.py` drives everything) to keep iteration speed high.
 
 ## 2. Key Features (Current State)
 Implemented:
 - File upload & persistent session dataset registry (multiple datasets retained per run)
 - Automatic schema parsing & numeric coercion with graceful fallbacks
-- Descriptive statistics (central tendency, dispersion, inferred types)
+- Descriptive statistics (central tendency, dispersion inferred types)
 - Time series handling: thinning/downsampling for large datasets to keep responsiveness
 - Static Matplotlib plots serialized as base64 images (no JS dependency required)
 - Forecast visual (statsmodels based) & STL decomposition plot generation
@@ -54,8 +54,8 @@ Planned / Roadmap Ideas:
 Everything centers around `app.py`:
 - Upload endpoint stores the parsed DataFrame in an in‑memory cache (LRU)
 - Analysis route branches views (overview / forecast / decomposition / correlation)
-- AI helpers build a trimmed context (column stats, head/tail, detected anomalies) before sending to Gemini
-- Caching layers: DataFrame cache, AI summary (only if a genuine AI result), AI Q&A answer cache
+- AI helpers build a trimmed context (column stats, head/tail detected anomalies) before sending to Gemini
+- Caching layers: DataFrame cache, AI summary (only if a genuine AI result) AI Q&A answer cache
 - Rate errors trigger adaptive model fallback (e.g. from a higher capability model to `gemini-2.5-flash` or below)
 
 ## 5. Supported File Types
@@ -139,7 +139,7 @@ Minimal automated tests exist; expansion planned. Suggested next steps:
 - Add regression tests for large CSV ingestion
 
 ## 13. Security Considerations
-- HTTP security headers via Talisman (CSP, etc.)
+- HTTP security headers via Talisman (CSP etc.)
 - Rate limiting reduces brute force / abuse surface
 - No file persistence beyond in‑memory caches (ephemeral session state)
 - Future: file type stricter validation & sandboxing for untrusted content
