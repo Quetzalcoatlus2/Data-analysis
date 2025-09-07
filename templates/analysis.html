@@ -15,18 +15,24 @@
       --bg: #0b1220; --panel: #111827; --text: #e5e7eb; --muted: #9ca3af;
       --border: #1f2937; --link: #93c5fd; --accent: #60a5fa; --accent-2: #f97316;
     }
-    html, body { background: var(--bg); color: var(--text); margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  html, body { background: var(--bg); color: var(--text); margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow-x:hidden; }
     a { color: var(--link); text-decoration: none; }
     a:hover { text-decoration: underline; }
     header { position: sticky; top: 0; z-index: 10; background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
-    .wrap { max-width: 1200px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .wrap { width: 100%; margin: 0; padding: 12px clamp(14px,2vw,28px); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .wrap .nav { flex-wrap:wrap; }
+    @media (max-width: 1300px) {
+      .wrap nav.nav { flex: 1 1 100%; order: 10; }
+      .wrap > .nav + .nav { order: 11; }
+      .wrap .spacer { display:none; }
+    }
     .title { font-size: 18px; font-weight: 600; color: var(--text); margin-right: 8px; }
     .nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .pill { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
     .pill.active { color: var(--text); background: color-mix(in oklab, var(--panel) 80%, var(--bg)); border-color: color-mix(in oklab, var(--border) 80%, var(--bg)); }
     .spacer { flex: 1; }
     .btn { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
-    .content { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  .content { width:100%; margin:0; padding: 20px clamp(14px,2vw,32px) 60px; }
     .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
     .grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 16px; }
     @media (min-width: 900px) { .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -110,7 +116,7 @@
     </div>
   </header>
 
-  <main class="container" style="max-width: 1200px; margin: 0 auto; padding: 16px">
+  <main class="container" style="width:100%; margin:0; padding:0">
 
 
 
@@ -152,7 +158,7 @@
       </script>
       {% endif %}
 
-      <div class="grid">
+  <div class="grid" style="grid-template-columns: 1fr;">
         <section class="panel">
           <h3>Preview</h3>
           <div class="muted">Top rows of your dataset</div>
@@ -183,7 +189,7 @@
       </div>
 
     {% elif active_view == 'static' %}
-      <section class="panel">
+  <section class="panel" style="width:100%;">
         <h3>Static trends</h3>
         <div class="muted">Full-history PNGs with anomaly markers</div>
         {% if analysis.plots %}
@@ -201,7 +207,7 @@
       </section>
 
     {% elif active_view == 'forecast' %}
-      <section class="panel">
+  <section class="panel" style="width:100%;">
         <h3>Forecasts</h3>
         <div class="muted">Full-history context with forecast and 95% CI</div>
         {% if analysis.forecast_plots %}
@@ -219,7 +225,7 @@
       </section>
 
     {% elif active_view == 'interactive' %}
-      <section class="panel">
+  <section class="panel" style="width:100%;">
         <h3>Interactive charts</h3>
         <div class="row" style="margin-bottom:8px">
           <label for="colPick">Column</label>

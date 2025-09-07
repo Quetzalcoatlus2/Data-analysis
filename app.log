@@ -10004,3 +10004,65 @@ violations {
 }
 ]
 2025-09-06 11:58:44,376 INFO werkzeug: 127.0.0.1 - - [06/Sep/2025 11:58:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-09-07 18:24:12,069 INFO app: Attempting to configure AI...
+2025-09-07 18:24:12,071 INFO app: AI configured successfully.
+2025-09-07 18:24:12,081 INFO app: Talisman enabled.
+2025-09-07 18:24:12,083 INFO app: Rate limiting enabled: 120/hour
+2025-09-07 18:24:12,084 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-09-07 18:24:12,276 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2025-09-07 18:24:12,277 INFO werkzeug: Press CTRL+C to quit
+2025-09-07 18:24:12,280 INFO werkzeug:  * Restarting with stat
+2025-09-07 18:24:23,928 INFO app: Attempting to configure AI...
+2025-09-07 18:24:23,929 INFO app: AI configured successfully.
+2025-09-07 18:24:23,954 INFO app: Talisman enabled.
+2025-09-07 18:24:23,962 INFO app: Rate limiting enabled: 120/hour
+2025-09-07 18:24:23,964 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-09-07 18:24:24,006 WARNING werkzeug:  * Debugger is active!
+2025-09-07 18:24:24,030 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-09-07 18:24:24,571 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:24:24] "GET / HTTP/1.1" 200 -
+2025-09-07 18:24:25,351 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:24:25] "GET /favicon.ico HTTP/1.1" 404 -
+2025-09-07 18:24:52,810 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:24:52] "POST / HTTP/1.1" 302 -
+2025-09-07 18:25:36,307 INFO app: Using Gemini model: models/gemini-2.5-pro
+2025-09-07 18:27:20,368 WARNING app: AI summary failed, falling back. Error: 500 An internal error has occurred. Please retry or report in https://developers.generativeai.google/guide/troubleshooting
+2025-09-07 18:27:20,741 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:27:20] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-09-07 18:27:53,665 WARNING app: Gemini response.text accessor failed: Invalid operation: The `response.text` quick accessor requires the response to contain a valid `Part`, but none were returned. The candidate's [finish_reason](https://ai.google.dev/api/generate-content#finishreason) is 2.
+2025-09-07 18:27:53,666 WARNING app: AI Q&A empty response: finish_reason=MAX_TOKENS
+2025-09-07 18:27:53,783 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2025-09-07 18:27:54,329 INFO app: Using Gemini model: gemini-1.5-flash
+2025-09-07 18:28:55,400 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:28:55] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-09-07 18:32:04,802 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:32:04] "GET / HTTP/1.1" 200 -
+2025-09-07 18:33:08,839 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:33:08] "POST / HTTP/1.1" 302 -
+2025-09-07 18:34:10,365 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:34:10] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-09-07 18:34:43,869 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-1.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 250000
+}
+, links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, retry_delay {
+  seconds: 15
+}
+]
+2025-09-07 18:34:44,009 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:34:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-09-07 18:34:54,555 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:34:54] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-09-07 18:35:37,342 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:35:37] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive HTTP/1.1" 200 -
+2025-09-07 18:38:11,995 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:38:11] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 200 -
+2025-09-07 18:38:43,984 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:38:43] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -
+2025-09-07 18:41:31,132 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:41:31] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-09-07 18:44:03,108 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:44:03] "GET / HTTP/1.1" 200 -
+2025-09-07 18:44:19,834 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:44:19] "POST / HTTP/1.1" 302 -
+2025-09-07 18:44:55,837 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:44:55] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-09-07 18:45:50,505 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:45:50] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=static HTTP/1.1" 200 -
+2025-09-07 18:46:14,057 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 18:46:14] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation HTTP/1.1" 200 -

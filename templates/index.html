@@ -7,24 +7,37 @@
   <meta name="color-scheme" content="light dark">
   <style>
     :root {
-      --bg: #ffffff; --text: #0f172a; --muted: #475569; --card: #f8fafc; --border: #e2e8f0; --accent: #0ea5e9; --button-text: #ffffff;
+      --bg: #ffffff; --text: #0f172a; --muted: #475569; --surface: #f8fafc; --border: #e2e8f0; --accent: #0ea5e9; --accent-fg: #ffffff;
+      --focus: #0ea5e9; --danger: #ef4444; --radius: 10px; --radius-sm:6px; --shadow: 0 2px 4px -2px rgba(0,0,0,.08), 0 4px 10px -2px rgba(0,0,0,.06);
     }
     :root[data-theme="dark"] {
-      --bg: #0b1220; --text: #e5e7eb; --muted: #9ca3af; --card: #111827; --border: #1f2937; --accent: #38bdf8; --button-text: #0b1220;
+      --bg: #0b1220; --text: #e5e7eb; --muted: #9ca3af; --surface: #111827; --border: #1f2937; --accent: #38bdf8; --accent-fg: #0b1220;
+      --shadow: 0 2px 4px -2px rgba(0,0,0,.6), 0 4px 12px -2px rgba(0,0,0,.4);
     }
-    html, body { background: var(--bg); color: var(--text); }
-    .topbar { display:flex; align-items:center; gap:10px; padding:10px 0; }
-    .spacer { flex: 1; }
-    .btn { display:inline-block; padding:8px 12px; border:1px solid var(--border); background: var(--accent); color: var(--button-text); border-radius:6px; text-decoration:none; cursor:pointer; }
-    .btn.secondary { background: transparent; color: var(--text); }
-    .card { background: var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; max-width: 800px; }
-    form { display: grid; gap: 12px; }
-    input[type="file"], input[type="number"], input[type="text"], select, button {
-      color: var(--text); background: var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px;
-    }
-    label { color: var(--muted); display: grid; gap: 6px; }
-    fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
-    legend { color: var(--muted); padding: 0 6px; }
+    * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; min-height:100dvh; overflow-x:hidden; }
+    body { display:flex; flex-direction:column; }
+  header { padding: 12px clamp(14px,2vw,28px); display:flex; flex-wrap:wrap; align-items:center; gap:16px; border-bottom:1px solid var(--border); background: linear-gradient(to bottom, color-mix(in oklab, var(--bg) 96%, transparent), var(--bg)); position:sticky; top:0; z-index:20; }
+    h1 { font-size: clamp(1.4rem, 2.4vw, 2rem); margin:0; font-weight:600; letter-spacing:-0.5px; }
+    .spacer { flex:1; }
+    .btn { display:inline-flex; gap:6px; align-items:center; padding:10px 16px; font-size:.9rem; border:1px solid var(--border); background: var(--accent); color: var(--accent-fg); border-radius: var(--radius-sm); text-decoration:none; cursor:pointer; line-height:1.2; font-weight:500; transition:.15s background, .15s color, .15s border-color; }
+    .btn.secondary { background: var(--surface); color: var(--text); }
+    .btn:hover { filter: brightness(1.05); }
+    main { flex:1; width:100%; padding: 28px clamp(12px,2vw,32px) 60px; display:grid; gap:32px; }
+    .layout { display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:32px; width:100%; }
+    .panel { background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding: 20px 22px 26px; box-shadow: var(--shadow); display:flex; flex-direction:column; gap:18px; }
+    .panel h2 { margin:0 0 4px 0; font-size:1.05rem; letter-spacing:.5px; text-transform:uppercase; font-weight:600; color: var(--muted); }
+    form.upload { display:grid; gap:18px; }
+    fieldset { border:1px solid var(--border); border-radius: var(--radius-sm); padding:14px 16px 18px; display:grid; gap:14px; background: color-mix(in oklab, var(--surface) 94%, transparent); }
+    legend { padding:0 8px; font-size:.8rem; letter-spacing:.5px; text-transform:uppercase; color: var(--muted); }
+    label { display:grid; gap:6px; font-size:.85rem; color: var(--muted); }
+    input[type="file"], input[type="number"], select { padding:10px 12px; background: var(--bg); color: var(--text); border:1px solid var(--border); border-radius: var(--radius-sm); font: inherit; }
+    input:focus, select:focus { outline:2px solid var(--focus); outline-offset:2px; }
+    button[type=submit] { justify-self:start; }
+    ul.flash { list-style:none; margin: 8px 0 0; padding:0; display:grid; gap:8px; }
+    ul.flash li { background: var(--surface); border:1px solid var(--border); padding:10px 14px; border-radius: var(--radius-sm); }
+    footer { padding:24px 28px 40px; font-size:.75rem; color: var(--muted); text-align:center; }
+    @media (max-width: 680px) { main { padding-bottom:80px; } }
   </style>
   <script>
     (function() {
@@ -46,11 +59,11 @@
   </script>
 </head>
 <body>
-  <div class="topbar">
-    <h2 style="margin:0;">Data Analysis – Upload</h2>
+  <header>
+    <h1>Data Analysis – Upload</h1>
     <div class="spacer"></div>
     <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()">Dark mode</button>
-  </div>
+  </header>
 
   <!-- Flash messages -->
   {% with messages = get_flashed_messages() %}
@@ -65,37 +78,45 @@
     {% endif %}
   {% endwith %}
 
-  <div class="card">
-    <h2>Upload a dataset</h2>
-    <form method="post" enctype="multipart/form-data">
-      <label>Choose file
-        <input type="file" name="file" required />
-      </label>
-
-      <fieldset>
-        <legend>Options</legend>
-
-        <label>Forecast horizon (steps)
-          <input type="number" name="forecast_horizon" min="10" max="240" value="40" />
-        </label>
-
-        <label>Anomaly contamination (0.001–0.2)
-          <input type="number" step="0.001" min="0.001" max="0.2" name="contamination" value="0.02" />
-        </label>
-
-        <label>Start in view
-          <select name="view">
-            <option value="overview" selected>Overview</option>
-            <option value="static">Static</option>
-            <option value="interactive">Interactive</option>
-            <option value="forecast">Forecast</option>
-            <option value="correlation">Correlation</option>
-          </select>
-        </label>
-      </fieldset>
-
-      <button type="submit" style="margin-top:0.5rem">Analyze</button>
-    </form>
-  </div>
+  <main>
+    <div class="layout">
+      <section class="panel">
+        <h2>Upload a dataset</h2>
+        <form class="upload" method="post" enctype="multipart/form-data">
+          <label>Choose file
+            <input type="file" name="file" required />
+          </label>
+          <fieldset>
+            <legend>Options</legend>
+            <label>Forecast horizon (steps)
+              <input type="number" name="forecast_horizon" min="10" max="240" value="40" />
+            </label>
+            <label>Anomaly contamination (0.001–0.2)
+              <input type="number" step="0.001" min="0.001" max="0.2" name="contamination" value="0.02" />
+            </label>
+            <label>Start in view
+              <select name="view">
+                <option value="overview" selected>Overview</option>
+                <option value="static">Static</option>
+                <option value="interactive">Interactive</option>
+                <option value="forecast">Forecast</option>
+                <option value="correlation">Correlation</option>
+              </select>
+            </label>
+          </fieldset>
+          <button class="btn" type="submit">Analyze</button>
+        </form>
+      </section>
+      <section class="panel" style="min-height:100%;">
+        <h2>How it works</h2>
+        <p style="margin:0; line-height:1.5; font-size:.9rem;">Upload structured data (CSV, Excel, TXT, JSON). The app profiles columns, detects anomalies, renders plots and can produce AI summaries plus Q&A if a free‑tier Gemini model is available. Large time series are downsampled for speed.</p>
+        <p style="margin:0; line-height:1.5; font-size:.9rem;">You can switch views after processing: overview, static plots, interactive exploration, forecast or correlation maps.</p>
+        <p style="margin:0; line-height:1.5; font-size:.9rem;">If AI quota is exhausted you still get an offline heuristic summary with a visible reason tag so you know what happened.</p>
+      </section>
+    </div>
+  </main>
+  <footer>
+    <p>Experimental data insight tool – adaptive to free-tier constraints. Refresh or re‑analyze to attempt a new AI summary if capacity frees up.</p>
+  </footer>
 </body>
 </html>
