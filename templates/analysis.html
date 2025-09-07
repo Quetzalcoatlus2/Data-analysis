@@ -109,20 +109,20 @@
     <div class="wrap">
       <div class="title">Analysis: {{ display_name }}</div>
       <nav class="nav">
-        <a class="pill {{ 'active' if active_view == 'overview' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}">Overview</a>
-        <a class="pill {{ 'active' if active_view == 'static' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='static') }}">Static</a>
-        <a class="pill {{ 'active' if active_view == 'interactive' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive') }}">Interactive</a>
-        <a class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast') }}">Forecast</a>
-        <a class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation') }}">Correlation</a>
+  <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}">Overview</a>
+  <a title="View static PNG plots" class="pill {{ 'active' if active_view == 'static' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='static') }}">Static</a>
+  <a title="Explore interactively with zoom & hover" class="pill {{ 'active' if active_view == 'interactive' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive') }}">Interactive</a>
+  <a title="Show forecasts with 95% confidence band" class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast') }}">Forecast</a>
+  <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation') }}">Correlation</a>
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
       <div class="actions">
-        <a class="pill" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
-        <a class="pill" href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Images ZIP</a>
-        <a class="pill" href="{{ url_for('download_full_report_html', filename=filename, display=display_name) }}">Full report</a>
-        <a class="pill" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Cleaned CSV</a>
-        <a class="pill" href="{{ url_for('upload_file') }}?auto=1" title="Upload a new dataset">New dataset</a>
-        <button id="themeToggle" class="btn" type="button" onclick="toggleTheme()" style="padding:8px 14px;">Theme</button>
+  <a class="pill" title="Download AI summary (HTML)" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
+  <a class="pill" title="Download all static plots as ZIP" href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Images ZIP</a>
+  <a class="pill" title="Download full combined report" href="{{ url_for('download_full_report_html', filename=filename, display=display_name) }}">Full report</a>
+  <a class="pill" title="Download cleaned CSV file" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Cleaned CSV</a>
+  <a class="pill" title="Upload a new dataset (opens file picker)" href="{{ url_for('upload_file') }}?auto=1">New dataset</a>
+  <button id="themeToggle" title="Toggle light / dark theme" class="btn" type="button" onclick="toggleTheme()" style="padding:8px 14px;">Theme</button>
       </div>
     </div>
   </header>
