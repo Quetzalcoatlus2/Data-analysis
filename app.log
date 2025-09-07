@@ -10145,3 +10145,33 @@ violations {
 2025-09-07 20:26:22,956 WARNING app: Delete failed (datasets\uploaded\664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv), attempt 3/3: [WinError 32] The process cannot access the file because it is being used by another process: 'datasets\\uploaded\\664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv'
 2025-09-07 20:27:12,477 INFO app: Deferred delete of datasets\uploaded\664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv done
 2025-09-07 20:27:12,479 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 20:27:12] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-09-07 20:34:44,984 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 20:34:44] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-09-07 20:36:22,372 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-09-07 20:36:29,069 INFO werkzeug:  * Restarting with stat
+2025-09-07 20:36:53,640 INFO app: Attempting to configure AI...
+2025-09-07 20:36:53,642 INFO app: AI configured successfully.
+2025-09-07 20:36:53,659 INFO app: Talisman enabled.
+2025-09-07 20:36:53,662 INFO app: Rate limiting enabled: 120/hour
+2025-09-07 20:36:53,663 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-09-07 20:36:53,721 WARNING werkzeug:  * Debugger is active!
+2025-09-07 20:36:53,770 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-09-07 20:37:31,642 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-09-07 20:37:32,521 INFO werkzeug:  * Restarting with stat
+2025-09-07 20:37:52,580 INFO app: Attempting to configure AI...
+2025-09-07 20:37:52,581 INFO app: AI configured successfully.
+2025-09-07 20:37:52,596 INFO app: Talisman enabled.
+2025-09-07 20:37:52,599 INFO app: Rate limiting enabled: 120/hour
+2025-09-07 20:37:52,600 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-09-07 20:37:52,650 WARNING werkzeug:  * Debugger is active!
+2025-09-07 20:37:52,660 INFO werkzeug:  * Debugger PIN: 111-904-242
+2025-09-07 20:37:52,955 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 20:37:52] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 302 -
+2025-09-07 20:37:53,012 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 20:37:53] "GET / HTTP/1.1" 200 -
+2025-09-07 20:38:14,493 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 20:38:14] "POST / HTTP/1.1" 302 -
+2025-09-07 20:39:15,730 INFO app: Using Gemini model: models/gemini-2.5-pro
+2025-09-07 20:41:00,080 WARNING app: AI summary failed, falling back. Error: 500 An internal error has occurred. Please retry or report in https://developers.generativeai.google/guide/troubleshooting
+2025-09-07 20:41:00,784 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 20:41:00] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_horizon=40&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-09-07 20:47:30,814 WARNING app: Gemini response.text accessor failed: Invalid operation: The `response.text` quick accessor requires the response to contain a valid `Part`, but none were returned. The candidate's [finish_reason](https://ai.google.dev/api/generate-content#finishreason) is 2.
+2025-09-07 20:47:30,826 WARNING app: AI Q&A empty response: finish_reason=MAX_TOKENS
+2025-09-07 20:47:30,939 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2025-09-07 20:47:31,385 INFO app: Using Gemini model: gemini-1.5-flash
+2025-09-07 20:48:31,719 INFO werkzeug: 127.0.0.1 - - [07/Sep/2025 20:48:31] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -

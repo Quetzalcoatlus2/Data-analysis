@@ -653,9 +653,21 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
     except Exception:
         df_desc = ""
     prompt = (
-        "You are an expert data analyst. Provide a clear, rich, and structured HTML summary of the dataset. "
-        "Respond strictly in HTML (no Markdown) using tags like <p>, <ul><li>, <table><thead><tbody><tr><th><td>, "
-        "<strong>, and <em>. Keep it concise but informative; mention notable trends, missingness, and caveats.\n\n"
+        "You are an expert data analyst. Produce a comprehensive yet efficient HTML summary of the dataset. "
+        "Respond strictly in HTML (no Markdown) using <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, <em>. "
+        "Structure the answer into clearly separated thematic sections in this order: "
+        "1. Overview (what the dataset appears to capture, size, time span if temporal). "
+        "2. Data Quality (missing data, constant columns, suspected data quality issues, outliers). "
+        "3. Key Descriptive Insights (distributions, central tendencies, notable ratios or segments). "
+        "4. Temporal / Seasonal Patterns (only if time indexed: trends, seasonality, volatility). "
+        "5. Correlations & Relationships (highlight strongest positive and negative numeric relationships). "
+        "6. Anomalies & Irregularities (potential abnormal spikes / dips). "
+        "7. Prognostics & Future Tendencies (infer plausible directional trends or risk areas—be cautious and qualify uncertainty). "
+        "8. Actionable Observations (succinct bullet recommendations or next analytical steps). "
+        "9. Caveats & Limitations (sampling bias, data sparsity, interpretability constraints). "
+        "Keep language analytical, neutral, and avoid marketing tone. Always cite concrete numbers (counts, min/median/max, % missing) where useful. "
+        "If a section does not apply, include the heading with a short note (e.g., '<p><strong>Temporal / Seasonal Patterns:</strong> Not applicable (no datetime index).</p>'). "
+        "Do NOT hallucinate fields absent from context.\n\n"
         "Context:\n" + df_desc + ("\n\nAdditional context:\n" + extra_context if extra_context else "")
     )
 
