@@ -19,7 +19,9 @@
     a { color: var(--link); text-decoration: none; }
     a:hover { text-decoration: underline; }
     header { position: sticky; top: 0; z-index: 10; background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
-    .wrap { width: 100%; margin: 0; padding: 12px clamp(14px,2vw,28px); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .wrap { width: 100%; margin: 0; padding: 12px clamp(14px,2vw,28px); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .wrap .actions { display:flex; gap:8px; flex-wrap:wrap; padding-right: clamp(24px, 3vw, 56px); }
+  @media (max-width:800px) { .wrap .actions { padding-right: clamp(16px, 4vw, 40px); } }
     .wrap .nav { flex-wrap:wrap; }
     @media (max-width: 1300px) {
       .wrap nav.nav { flex: 1 1 100%; order: 10; }
@@ -53,13 +55,21 @@
     (function() {
       const saved = localStorage.getItem('theme') || 'light';
       document.documentElement.setAttribute('data-theme', saved);
+      function setThemeButtonLabel() {
+        const btn = document.getElementById('themeToggle');
+        if (!btn) return;
+        const cur = document.documentElement.getAttribute('data-theme') || 'light';
+        btn.textContent = cur === 'light' ? 'Dark mode' : 'Light mode';
+      }
       window.toggleTheme = function() {
         const cur = document.documentElement.getAttribute('data-theme') || 'light';
         const next = cur === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
         if (window.applyThemeToPlots) window.applyThemeToPlots();
+        setThemeButtonLabel();
       };
+      window.addEventListener('DOMContentLoaded', setThemeButtonLabel);
       window.getThemeVars = function() {
         const s = getComputedStyle(document.documentElement);
         const pick = n => (s.getPropertyValue(n) || '').trim();
@@ -105,14 +115,15 @@
         <a class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast') }}">Forecast</a>
         <a class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation') }}">Correlation</a>
       </nav>
-      <div class="nav" style="gap:8px; flex-wrap:wrap">
-        <a class="pill" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">Download AI summary</a>
-        <a class="pill" href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Download static images (ZIP)</a>
-        <a class="pill" href="{{ url_for('download_full_report_html', filename=filename, display=display_name) }}">Download full report</a>
+      <div class="spacer" style="flex:1 1 auto;"></div>
+      <div class="actions">
+        <a class="pill" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
+        <a class="pill" href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Images ZIP</a>
+        <a class="pill" href="{{ url_for('download_full_report_html', filename=filename, display=display_name) }}">Full report</a>
+        <a class="pill" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Cleaned CSV</a>
+        <a class="pill" href="{{ url_for('upload_file') }}?auto=1" title="Upload a new dataset">New dataset</a>
+        <button id="themeToggle" class="btn" type="button" onclick="toggleTheme()" style="padding:8px 14px;">Theme</button>
       </div>
-      <div class="spacer"></div>
-      <a class="pill" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Download cleaned CSV</a>
-      <button class="btn" type="button" onclick="toggleTheme()">Toggle theme</button>
     </div>
   </header>
 
@@ -255,18 +266,23 @@
 
         function applyThemeLayoutDefaults(layout) {
           const t = getThemeVars();
+          const isDark = t.bg && /^#0|^#1|^#2/i.test(t.bg.trim());
+          const gridColor = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
           layout.paper_bgcolor = t.panel;
           layout.plot_bgcolor = t.panel;
           layout.font = { color: t.text };
-          layout.margin = layout.margin || { l: 40, r: 10, t: 20, b: 40 };
+          layout.margin = layout.margin || { l: 50, r: 20, t: 28, b: 48 };
           layout.legend = Object.assign({ orientation: 'h' }, layout.legend || {});
-
+          layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
           layout.title = null;
-
           if (!layout.xaxis) layout.xaxis = {};
-          layout.xaxis.showgrid = true;
-          layout.xaxis.automargin = true;
-          
+          Object.assign(layout.xaxis, {
+            showgrid: true,
+            gridcolor: gridColor,
+            gridwidth: 1,
+            automargin: true,
+            nticks: 10
+          });
           if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
           Object.assign(layout.xaxis.rangeselector, {
             visible: true,
@@ -281,17 +297,90 @@
               {step: 'all', label: 'All'}
             ]
           });
-
           if (!layout.yaxis) layout.yaxis = {};
-          layout.yaxis.showgrid = true;
-          layout.yaxis.automargin = true;
+          Object.assign(layout.yaxis, {
+            showgrid: true,
+            gridcolor: gridColor,
+            gridwidth: 1,
+            automargin: true,
+            nticks: 8
+          });
         }
 
+        function hexToRgba(hex, alpha) {
+          if (!hex) return `rgba(90,90,160,${alpha||1})`;
+          const h = hex.replace('#','');
+            if (h.length === 3) {
+              const r = parseInt(h[0]+h[0],16), g = parseInt(h[1]+h[1],16), b = parseInt(h[2]+h[2],16);
+              return `rgba(${r},${g},${b},${alpha})`;
+            } else if (h.length === 6) {
+              const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+              return `rgba(${r},${g},${b},${alpha})`;
+            }
+          return `rgba(90,90,160,${alpha||1})`;
+        }
         function renderFromPayload(item) {
-          const traces = item.traces || [];
+          const traces = (item.traces || []).map(t => ({ ...t }));
+          const tvars = getThemeVars();
+          const accent = tvars.accent || '#0ea5e9';
+          const accentBand = tvars.accent2 || '#f97316';
+          const ciFill = hexToRgba(accentBand, 0.22);
+          const ciLine = hexToRgba(accentBand, 0.95);
+          const forecastIdx = [];
+          const ciIdx = [];
+          for (let i = 0; i < traces.length; i++) {
+            const nm = (traces[i].name || '').toLowerCase();
+            if (nm.includes('forecast')) forecastIdx.push(i);
+            if (/\bci\b|conf|interval/.test(nm)) ciIdx.push(i);
+          }
+          // Style forecast main line
+          forecastIdx.forEach((idx, rel) => {
+            const tr = traces[idx];
+            tr.legendgroup = 'forecast';
+            if (rel === 0) {
+              tr.name = (tr.name && tr.name.trim()) || 'Forecast';
+              tr.showlegend = true;
+              tr.mode = tr.mode || 'lines';
+              tr.line = Object.assign({ width: 2, color: accent }, tr.line || {});
+              tr.legendrank = 10; // ensure appears early
+            }
+          });
+          // Style CI traces: first acts as controller in legend, others hidden but toggle together
+          ciIdx.forEach((idx, rel) => {
+            const tr = traces[idx];
+            tr.name = '95% CI';
+            tr.mode = 'lines';
+            tr.line = Object.assign({ width: 0.8, dash: 'dot', color: ciLine }, tr.line || {});
+            if (!tr.fill) tr.fill = 'tonexty';
+            if (!tr.fillcolor) tr.fillcolor = ciFill;
+            if (tr.marker) delete tr.marker;
+            if (!tr.hovertemplate) tr.hovertemplate = '%{y}<extra>95% CI</extra>';
+            tr.meta = (rel === 0) ? 'ci-controller' : 'ci-member';
+            tr.showlegend = rel === 0; // only first one appears in legend
+            if (rel === 0) tr.legendrank = 9999; // push to end
+          });
           const layout = Object.assign({}, item.layout || {});
           applyThemeLayoutDefaults(layout);
           Plotly.newPlot('chart', traces, layout, { displayModeBar: true, responsive: true });
+
+          // Attach legend toggle handler once to control all CI traces together
+          const chartEl = document.getElementById('chart');
+          if (!chartEl._ciLegendBound) {
+            chartEl._ciLegendBound = true;
+            chartEl.on('plotly_legendclick', function(evt){
+              const d = chartEl.data[evt.curveNumber];
+              if (!d || d.meta !== 'ci-controller') return; // let default for others
+              const currentlyVisible = d.visible === undefined || d.visible === true;
+              const newVis = currentlyVisible ? 'legendonly' : true;
+              // apply to all CI traces
+              chartEl.data.forEach((t,i) => {
+                if (t.meta === 'ci-controller' || t.meta === 'ci-member') {
+                  Plotly.restyle(chartEl, { visible: newVis }, [i]);
+                }
+              });
+              return false; // prevent default toggling (we handled it)
+            });
+          }
 
           const dist = item.distribution || null;
           if (dist && Array.isArray(dist.values)) {
@@ -301,7 +390,8 @@
             }], {
               title: null,
               paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-              margin: { l: 40, r: 10, t: 20, b: 40 }
+              margin: { l: 40, r: 10, t: 20, b: 40 },
+              hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
             }, { responsive: true });
           } else {
             document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
@@ -332,6 +422,7 @@
               yaxis: { title: column }
             };
             applyThemeLayoutDefaults(layout);
+            layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
             Plotly.newPlot('chart', [hist], layout, { responsive: true });
 
             const vals = (found.y || []).filter(v => Number.isFinite(v));
@@ -341,7 +432,8 @@
               }], {
                 title: null,
                 paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-                margin: { l: 40, r: 10, t: 20, b: 40 }
+                margin: { l: 40, r: 10, t: 20, b: 40 },
+                hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
               }, { responsive: true });
             } else {
               document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
@@ -419,20 +511,17 @@
               paper_bgcolor: t.panel,
               plot_bgcolor: t.panel,
               font: { color: t.text },
-             
               margin: { l: 120, r: 10, t: 60, b: 60 }
             };
             Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
 
-        
+            // Pearson correlation (if provided)
             if (corrData && corrData.pearson && corrData.pearson.z) {
               const pearDiv = document.createElement('div');
               pearDiv.id = 'pearson';
               pearDiv.className = 'panel';
               pearDiv.style.minHeight = '520px';
-             
               document.currentScript.parentElement.appendChild(pearDiv);
-
               const pearData = [{
                 z: corrData.pearson.z,
                 x: corrData.pearson.x,
