@@ -1071,15 +1071,37 @@ def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
 
 def _infer_future_index(idx, steps):
     if isinstance(idx, pd.DatetimeIndex):
-        freq = idx.freq or pd.infer_freq(idx)
-        if freq is not None:
-            offset = pd.tseries.frequencies.to_offset(freq)
-        else:
+        # Always calculate the base interval for most accurate forecasting
+        if len(idx) > 1:
+            # Calculate all intervals in the entire dataset for accurate detection
             diffs = pd.Series(idx).diff().dropna()
-            step = diffs.median() if not diffs.empty else pd.Timedelta(days=1)
-            offset = pd.tseries.frequencies.to_offset(step)
-        start = idx[-1] + offset
-        return pd.date_range(start=start, periods=steps, freq=offset)
+            
+            if not diffs.empty:
+                # Find the minimum non-zero interval (the base sampling rate)
+                # This handles datasets with gaps better than median or mode
+                non_zero_diffs = diffs[diffs > pd.Timedelta(0)]
+                if len(non_zero_diffs) > 0:
+                    offset = non_zero_diffs.min()
+                else:
+                    offset = diffs.median()
+            else:
+                # Fallback: average interval across entire dataset
+                total_duration = idx[-1] - idx[0]
+                offset = total_duration / (len(idx) - 1)
+        else:
+            offset = pd.Timedelta(hours=1)
+        
+        # Debug logging
+        try:
+            print(f"[DEBUG] Forecast: {steps} steps, offset={offset}, last_date={idx[-1]}, forecast_end={idx[-1] + offset * steps}")
+        except:
+            pass
+        
+        # Generate future timestamps manually to ensure correct spacing
+        start = idx[-1]
+        future_dates = [start + offset * (i + 1) for i in range(steps)]
+        return pd.DatetimeIndex(future_dates)
+    
     try:
         ser_idx = pd.Series(idx.astype('int64') if hasattr(idx, 'astype') else list(idx))
     except Exception:
