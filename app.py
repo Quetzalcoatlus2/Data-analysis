@@ -1768,19 +1768,57 @@ def _compute_forecast(series: pd.Series, steps: int):
         seed_val = int(abs(series_hash) % (2**31))
         np.random.seed(seed_val)
         
-        # Generate forecast using random walk with trend
+        # Use actual historical segments to build forecast
         forecast_vals = np.zeros(k, dtype=float)
-        current_value = last
         
-        for i in range(k):
-            # Add trend step
-            current_value = current_value + trend
+        # Find similar historical patterns to the recent end
+        # Use a moving window approach to extract realistic segments
+        segment_length = min(k, max(5, len(recent_data) // 10))
+        
+        if len(values) > segment_length * 2:
+            # Find segments in history that are similar to recent data
+            recent_pattern = recent_data[-segment_length:]
+            recent_mean = np.mean(recent_pattern)
+            recent_std = np.std(recent_pattern)
             
-            # Add random variation (realistic noise)
-            noise = np.random.normal(0, hist_volatility * 0.5)
-            current_value = current_value + noise
+            # Search for similar segments in historical data
+            similar_segments = []
+            for i in range(len(values) - segment_length - k):
+                segment = values[i:i+segment_length]
+                seg_mean = np.mean(segment)
+                seg_std = np.std(segment)
+                
+                # Check if this segment has similar statistical properties
+                if abs(seg_mean - recent_mean) < data_range * 0.3 and abs(seg_std - recent_std) < hist_volatility * 2:
+                    # Get what happened after this segment
+                    continuation = values[i+segment_length:i+segment_length+k]
+                    if len(continuation) == k:
+                        similar_segments.append(continuation)
             
-            forecast_vals[i] = current_value
+            # If we found similar patterns, use them
+            if len(similar_segments) > 0:
+                # Randomly pick one similar segment's continuation
+                chosen_continuation = similar_segments[np.random.randint(0, len(similar_segments))]
+                
+                # Adjust the continuation to start from our last value
+                offset = last - chosen_continuation[0]
+                forecast_vals = chosen_continuation + offset
+            else:
+                # Fallback: use change sampling (no trend addition)
+                historical_changes = np.diff(recent_data)
+                current_value = last
+                for i in range(k):
+                    sampled_change = np.random.choice(historical_changes)
+                    current_value = current_value + sampled_change
+                    forecast_vals[i] = current_value
+        else:
+            # Not enough data, use simple change sampling (no trend addition)
+            historical_changes = np.diff(recent_data)
+            current_value = last
+            for i in range(k):
+                sampled_change = np.random.choice(historical_changes)
+                current_value = current_value + sampled_change
+                forecast_vals[i] = current_value
         
         # Scale forecast to fit within bounds (no clipping)
         fc_min = float(np.min(forecast_vals))

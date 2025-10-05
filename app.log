@@ -26013,3 +26013,391 @@ Please retry in 4.734442534s. [violations {
 2025-10-05 15:20:38,674 INFO app: Static forecast_plots count: 0
 2025-10-05 15:20:38,724 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=6.91s cols=7
 2025-10-05 15:20:38,731 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:20:38] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-10-05 15:25:44,014 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:25:45,148 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:25:49,174 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:25:54,870 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:26:19,118 INFO app: Attempting to configure AI...
+2025-10-05 15:26:19,309 INFO app: AI configured successfully.
+2025-10-05 15:26:19,349 INFO app: Talisman enabled.
+2025-10-05 15:26:21,860 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:26:21,867 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:26:22,215 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:26:22,569 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 15:26:26,673 INFO app: Attempting to configure AI...
+2025-10-05 15:26:26,676 INFO app: AI configured successfully.
+2025-10-05 15:26:26,694 INFO app: Talisman enabled.
+2025-10-05 15:26:26,705 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:26:26,706 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:26:26,744 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:26:26,755 INFO werkzeug:  * Debugger PIN: 993-719-916
+2025-10-05 15:26:30,700 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:26:30] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast HTTP/1.1" 302 -
+2025-10-05 15:26:30,828 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:26:30] "GET / HTTP/1.1" 200 -
+2025-10-05 15:32:59,007 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:33:02,730 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:33:33,520 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:33:57,321 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:34:35,678 INFO app: Attempting to configure AI...
+2025-10-05 15:34:35,702 INFO app: AI configured successfully.
+2025-10-05 15:34:35,767 INFO app: Talisman enabled.
+2025-10-05 15:34:35,850 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:34:35,862 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:34:35,985 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:34:36,098 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 15:34:48,243 INFO app: Attempting to configure AI...
+2025-10-05 15:34:48,253 INFO app: AI configured successfully.
+2025-10-05 15:34:48,293 INFO app: Talisman enabled.
+2025-10-05 15:34:48,332 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:34:48,341 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:34:48,432 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:34:48,455 INFO werkzeug:  * Debugger PIN: 993-719-916
+2025-10-05 15:35:07,538 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:35:10,963 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:35:46,921 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:35:46] "POST / HTTP/1.1" 302 -
+2025-10-05 15:35:50,258 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2025-10-05 15:35:50,264 INFO app: Attempting to configure AI...
+2025-10-05 15:35:50,266 INFO app: AI configured successfully.
+2025-10-05 15:35:50,290 INFO app: Talisman enabled.
+2025-10-05 15:35:50,298 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:35:50,303 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:35:50,422 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:35:50,786 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 15:35:54,630 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2025-10-05 15:35:54,632 INFO app: Forecast done col=Temp_C took=4.37s steps=879 points=8784
+2025-10-05 15:36:00,277 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2025-10-05 15:36:01,290 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2025-10-05 15:36:01,292 INFO app: Forecast done col=Dew Point Temp_C took=1.01s steps=879 points=8784
+2025-10-05 15:36:06,929 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2025-10-05 15:36:07,885 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2025-10-05 15:36:07,886 INFO app: Forecast done col=Rel Hum_% took=0.96s steps=879 points=8784
+2025-10-05 15:36:13,145 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2025-10-05 15:36:13,803 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2025-10-05 15:36:13,804 INFO app: Forecast done col=Wind Speed_km/h took=0.66s steps=879 points=8784
+2025-10-05 15:36:20,805 INFO app: Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2025-10-05 15:36:21,514 INFO app: Forecast plot ready col=Visibility_km forecast_points=879
+2025-10-05 15:36:21,515 INFO app: Forecast done col=Visibility_km took=0.71s steps=879 points=8784
+2025-10-05 15:36:26,774 INFO app: Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2025-10-05 15:36:27,579 INFO app: Forecast plot ready col=Press_kPa forecast_points=879
+2025-10-05 15:36:27,581 INFO app: Forecast done col=Press_kPa took=0.81s steps=879 points=8784
+2025-10-05 15:36:37,949 INFO app: Using Gemini model: models/gemini-2.5-flash
+2025-10-05 15:37:08,326 INFO app: Static forecast_plots count: 12
+2025-10-05 15:37:08,327 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 15:37:08,328 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 15:37:08,329 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 15:37:08,330 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 15:37:08,331 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 15:37:08,331 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 15:37:08,332 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 15:37:08,332 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 15:37:08,333 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 15:37:08,334 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 15:37:08,334 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 15:37:08,335 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 15:37:08,404 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=79.42s cols=7
+2025-10-05 15:37:08,530 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:37:08] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=forecast HTTP/1.1" 200 -
+2025-10-05 15:37:45,784 INFO app: Forecast start col=Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:37:47,961 INFO app: Forecast plot ready col=Temp_C forecast_points=1757
+2025-10-05 15:37:47,962 INFO app: Forecast done col=Temp_C took=2.18s steps=1757 points=8784
+2025-10-05 15:37:52,697 INFO app: Forecast start col=Dew Point Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:37:53,410 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=1757
+2025-10-05 15:37:53,411 INFO app: Forecast done col=Dew Point Temp_C took=0.71s steps=1757 points=8784
+2025-10-05 15:37:57,814 INFO app: Forecast start col=Rel Hum_% steps=1757 rows=8784 pct=0.2
+2025-10-05 15:37:58,429 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=1757
+2025-10-05 15:37:58,430 INFO app: Forecast done col=Rel Hum_% took=0.62s steps=1757 points=8784
+2025-10-05 15:38:02,777 INFO app: Forecast start col=Wind Speed_km/h steps=1757 rows=8784 pct=0.2
+2025-10-05 15:38:03,510 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=1757
+2025-10-05 15:38:03,511 INFO app: Forecast done col=Wind Speed_km/h took=0.73s steps=1757 points=8784
+2025-10-05 15:38:08,903 INFO app: Forecast start col=Visibility_km steps=1757 rows=8784 pct=0.2
+2025-10-05 15:38:09,954 INFO app: Forecast plot ready col=Visibility_km forecast_points=1757
+2025-10-05 15:38:09,956 INFO app: Forecast done col=Visibility_km took=1.05s steps=1757 points=8784
+2025-10-05 15:38:15,771 INFO app: Forecast start col=Press_kPa steps=1757 rows=8784 pct=0.2
+2025-10-05 15:38:16,511 INFO app: Forecast plot ready col=Press_kPa forecast_points=1757
+2025-10-05 15:38:16,513 INFO app: Forecast done col=Press_kPa took=0.74s steps=1757 points=8784
+2025-10-05 15:38:20,449 INFO app: Static forecast_plots count: 12
+2025-10-05 15:38:20,449 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 15:38:20,450 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 15:38:20,451 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 15:38:20,451 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 15:38:20,452 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 15:38:20,453 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 15:38:20,454 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 15:38:20,455 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 15:38:20,458 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 15:38:20,459 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 15:38:20,460 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 15:38:20,461 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 15:38:20,503 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=35.44s cols=7
+2025-10-05 15:38:20,514 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:38:20] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.20&contamination=0.02&view=forecast HTTP/1.1" 200 -
+2025-10-05 15:39:09,660 INFO app: Forecast start col=Temp_C steps=264 rows=8784 pct=0.03
+2025-10-05 15:39:10,293 INFO app: Forecast plot ready col=Temp_C forecast_points=264
+2025-10-05 15:39:10,294 INFO app: Forecast done col=Temp_C took=0.63s steps=264 points=8784
+2025-10-05 15:39:15,325 INFO app: Forecast start col=Dew Point Temp_C steps=264 rows=8784 pct=0.03
+2025-10-05 15:39:16,054 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=264
+2025-10-05 15:39:16,055 INFO app: Forecast done col=Dew Point Temp_C took=0.73s steps=264 points=8784
+2025-10-05 15:39:21,355 INFO app: Forecast start col=Rel Hum_% steps=264 rows=8784 pct=0.03
+2025-10-05 15:39:22,018 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=264
+2025-10-05 15:39:22,021 INFO app: Forecast done col=Rel Hum_% took=0.67s steps=264 points=8784
+2025-10-05 15:39:27,256 INFO app: Forecast start col=Wind Speed_km/h steps=264 rows=8784 pct=0.03
+2025-10-05 15:39:27,973 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=264
+2025-10-05 15:39:27,974 INFO app: Forecast done col=Wind Speed_km/h took=0.72s steps=264 points=8784
+2025-10-05 15:39:35,643 INFO app: Forecast start col=Visibility_km steps=264 rows=8784 pct=0.03
+2025-10-05 15:39:36,371 INFO app: Forecast plot ready col=Visibility_km forecast_points=264
+2025-10-05 15:39:36,372 INFO app: Forecast done col=Visibility_km took=0.73s steps=264 points=8784
+2025-10-05 15:39:41,630 INFO app: Forecast start col=Press_kPa steps=264 rows=8784 pct=0.03
+2025-10-05 15:39:42,353 INFO app: Forecast plot ready col=Press_kPa forecast_points=264
+2025-10-05 15:39:42,354 INFO app: Forecast done col=Press_kPa took=0.72s steps=264 points=8784
+2025-10-05 15:39:46,477 INFO app: Static forecast_plots count: 12
+2025-10-05 15:39:46,478 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 15:39:46,479 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 15:39:46,480 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 15:39:46,481 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 15:39:46,482 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 15:39:46,482 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 15:39:46,483 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 15:39:46,484 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 15:39:46,486 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 15:39:46,487 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 15:39:46,488 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 15:39:46,489 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 15:39:46,531 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=37.70s cols=7
+2025-10-05 15:39:46,547 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:39:46] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.03&contamination=0.02&view=forecast HTTP/1.1" 200 -
+2025-10-05 15:40:17,464 INFO app: Forecast start col=Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:40:18,161 INFO app: Forecast plot ready col=Temp_C forecast_points=1757
+2025-10-05 15:40:18,162 INFO app: Forecast done col=Temp_C took=0.70s steps=1757 points=8784
+2025-10-05 15:40:22,479 INFO app: Forecast start col=Dew Point Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:40:22,966 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=1757
+2025-10-05 15:40:22,967 INFO app: Forecast done col=Dew Point Temp_C took=0.49s steps=1757 points=8784
+2025-10-05 15:40:30,292 INFO app: Forecast start col=Rel Hum_% steps=1757 rows=8784 pct=0.2
+2025-10-05 15:40:31,270 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=1757
+2025-10-05 15:40:31,272 INFO app: Forecast done col=Rel Hum_% took=0.98s steps=1757 points=8784
+2025-10-05 15:40:36,134 INFO app: Forecast start col=Wind Speed_km/h steps=1757 rows=8784 pct=0.2
+2025-10-05 15:40:36,813 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=1757
+2025-10-05 15:40:36,815 INFO app: Forecast done col=Wind Speed_km/h took=0.68s steps=1757 points=8784
+2025-10-05 15:40:41,214 INFO app: Forecast start col=Visibility_km steps=1757 rows=8784 pct=0.2
+2025-10-05 15:40:42,280 INFO app: Forecast plot ready col=Visibility_km forecast_points=1757
+2025-10-05 15:40:42,282 INFO app: Forecast done col=Visibility_km took=1.07s steps=1757 points=8784
+2025-10-05 15:40:47,144 INFO app: Forecast start col=Press_kPa steps=1757 rows=8784 pct=0.2
+2025-10-05 15:40:47,894 INFO app: Forecast plot ready col=Press_kPa forecast_points=1757
+2025-10-05 15:40:47,896 INFO app: Forecast done col=Press_kPa took=0.75s steps=1757 points=8784
+2025-10-05 15:40:52,060 INFO app: Static forecast_plots count: 12
+2025-10-05 15:40:52,061 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 15:40:52,061 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 15:40:52,062 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 15:40:52,063 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 15:40:52,063 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 15:40:52,064 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 15:40:52,066 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 15:40:52,067 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 15:40:52,068 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 15:40:52,069 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 15:40:52,070 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 15:40:52,071 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 15:40:52,122 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=35.40s cols=7
+2025-10-05 15:40:52,133 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:40:52] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.20&contamination=0.02&view=forecast HTTP/1.1" 200 -
+2025-10-05 15:42:44,428 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:42:46,720 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:43:02,813 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:43:08,055 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:43:45,731 INFO app: Attempting to configure AI...
+2025-10-05 15:43:45,757 INFO app: AI configured successfully.
+2025-10-05 15:43:45,809 INFO app: Talisman enabled.
+2025-10-05 15:43:46,192 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:43:46,197 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:43:46,481 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:43:46,619 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 15:43:51,466 INFO app: Attempting to configure AI...
+2025-10-05 15:43:51,471 INFO app: AI configured successfully.
+2025-10-05 15:43:51,493 INFO app: Talisman enabled.
+2025-10-05 15:43:51,566 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:43:51,568 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:43:51,606 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:43:51,614 INFO werkzeug:  * Debugger PIN: 993-719-916
+2025-10-05 15:47:18,530 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:47:20,370 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:47:33,827 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:47:33,797 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:48:27,868 INFO app: Attempting to configure AI...
+2025-10-05 15:48:27,870 INFO app: AI configured successfully.
+2025-10-05 15:48:27,870 INFO app: Attempting to configure AI...
+2025-10-05 15:48:27,872 INFO app: AI configured successfully.
+2025-10-05 15:48:27,883 INFO app: Talisman enabled.
+2025-10-05 15:48:27,884 INFO app: Talisman enabled.
+2025-10-05 15:48:27,929 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:48:27,929 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:48:27,930 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:48:27,967 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:48:27,979 INFO werkzeug:  * Debugger PIN: 993-719-916
+2025-10-05 15:48:31,529 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:48:31] "GET / HTTP/1.1" 200 -
+2025-10-05 15:48:48,694 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:48:48] "POST / HTTP/1.1" 302 -
+2025-10-05 15:48:49,679 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2025-10-05 15:48:50,728 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2025-10-05 15:48:50,729 INFO app: Forecast done col=Temp_C took=1.05s steps=879 points=8784
+2025-10-05 15:48:55,263 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2025-10-05 15:48:56,043 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2025-10-05 15:48:56,044 INFO app: Forecast done col=Dew Point Temp_C took=0.78s steps=879 points=8784
+2025-10-05 15:49:00,822 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2025-10-05 15:49:01,603 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2025-10-05 15:49:01,604 INFO app: Forecast done col=Rel Hum_% took=0.78s steps=879 points=8784
+2025-10-05 15:49:06,162 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2025-10-05 15:49:06,825 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2025-10-05 15:49:06,825 INFO app: Forecast done col=Wind Speed_km/h took=0.66s steps=879 points=8784
+2025-10-05 15:49:11,728 INFO app: Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2025-10-05 15:49:12,634 INFO app: Forecast plot ready col=Visibility_km forecast_points=879
+2025-10-05 15:49:12,635 INFO app: Forecast done col=Visibility_km took=0.91s steps=879 points=8784
+2025-10-05 15:49:17,102 INFO app: Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2025-10-05 15:49:17,862 INFO app: Forecast plot ready col=Press_kPa forecast_points=879
+2025-10-05 15:49:17,863 INFO app: Forecast done col=Press_kPa took=0.76s steps=879 points=8784
+2025-10-05 15:49:29,307 INFO app: Using Gemini model: models/gemini-2.5-flash
+2025-10-05 15:50:02,225 WARNING app: Gemini response.text accessor failed: Invalid operation: The `response.text` quick accessor requires the response to contain a valid `Part`, but none were returned. The candidate's [finish_reason](https://ai.google.dev/api/generate-content#finishreason) is 2.
+2025-10-05 15:50:02,233 INFO app: Static forecast_plots count: 12
+2025-10-05 15:50:02,234 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 15:50:02,236 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 15:50:02,237 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 15:50:02,238 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 15:50:02,239 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 15:50:02,239 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 15:50:02,240 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 15:50:02,241 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 15:50:02,241 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 15:50:02,242 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 15:50:02,243 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 15:50:02,243 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 15:50:02,314 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=73.29s cols=7
+2025-10-05 15:50:02,743 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:50:02] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=forecast HTTP/1.1" 200 -
+2025-10-05 15:52:04,801 INFO app: Forecast start col=Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:52:05,789 INFO app: Forecast plot ready col=Temp_C forecast_points=1757
+2025-10-05 15:52:05,791 INFO app: Forecast done col=Temp_C took=0.99s steps=1757 points=8784
+2025-10-05 15:52:10,048 INFO app: Forecast start col=Dew Point Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:52:10,759 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=1757
+2025-10-05 15:52:10,760 INFO app: Forecast done col=Dew Point Temp_C took=0.71s steps=1757 points=8784
+2025-10-05 15:52:15,066 INFO app: Forecast start col=Rel Hum_% steps=1757 rows=8784 pct=0.2
+2025-10-05 15:52:15,781 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=1757
+2025-10-05 15:52:15,782 INFO app: Forecast done col=Rel Hum_% took=0.72s steps=1757 points=8784
+2025-10-05 15:52:20,234 INFO app: Forecast start col=Wind Speed_km/h steps=1757 rows=8784 pct=0.2
+2025-10-05 15:52:21,027 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=1757
+2025-10-05 15:52:21,028 INFO app: Forecast done col=Wind Speed_km/h took=0.79s steps=1757 points=8784
+2025-10-05 15:52:25,554 INFO app: Forecast start col=Visibility_km steps=1757 rows=8784 pct=0.2
+2025-10-05 15:52:26,348 INFO app: Forecast plot ready col=Visibility_km forecast_points=1757
+2025-10-05 15:52:26,349 INFO app: Forecast done col=Visibility_km took=0.80s steps=1757 points=8784
+2025-10-05 15:52:30,579 INFO app: Forecast start col=Press_kPa steps=1757 rows=8784 pct=0.2
+2025-10-05 15:52:31,339 INFO app: Forecast plot ready col=Press_kPa forecast_points=1757
+2025-10-05 15:52:31,340 INFO app: Forecast done col=Press_kPa took=0.76s steps=1757 points=8784
+2025-10-05 15:52:35,822 INFO app: Static forecast_plots count: 12
+2025-10-05 15:52:35,823 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 15:52:35,824 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 15:52:35,824 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 15:52:35,826 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 15:52:35,826 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 15:52:35,827 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 15:52:35,828 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 15:52:35,828 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 15:52:35,829 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 15:52:35,830 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 15:52:35,830 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 15:52:35,831 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 15:52:35,880 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=31.78s cols=7
+2025-10-05 15:52:35,888 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:52:35] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.20&contamination=0.02&view=forecast HTTP/1.1" 200 -
+2025-10-05 15:56:50,280 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:56:53,674 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:57:04,764 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:57:14,654 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:57:50,017 INFO app: Attempting to configure AI...
+2025-10-05 15:57:50,024 INFO app: AI configured successfully.
+2025-10-05 15:57:50,048 INFO app: Talisman enabled.
+2025-10-05 15:57:50,063 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:57:50,064 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:57:50,110 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:57:50,125 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 15:57:53,062 INFO app: Attempting to configure AI...
+2025-10-05 15:57:53,107 INFO app: AI configured successfully.
+2025-10-05 15:57:53,143 INFO app: Talisman enabled.
+2025-10-05 15:57:53,193 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:57:53,196 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:57:53,265 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:57:53,298 INFO werkzeug:  * Debugger PIN: 993-719-916
+2025-10-05 15:58:19,974 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:58:20,410 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 15:58:22,260 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:58:22,661 INFO werkzeug:  * Restarting with stat
+2025-10-05 15:58:46,359 INFO app: Attempting to configure AI...
+2025-10-05 15:58:46,361 INFO app: AI configured successfully.
+2025-10-05 15:58:46,372 INFO app: Attempting to configure AI...
+2025-10-05 15:58:46,373 INFO app: AI configured successfully.
+2025-10-05 15:58:46,377 INFO app: Talisman enabled.
+2025-10-05 15:58:46,383 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:58:46,384 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:58:46,396 INFO app: Talisman enabled.
+2025-10-05 15:58:46,405 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 15:58:46,407 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 15:58:46,440 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:58:46,447 WARNING werkzeug:  * Debugger is active!
+2025-10-05 15:58:46,458 INFO werkzeug:  * Debugger PIN: 993-719-916
+2025-10-05 15:58:50,322 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:58:50] "GET / HTTP/1.1" 200 -
+2025-10-05 15:59:28,139 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 15:59:28] "POST / HTTP/1.1" 302 -
+2025-10-05 15:59:29,224 INFO app: Forecast start col=Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:59:30,705 INFO app: Forecast plot ready col=Temp_C forecast_points=1757
+2025-10-05 15:59:30,706 INFO app: Forecast done col=Temp_C took=1.48s steps=1757 points=8784
+2025-10-05 15:59:36,172 INFO app: Forecast start col=Dew Point Temp_C steps=1757 rows=8784 pct=0.2
+2025-10-05 15:59:36,866 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=1757
+2025-10-05 15:59:36,867 INFO app: Forecast done col=Dew Point Temp_C took=0.70s steps=1757 points=8784
+2025-10-05 15:59:42,212 INFO app: Forecast start col=Rel Hum_% steps=1757 rows=8784 pct=0.2
+2025-10-05 15:59:43,363 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=1757
+2025-10-05 15:59:43,366 INFO app: Forecast done col=Rel Hum_% took=1.15s steps=1757 points=8784
+2025-10-05 15:59:48,346 INFO app: Forecast start col=Wind Speed_km/h steps=1757 rows=8784 pct=0.2
+2025-10-05 15:59:49,204 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=1757
+2025-10-05 15:59:49,205 INFO app: Forecast done col=Wind Speed_km/h took=0.86s steps=1757 points=8784
+2025-10-05 15:59:54,313 INFO app: Forecast start col=Visibility_km steps=1757 rows=8784 pct=0.2
+2025-10-05 15:59:55,236 INFO app: Forecast plot ready col=Visibility_km forecast_points=1757
+2025-10-05 15:59:55,236 INFO app: Forecast done col=Visibility_km took=0.92s steps=1757 points=8784
+2025-10-05 16:00:00,367 INFO app: Forecast start col=Press_kPa steps=1757 rows=8784 pct=0.2
+2025-10-05 16:00:01,311 INFO app: Forecast plot ready col=Press_kPa forecast_points=1757
+2025-10-05 16:00:01,312 INFO app: Forecast done col=Press_kPa took=0.95s steps=1757 points=8784
+2025-10-05 16:00:13,867 INFO app: Using Gemini model: models/gemini-2.5-flash
+2025-10-05 16:00:44,320 INFO app: Static forecast_plots count: 12
+2025-10-05 16:00:44,320 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 16:00:44,321 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 16:00:44,322 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 16:00:44,322 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 16:00:44,323 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 16:00:44,323 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 16:00:44,324 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 16:00:44,324 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 16:00:44,325 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 16:00:44,325 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 16:00:44,326 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 16:00:44,327 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 16:00:44,391 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=75.89s cols=7
+2025-10-05 16:00:44,521 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 16:00:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.20&contamination=0.02&view=forecast HTTP/1.1" 200 -
+2025-10-05 16:02:06,464 INFO app: Forecast start col=Temp_C steps=1318 rows=8784 pct=0.15
+2025-10-05 16:02:08,750 INFO app: Forecast plot ready col=Temp_C forecast_points=1318
+2025-10-05 16:02:08,751 INFO app: Forecast done col=Temp_C took=2.29s steps=1318 points=8784
+2025-10-05 16:02:13,401 INFO app: Forecast start col=Dew Point Temp_C steps=1318 rows=8784 pct=0.15
+2025-10-05 16:02:14,190 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=1318
+2025-10-05 16:02:14,192 INFO app: Forecast done col=Dew Point Temp_C took=0.79s steps=1318 points=8784
+2025-10-05 16:02:19,024 INFO app: Forecast start col=Rel Hum_% steps=1318 rows=8784 pct=0.15
+2025-10-05 16:02:19,838 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=1318
+2025-10-05 16:02:19,839 INFO app: Forecast done col=Rel Hum_% took=0.82s steps=1318 points=8784
+2025-10-05 16:02:24,429 INFO app: Forecast start col=Wind Speed_km/h steps=1318 rows=8784 pct=0.15
+2025-10-05 16:02:25,203 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=1318
+2025-10-05 16:02:25,203 INFO app: Forecast done col=Wind Speed_km/h took=0.77s steps=1318 points=8784
+2025-10-05 16:02:29,948 INFO app: Forecast start col=Visibility_km steps=1318 rows=8784 pct=0.15
+2025-10-05 16:02:30,817 INFO app: Forecast plot ready col=Visibility_km forecast_points=1318
+2025-10-05 16:02:30,817 INFO app: Forecast done col=Visibility_km took=0.87s steps=1318 points=8784
+2025-10-05 16:02:37,131 INFO app: Forecast start col=Press_kPa steps=1318 rows=8784 pct=0.15
+2025-10-05 16:02:38,008 INFO app: Forecast plot ready col=Press_kPa forecast_points=1318
+2025-10-05 16:02:38,009 INFO app: Forecast done col=Press_kPa took=0.88s steps=1318 points=8784
+2025-10-05 16:02:42,278 INFO app: Static forecast_plots count: 12
+2025-10-05 16:02:42,279 INFO app: Forecast plot: Forecast for Temp_C
+2025-10-05 16:02:42,280 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-10-05 16:02:42,281 INFO app: Forecast plot: Forecast for Dew Point Temp_C
+2025-10-05 16:02:42,281 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-10-05 16:02:42,282 INFO app: Forecast plot: Forecast for Rel Hum_%
+2025-10-05 16:02:42,283 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-10-05 16:02:42,284 INFO app: Forecast plot: Forecast for Wind Speed_km/h
+2025-10-05 16:02:42,284 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-10-05 16:02:42,285 INFO app: Forecast plot: Forecast for Visibility_km
+2025-10-05 16:02:42,285 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-10-05 16:02:42,286 INFO app: Forecast plot: Forecast for Press_kPa
+2025-10-05 16:02:42,287 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-10-05 16:02:42,348 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=36.73s cols=7
+2025-10-05 16:02:42,362 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 16:02:42] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.15&contamination=0.02&view=forecast HTTP/1.1" 200 -
