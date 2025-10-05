@@ -27079,3 +27079,90 @@ Please retry in 4.734442534s. [violations {
 2025-10-05 22:08:37,062 INFO app: Forecast plot: STL decomposition for Press_kPa
 2025-10-05 22:08:37,100 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=23.51s cols=7
 2025-10-05 22:08:37,188 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:08:37] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive&forecast_pct=0.10 HTTP/1.1" 200 -
+2025-10-05 22:13:52,655 INFO app: Static forecast_plots count: 0
+2025-10-05 22:13:52,721 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=10.71s cols=7
+2025-10-05 22:13:52,784 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:13:52] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview&forecast_pct=0.10 HTTP/1.1" 200 -
+2025-10-05 22:14:44,982 INFO app: Static forecast_plots count: 0
+2025-10-05 22:14:45,008 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=4.46s cols=7
+2025-10-05 22:14:45,011 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:14:45] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-10-05 22:19:33,094 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 22:19:39,738 INFO werkzeug:  * Restarting with stat
+2025-10-05 22:19:58,783 INFO app: Attempting to configure AI...
+2025-10-05 22:19:58,784 INFO app: AI configured successfully.
+2025-10-05 22:19:58,805 INFO app: Talisman enabled.
+2025-10-05 22:19:58,813 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 22:19:58,815 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 22:19:58,856 WARNING werkzeug:  * Debugger is active!
+2025-10-05 22:19:58,867 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 22:20:11,724 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 22:20:15,065 INFO werkzeug:  * Restarting with stat
+2025-10-05 22:20:32,455 INFO app: Attempting to configure AI...
+2025-10-05 22:20:32,466 INFO app: AI configured successfully.
+2025-10-05 22:20:32,507 INFO app: Talisman enabled.
+2025-10-05 22:20:32,516 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 22:20:32,517 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 22:20:32,597 WARNING werkzeug:  * Debugger is active!
+2025-10-05 22:20:32,619 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 22:20:52,206 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 22:20:52,981 INFO werkzeug:  * Restarting with stat
+2025-10-05 22:21:20,665 INFO app: Attempting to configure AI...
+2025-10-05 22:21:20,672 INFO app: AI configured successfully.
+2025-10-05 22:21:20,695 INFO app: Talisman enabled.
+2025-10-05 22:21:20,703 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 22:21:20,704 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 22:21:20,777 WARNING werkzeug:  * Debugger is active!
+2025-10-05 22:21:20,798 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 22:21:21,155 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:21:21] "GET / HTTP/1.1" 200 -
+2025-10-05 22:22:59,331 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:22:59] "POST / HTTP/1.1" 302 -
+2025-10-05 22:23:11,813 INFO app: Using Gemini model: models/gemini-2.5-flash
+2025-10-05 22:23:57,090 INFO app: Static forecast_plots count: 0
+2025-10-05 22:23:57,168 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=57.41s cols=7
+2025-10-05 22:23:57,239 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:23:57] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-10-05 22:25:50,499 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 22:25:55,753 INFO werkzeug:  * Restarting with stat
+2025-10-05 22:26:26,975 INFO app: Attempting to configure AI...
+2025-10-05 22:26:27,018 INFO app: AI configured successfully.
+2025-10-05 22:26:27,101 INFO app: Talisman enabled.
+2025-10-05 22:26:27,116 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 22:26:27,119 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 22:26:27,196 WARNING werkzeug:  * Debugger is active!
+2025-10-05 22:26:27,349 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 22:27:06,509 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 22:27:09,516 INFO werkzeug:  * Restarting with stat
+2025-10-05 22:27:47,063 INFO app: Attempting to configure AI...
+2025-10-05 22:27:47,112 INFO app: AI configured successfully.
+2025-10-05 22:27:47,191 INFO app: Talisman enabled.
+2025-10-05 22:27:47,263 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 22:27:47,358 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 22:27:47,972 WARNING werkzeug:  * Debugger is active!
+2025-10-05 22:27:48,078 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 22:29:17,694 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 22:29:23,358 INFO werkzeug:  * Restarting with stat
+2025-10-05 22:29:48,093 INFO app: Attempting to configure AI...
+2025-10-05 22:29:48,100 INFO app: AI configured successfully.
+2025-10-05 22:29:48,122 INFO app: Talisman enabled.
+2025-10-05 22:29:48,132 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 22:29:48,134 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 22:29:48,178 WARNING werkzeug:  * Debugger is active!
+2025-10-05 22:29:48,207 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 22:30:28,401 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-10-05 22:30:29,580 INFO werkzeug:  * Restarting with stat
+2025-10-05 22:31:03,328 INFO app: Attempting to configure AI...
+2025-10-05 22:31:03,331 INFO app: AI configured successfully.
+2025-10-05 22:31:03,344 INFO app: Talisman enabled.
+2025-10-05 22:31:03,350 INFO app: Rate limiting enabled: 120/hour
+2025-10-05 22:31:03,351 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-10-05 22:31:03,391 WARNING werkzeug:  * Debugger is active!
+2025-10-05 22:31:03,414 INFO werkzeug:  * Debugger PIN: 711-139-783
+2025-10-05 22:31:50,883 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:31:50] "GET / HTTP/1.1" 200 -
+2025-10-05 22:32:04,617 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:32:04] "POST / HTTP/1.1" 302 -
+2025-10-05 22:32:22,339 INFO app: Using Gemini model: models/gemini-2.5-flash
+2025-10-05 22:33:11,009 INFO app: Static forecast_plots count: 0
+2025-10-05 22:33:11,146 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=66.00s cols=7
+2025-10-05 22:33:11,336 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:33:11] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2025-10-05 22:33:59,768 INFO app: Static forecast_plots count: 0
+2025-10-05 22:33:59,817 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=6.86s cols=7
+2025-10-05 22:33:59,821 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:33:59] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -
+2025-10-05 22:36:46,962 INFO app: Static forecast_plots count: 0
+2025-10-05 22:36:47,020 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=7.56s cols=7
+2025-10-05 22:36:47,031 INFO werkzeug: 127.0.0.1 - - [05/Oct/2025 22:36:47] "POST /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview HTTP/1.1" 200 -

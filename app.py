@@ -685,27 +685,62 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
     except Exception:
         df_desc = ""
     prompt = (
-        "You are an expert data analyst. Produce a comprehensive yet efficient HTML summary of the dataset. "
-        "Respond strictly in HTML (no Markdown) using <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, <em>. "
-        "Structure the answer into clearly separated thematic sections in this order: "
-        "1. Overview (what the dataset appears to capture, size, time span if temporal). "
-        "2. Data Quality (missing data, constant columns, suspected data quality issues, outliers). "
-        "3. Key Descriptive Insights (distributions, central tendencies, notable ratios or segments). "
-        "4. Temporal / Seasonal Patterns (only if time indexed: trends, seasonality, volatility). "
-        "5. Correlations & Relationships (highlight strongest positive and negative numeric relationships). "
-        "6. Anomalies & Irregularities (potential abnormal spikes / dips). "
-        "7. Prognostics & Future Tendencies (infer plausible directional trends or risk areas—be cautious and qualify uncertainty). "
-        "8. Actionable Observations (succinct bullet recommendations or next analytical steps). "
-        "9. Caveats & Limitations (sampling bias, data sparsity, interpretability constraints). "
-        "Keep language analytical, neutral, and avoid marketing tone. Always cite concrete numbers (counts, min/median/max, % missing) where useful. "
-        "If a section does not apply, include the heading with a short note (e.g., '<p><strong>Temporal / Seasonal Patterns:</strong> Not applicable (no datetime index).</p>'). "
-        "Do NOT hallucinate fields absent from context.\n\n"
+        "You are a senior data analyst with expertise in statistical analysis and predictive insights. "
+        "Produce a comprehensive, insightful HTML analysis of this dataset. "
+        "Respond strictly in HTML (no Markdown) using <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, <em>, <h3> for section headers. "
+        "Structure your analysis into clearly separated sections with headers:\n\n"
+        
+        "<h3>📊 Dataset Overview</h3>\n"
+        "Describe what this dataset captures, its size (rows × columns), time span if temporal, and primary purpose/domain.\n\n"
+        
+        "<h3>🔍 Data Quality Assessment</h3>\n"
+        "Analyze: missing values (% per key columns), constant/near-constant columns, data types, suspected quality issues, "
+        "duplicate records, outliers. Rate overall quality (Excellent/Good/Fair/Poor) with brief justification.\n\n"
+        
+        "<h3>📈 Key Statistical Insights</h3>\n"
+        "Provide distributions (mean, median, std dev), ranges (min/max), skewness. Identify interesting patterns, "
+        "dominant segments, notable ratios. Use concrete numbers. Highlight any surprising findings.\n\n"
+        
+        "<h3>⏱️ Temporal Patterns & Trends</h3>\n"
+        "If time-indexed: identify trends (upward/downward/stable), seasonality (daily/weekly/monthly cycles), "
+        "volatility periods, growth rates. If not temporal, state '<p>Not applicable (no datetime index).</p>'\n\n"
+        
+        "<h3>🔗 Correlations & Relationships</h3>\n"
+        "Highlight strongest positive and negative correlations (cite correlation coefficients). "
+        "Explain what these relationships might indicate. Identify potential causal links vs. coincidences.\n\n"
+        
+        "<h3>⚠️ Anomalies & Irregularities</h3>\n"
+        "Flag unusual spikes, dips, gaps, or inconsistencies. Estimate their severity and potential causes. "
+        "If none found, state clearly.\n\n"
+        
+        "<h3>🔮 Prognosis & Future Outlook</h3>\n"
+        "Based on observed trends and patterns, what are plausible future directions? Identify: "
+        "expected continuations, potential risks, growth/decline scenarios. Be specific but qualify uncertainty. "
+        "State confidence level (high/medium/low) for each prediction.\n\n"
+        
+        "<h3>💡 Actionable Observations</h3>\n"
+        "Provide 3-5 concrete, prioritized recommendations for: data collection improvements, further analyses, "
+        "decision-making insights, or intervention points. Use bullet points.\n\n"
+        
+        "<h3>⚠️ Limitations & Caveats</h3>\n"
+        "Acknowledge: sampling biases, data sparsity, interpretability constraints, assumptions made, "
+        "or factors that could invalidate conclusions.\n\n"
+        
+        "Guidelines:\n"
+        "- Be analytical and precise—cite concrete numbers (counts, percentages, ranges, correlation coefficients)\n"
+        "- Focus on conclusions and insights, not just descriptions\n"
+        "- Explain the 'so what'—why findings matter\n"
+        "- Be honest about uncertainty\n"
+        "- Avoid jargon; explain technical terms briefly\n"
+        "- Do NOT hallucinate fields or values not in the context\n"
+        "- Keep professional tone; avoid marketing language\n\n"
+        
         "Context:\n" + df_desc + ("\n\nAdditional context:\n" + extra_context if extra_context else "")
     )
 
     gen_cfg = {
-        "max_output_tokens": 3072,
-        "temperature": 0.35,
+        "max_output_tokens": 16384,
+        "temperature": 0.4,
         "top_p": 0.95,
         "top_k": 40,
         "response_mime_type": "text/plain",
