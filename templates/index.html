@@ -88,8 +88,14 @@
           </label>
           <fieldset>
             <legend>Options</legend>
-            <label>Forecast horizon (steps)
-              <input type="number" name="forecast_horizon" min="10" max="240" value="40" />
+            <label>Forecast horizon (% of dataset)
+              <select name="forecast_pct" title="Future forecast length as a percent of total rows (approximate)">
+                <option value="0.03">3%</option>
+                <option value="0.05">5%</option>
+                <option value="0.10" selected>10%</option>
+                <option value="0.15">15%</option>
+                <option value="0.20">20%</option>
+              </select>
             </label>
             <label>Anomaly contamination (0.001–0.2)
               <input type="number" step="0.001" min="0.001" max="0.2" name="contamination" value="0.02" />

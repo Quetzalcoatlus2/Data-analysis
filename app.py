@@ -1,4 +1,5 @@
 import os
+import math
 import io
 import base64
 import zipfile
@@ -35,7 +36,10 @@ from collections import OrderedDict
 import re
 import html as htmllib  
 import math  
+from flask import Flask
 
+
+app = Flask(__name__)
 
 try:
     from flask_limiter import Limiter  
@@ -47,14 +51,12 @@ try:
 except Exception:
     Talisman = None
 
-warnings.filterwarnings("ignore", category=UserWarning)
-
 UPLOAD_FOLDER = 'datasets'
 ALLOWED_EXTENSIONS = {'txt', 'csv', 'xlsx', 'json'}
 
-app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['UPLOADS_SUBDIR'] = os.getenv("UPLOADS_SUBDIR", "uploaded")
+# Ensure an uploads subdirectory exists/configured
+app.config.setdefault('UPLOADS_SUBDIR', 'uploaded')
 app.config['UPLOADS_DIR'] = os.path.join(app.config['UPLOAD_FOLDER'], app.config['UPLOADS_SUBDIR'])
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY") or "dev-secret-change-me"
 app.config['DELETE_UPLOADED_AFTER_PROCESSING'] = os.getenv("DELETE_UPLOADED_AFTER_PROCESSING", "true").strip().lower() in ("1", "true", "yes", "on")
@@ -66,12 +68,13 @@ if "UPLOAD_RETENTION_DAYS" in os.environ:
 
 app.config.setdefault('MAX_CACHE_ITEMS', int(os.getenv("MAX_CACHE_ITEMS", "6")))
 app.config.setdefault('DEFAULT_FORECAST_STEPS', int(os.getenv("DEFAULT_FORECAST_STEPS", "30")))
-app.config.setdefault('DEFAULT_CONTAMINATION', float(os.getenv("DEFAULT_CONTAMINATION", "0.02")))
+
 app.config.setdefault('PLOTLY_TAIL', int(os.getenv("PLOTLY_TAIL", "800")))
 app.config.setdefault('AI_TIMEOUT_SECONDS', int(os.getenv("AI_TIMEOUT_SECONDS", "30")))
 app.config.setdefault('AI_RETRY_ATTEMPTS', int(os.getenv("AI_RETRY_ATTEMPTS", "2")))
 app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACKOFF_SECONDS", "2.0")))
-
+app.config.setdefault('FORECAST_MAX_INPUT_POINTS', int(os.getenv('FORECAST_MAX_INPUT_POINTS', '4000')))
+app.config.setdefault('FORECAST_BOOTSTRAP_SAMPLES', int(os.getenv('FORECAST_BOOTSTRAP_SAMPLES', '60')))
 import logging
 import re
 from logging.handlers import RotatingFileHandler
@@ -111,7 +114,7 @@ DEFAULT_AI_MODEL = (
     os.getenv("GENAI_MODEL")
     or os.getenv("GOOGLE_MODEL")
     # Prefer a free-tier-friendly default when no env override is provided
-    or "models/gemini-1.5-flash"
+    or "models/gemini-2.5-flash"
 )
 MODEL_CACHE = {}
 CURRENT_MODEL_NAME = None
@@ -401,8 +404,12 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
 
             if i < attempts:
                 try:
-                    # Exponential backoff with a small jitter
+                    # Exponential backoff with longer wait for rate limits
                     sleep_s = backoff * (i + 1)
+                    # If rate-limited, wait much longer before retry
+                    if is_rate:
+                        sleep_s = max(sleep_s, 10 * (i + 1))  # Minimum 10s, 20s, 30s...
+                        app.logger.info("Rate limit detected, waiting %.1f seconds before retry...", sleep_s)
                     time.sleep(sleep_s)
                 except Exception:
                     pass
@@ -411,9 +418,10 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
             raise last_err
 
 class TinyLRU(OrderedDict):
-    def __init__(self, max_items=6):
+    def __init__(self, max_items=6, max_size_mb=None):
         super().__init__()
         self.max_items = max_items
+        self.max_size_mb = max_size_mb  # optional size limit in MB
     def get(self, key, default=None):
         if key in self:
             val = super().pop(key)
@@ -424,16 +432,29 @@ class TinyLRU(OrderedDict):
         if key in self:
             super().pop(key)
         super().__setitem__(key, value)
+        # Evict based on item count
         while len(self) > self.max_items:
             self.popitem(last=False)
+        # Evict based on size (for DataFrames)
+        if self.max_size_mb:
+            try:
+                import sys
+                total_bytes = sum(sys.getsizeof(v) for v in self.values() if v is not None)
+                while total_bytes > (self.max_size_mb * 1024 * 1024) and len(self) > 1:
+                    self.popitem(last=False)
+                    total_bytes = sum(sys.getsizeof(v) for v in self.values() if v is not None)
+            except Exception:
+                pass  # If size calculation fails, rely on item count limit only
 
-DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'])  
+DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'], max_size_mb=int(os.getenv('DATAFRAME_CACHE_MAX_MB', '200')))
 NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  
-app.config['AI_FULL_UPLOAD_MAX_MB'] = 5  
+# Allow configuration of file upload size limit to Gemini (smaller = faster, less timeout risk)
+app.config['AI_FULL_UPLOAD_MAX_MB'] = int(os.getenv('AI_FULL_UPLOAD_MAX_MB', '5'))  
 AI_FILE_MAP = {}  
 ORIGINAL_NAME_MAP = {}  
 AI_SUMMARY_CACHE = {}
 QNA_CACHE = TinyLRU(max_items=50)
+FORECAST_CACHE = TinyLRU(max_items=32)
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -460,16 +481,27 @@ def _save_name_map():
         app.logger.warning("Name map save warning: %s", e)
 
 def _safe_delete(path, retries=3, delay=0.2):
-    """Delete a file with small retries to tolerate transient locks (e.g., OneDrive/AV)."""
+    """Delete a file with small retries to tolerate transient locks (e.g., OneDrive/AV).
+    Returns tuple (success: bool, error_message: str | None)
+    """
     for i in range(retries):
         try:
             if os.path.exists(path):
                 os.remove(path)
-            return True
+            return True, None
+        except PermissionError as e:
+            app.logger.warning("Delete failed (permission denied %s), attempt %d/%d: %s", path, i + 1, retries, e)
+            if i < retries - 1:
+                time.sleep(delay)
+            else:
+                return False, f"Permission denied (file may be locked by OneDrive or antivirus)"
         except Exception as e:
             app.logger.warning("Delete failed (%s), attempt %d/%d: %s", path, i + 1, retries, e)
-            time.sleep(delay)
-    return False
+            if i < retries - 1:
+                time.sleep(delay)
+            else:
+                return False, str(e)
+    return False, "File deletion failed after retries"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(app.config['UPLOADS_DIR'], exist_ok=True)
@@ -793,7 +825,7 @@ Question:
 """.strip()
 
         resp = _call_gemini(prompt, file_asset=file_asset, generation_config={
-            "max_output_tokens": 896,
+            "max_output_tokens": 2048,
             "temperature": 0.3,
             "top_p": 0.95,
             "top_k": 40,
@@ -848,28 +880,39 @@ Question:
             d = _diagnose_gemini_response(resp)
             return offline_answer(df, question, error=("Empty AI response" + (f" ({d})" if d else "")))
 
-        # If truncated, try a brief continuation
+        # If truncated, try a continuation to complete the answer
         try:
             fr = _get_finish_reason(resp)
             if isinstance(fr, str) and "MAX_TOKENS" in fr:
+                app.logger.info("Q&A response truncated (MAX_TOKENS), attempting continuation...")
                 cont_prompt = (
                     "Continue the same HTML answer to the user's question. Do not repeat previous text. "
                     "Only output valid HTML fragments (<p>, <ul><li>, <table>).\n\n"
                     f"Question: {question}\n"
                     f"Previous tail for context (do not repeat):\n{text[-900:]}"
                 )
-                cont = _call_gemini(cont_prompt, file_asset=file_asset, generation_config={
-                    "max_output_tokens": 512,
-                    "temperature": 0.25,
-                    "top_p": 0.95,
-                    "top_k": 40,
-                    "response_mime_type": "text/plain",
-                })
-                more = _extract_text_from_gemini_response(cont).strip()
-                if more:
-                    text = text + "\n" + more
+                try:
+                    cont = _call_gemini(cont_prompt, file_asset=file_asset, generation_config={
+                        "max_output_tokens": 1536,
+                        "temperature": 0.25,
+                        "top_p": 0.95,
+                        "top_k": 40,
+                        "response_mime_type": "text/plain",
+                    })
+                    more = _extract_text_from_gemini_response(cont).strip()
+                    if more:
+                        text = text + "\n" + more
+                        app.logger.info("Q&A continuation successful")
+                    else:
+                        app.logger.warning("Q&A continuation returned empty, using truncated response")
+                        # Add notice that response was truncated
+                        text = text + "\n<p><em>(Response was truncated due to length)</em></p>"
+                except Exception as cont_err:
+                    app.logger.warning("Q&A continuation failed: %s, using truncated response", cont_err)
+                    # Add notice that response was truncated
+                    text = text + "\n<p><em>(Response was truncated due to length)</em></p>"
         except Exception as ce:
-            app.logger.info("Q&A continuation skipped: %s", ce)
+            app.logger.info("Q&A continuation check skipped: %s", ce)
 
         html = sanitize_ai_html(text)
         try:
@@ -919,7 +962,14 @@ def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
         n = len(s)
         if max_points and max_points > 0 and n > max_points:
             step = max(1, n // max_points)
-            return s.iloc[::step]
+            out = s.iloc[::step]
+            # Ensure the last point is included for continuity
+            try:
+                if out.index[-1] != s.index[-1]:
+                    out = pd.concat([out, s.iloc[[-1]]])
+            except Exception:
+                pass
+            return out
         return s
     except Exception:
         return s
@@ -947,6 +997,48 @@ def _ensure_plot_dicts(items):
         except Exception:
             continue
     return out
+
+def normalize_timeseries(series: pd.Series) -> pd.Series:
+    """
+    Ensure a numeric series with a clean, timezone-naive, sorted DatetimeIndex when possible.
+    - Coerces values to numeric and drops NaNs.
+    - If index is DatetimeIndex, make it tz-naive, sort it, and drop duplicate index entries (keep last).
+    - Otherwise, return the numeric series as-is.
+    """
+    try:
+        s = pd.to_numeric(series, errors='coerce').dropna()
+    except Exception:
+        try:
+            s = pd.Series(series).dropna()
+        except Exception:
+            return series
+    try:
+        idx = s.index
+        if isinstance(idx, pd.DatetimeIndex):
+            try:
+                idx = idx.tz_convert(None)
+            except Exception:
+                try:
+                    idx = idx.tz_localize(None)
+                except Exception:
+                    pass
+            try:
+                s = s.copy()
+                s.index = idx
+            except Exception:
+                pass
+            try:
+                s = s.sort_index()
+            except Exception:
+                pass
+            try:
+                if not s.index.is_unique:
+                    s = s[~s.index.duplicated(keep='last')]
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return s
 
 def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
     try:
@@ -1074,20 +1166,191 @@ def _recent_slope_forecast(series, steps, window=None, damping=None):
     ci.columns = ['lower', 'upper']
     return fc_mean, ci
 
+def _pattern_replay_forecast(series: pd.Series, steps: int, seasonal_period: int, noise_scale: float = 0.15):
+    """Replay the most recent seasonal cycle increments to build a natural forecast.
+    - Use last seasonal_period points as a template; compute cyclic diffs; iterate to build future.
+    - Add light jitter from recent residual distribution to avoid a perfectly repeated path.
+    Returns (forecast_series, conf_df approx) with a simple CI from recent std.
+    """
+    try:
+        y = pd.to_numeric(series, errors='coerce').dropna()
+        n = len(y)
+        sp = int(seasonal_period)
+        if n < max(8, sp + 3) or sp < 2:
+            return _recent_slope_forecast(series, steps, window=None, damping=None)
+        base = y.iloc[-sp:]
+        inc = np.diff(base.values, prepend=base.values[0])  # first diff 0, then increments
+
+        # residuals around a local smoothing to get jitter scale and drift
+        w = max(sp, min(200, n//3))
+        y_win = y.tail(w)
+        x = np.arange(len(y_win), dtype=float)
+        slope_lr, intercept = np.polyfit(x, y_win.values, 1)
+        fit = slope_lr * x + intercept
+        resid = (y_win.values - fit)
+        rs = float(np.nanstd(resid, ddof=1))
+        jitter = rs * float(noise_scale)
+        # light drift to follow recent trend without dominating pattern
+        drift = float(slope_lr) * 0.25
+
+        vals = []
+        cur = y.iloc[-1]
+        for k in range(steps):
+            d = inc[(k + 1) % sp]
+            if np.isfinite(jitter) and jitter > 0:
+                # light jitter from residuals distribution
+                noise = np.random.normal(0.0, jitter)
+            else:
+                noise = 0.0
+            cur = cur + d + drift + noise
+            vals.append(cur)
+        future_idx = _infer_future_index(y.index, steps)
+        fc = pd.Series(vals, index=future_idx)
+        # Simple CI from residual std
+        lower = fc - 1.96 * rs
+        upper = fc + 1.96 * rs
+        ci = pd.concat([lower, upper], axis=1)
+        ci.columns = ['lower', 'upper']
+        return fc, ci
+    except Exception:
+        return _recent_slope_forecast(series, steps, window=None, damping=None)
+
+def _forecast_natural(series: pd.Series, steps: int):
+    """Simple, natural forecast that reuses portions of actual data.
+    Strategy:
+      - Compute recent increments (diffs) from a trailing window.
+      - If a seasonal period is detectable (datetime index), replay the last seasonal increments cyclically.
+        Otherwise, replay the last K increments cyclically.
+      - Add small AR(1) noise proportional to increment volatility to avoid flatlines.
+      - Start from the last observed value (hard continuity).
+      - Apply a light envelope clip based on recent quantiles to avoid extremes.
+      - Build a basic constant-width CI from increment volatility.
+    """
+    try:
+        y = pd.to_numeric(series, errors='coerce').dropna()
+        n = len(y)
+        future_idx = _infer_future_index(series.index, steps)
+        if n < 3:
+            fc_mean = pd.Series([y.iloc[-1] if n else 0.0] * steps, index=future_idx)
+            ci = pd.DataFrame({"lower": fc_mean.copy(), "upper": fc_mean.copy()})
+            return fc_mean, ci
+
+        # Choose a trailing window
+        w = min(n, max(30, n // 3))
+        tail = y.iloc[-w:]
+        diffs = np.diff(tail.values)
+        if diffs.size == 0:
+            fc_mean = pd.Series([y.iloc[-1]] * steps, index=future_idx)
+            ci = pd.DataFrame({"lower": fc_mean.copy(), "upper": fc_mean.copy()})
+            return fc_mean, ci
+
+        # Prefer seasonal template when available
+        sp = _infer_seasonal_period(y.index) if isinstance(y.index, pd.DatetimeIndex) else None
+        if isinstance(sp, int) and sp >= 2 and n >= sp + 3:
+            # last sp+1 points to compute sp increments
+            recent = y.iloc[-(sp + 1):].values.astype(float)
+            template = np.diff(recent)  # length sp
+            if template.size < 2:
+                template = diffs[-min(len(diffs), max(8, steps)):]  # fallback
+        else:
+            K = min(steps, max(8, min(60, len(diffs))))
+            template = diffs[-K:]
+
+        # Build increments by cycling the template
+        incs = np.resize(template, steps).astype(float)
+
+        # AR(1) noise proportional to increment volatility; slightly scale with horizon
+        inc_std = float(np.nanstd(diffs, ddof=1)) if diffs.size else 0.0
+        hf = float(steps) / max(1.0, float(n))
+        sigma = (0.18 + 0.22 * min(1.0, hf)) * inc_std if (np.isfinite(inc_std) and inc_std > 0) else 0.0
+        rho = 0.6
+        if sigma > 0:
+            e = np.zeros(steps, dtype=float)
+            for i in range(steps):
+                shock = np.random.normal(0.0, sigma)
+                e[i] = (rho * (e[i-1] if i > 0 else 0.0)) + shock
+            incs = incs + e
+
+        # Integrate increments starting from last value (continuity)
+        vals = float(y.iloc[-1]) + np.cumsum(incs)
+        fc = pd.Series(vals, index=future_idx)
+        if len(fc) > 0:
+            fc.iloc[0] = float(y.iloc[-1])
+
+        # Light envelope clip based on recent quantiles + pad
+        try:
+            lo, hi = np.quantile(tail.values, [0.02, 0.98])
+        except Exception:
+            lo, hi = float(np.min(tail.values)), float(np.max(tail.values))
+        rng = float(max(1e-9, hi - lo))
+        pad = 0.2 * rng
+        fc_vals = np.minimum(np.maximum(fc.values.astype(float), lo - pad), hi + pad)
+        fc = pd.Series(fc_vals, index=fc.index)
+
+        # Basic CI from increment volatility
+        sigma_ci = float(np.nanstd(diffs, ddof=1)) if diffs.size else 0.0
+        if not np.isfinite(sigma_ci) or sigma_ci <= 0:
+            sigma_ci = float(np.nanstd(tail.values, ddof=1)) if tail.size else 0.0
+        lower = fc.values.astype(float) - 1.96 * sigma_ci
+        upper = fc.values.astype(float) + 1.96 * sigma_ci
+        ci = pd.DataFrame({"lower": lower, "upper": upper}, index=fc.index)
+        return fc, ci
+    except Exception:
+        return _recent_slope_forecast(series, steps, window=None, damping=None)
+def _seasonality_strength(series: pd.Series, seasonal_period: int | None) -> float:
+    """Estimate strength of seasonality (0..1) using STL-like ratio of seasonal var to total var.
+    Returns 0 if not enough data or invalid inputs.
+    """
+    try:
+        if not isinstance(seasonal_period, int) or seasonal_period < 2:
+            return 0.0
+        y = pd.to_numeric(series, errors='coerce').dropna()
+        n = len(y)
+        if n < seasonal_period * 3:
+            return 0.0
+        # compute a simple moving average baseline to approximate trend
+        w = seasonal_period
+        ma = y.rolling(window=w, center=True, min_periods=max(2, w//2)).mean()
+        detr = (y - ma).dropna()
+        if len(detr) < seasonal_period * 2:
+            return 0.0
+        # seasonal component via last one-period template repeated and mean-removed
+        template = detr.iloc[-seasonal_period:]
+        template = template - template.mean()
+        seasonal = pd.Series(np.resize(template.values, len(detr)), index=detr.index)
+        resid = detr - seasonal
+        var_sea = float(np.nanvar(seasonal.values))
+        var_tot = float(np.nanvar(detr.values)) + 1e-12
+        strength = max(0.0, min(1.0, var_sea / var_tot))
+        return float(strength)
+    except Exception:
+        return 0.0
 def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None):
     fig, ax = plt.subplots(figsize=(10, 4))
 
     history_tail_series = history if not history_tail or history_tail <= 0 else history.tail(history_tail)
+    # History exactly as before: line (no markers)
     history_tail_series.plot(ax=ax, label='History', color='tab:blue', linewidth=1.8)
 
-    forecast_series.plot(
-        ax=ax,
-        label='Forecast',
-        linestyle='--',
+    # Forecast: solid line (no point markers) for clarity on dense plots
+    # Prepend the last history point to ensure visual continuity
+    try:
+        last_x = history_tail_series.index[-1]
+        last_y = float(history_tail_series.iloc[-1])
+        x_plot = [last_x] + list(forecast_series.index)
+        y_plot = [last_y] + list(forecast_series.values.astype(float))
+    except Exception:
+        x_plot = list(forecast_series.index)
+        y_plot = list(forecast_series.values)
+
+    ax.plot(
+        x_plot,
+        y_plot,
+        linestyle='-',
         color='orangered',
-        linewidth=3,
-        marker='o',
-        markersize=3,
+        linewidth=2.6,
+        alpha=0.98,
+        label='Forecast',
         zorder=3
     )
 
@@ -1095,6 +1358,7 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         try:
             lower = conf_int.iloc[:, 0]
             upper = conf_int.iloc[:, 1]
+            # Keep CI bounds aligned with forecast only (do not prepend history point)
             lower.index = forecast_series.index
             upper.index = forecast_series.index
             ax.fill_between(
@@ -1122,7 +1386,14 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         pass
 
     ax.set_title(title)
-    ax.set_xlabel(xlabel)
+    # Use a sensible x-axis label depending on index type
+    try:
+        if isinstance(history_tail_series.index, pd.DatetimeIndex):
+            ax.set_xlabel('Timestamp')
+        else:
+            ax.set_xlabel('Index')
+    except Exception:
+        ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.legend()
     ax.grid(True)
@@ -1133,6 +1404,463 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
     img = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
     return img
+
+def _simple_forecast(series: pd.Series, steps: int):
+    """Simple, robust forecast that tends to mimic recent behavior without extremes.
+    - Robust trend: median of last-window diffs
+    - Optional seasonal template: last seasonal_period values (mean-removed), scaled to residual std
+    - Light noise from residuals
+    - Mild clamp to recent quantile envelope
+    Returns (forecast_series, conf_df) with basic CI from residual std.
+    """
+    try:
+        y = pd.to_numeric(series, errors='coerce').dropna()
+        n = len(y)
+        future_idx = _infer_future_index(y.index, steps)
+        if n < 5:
+            fc_mean = pd.Series([y.iloc[-1] if n else 0.0] * steps, index=future_idx)
+            ci = pd.concat([fc_mean.copy(), fc_mean.copy()], axis=1)
+            ci.columns = ['lower', 'upper']
+            return fc_mean, ci
+
+        w = min(max(24, n // 3), n)
+        y_win = y.iloc[-w:]
+        # Robust slope from diffs
+        diffs = np.diff(y_win.values)
+        slope = float(np.median(diffs)) if len(diffs) else 0.0
+        # Residual std around a simple linear fit (captures volatility)
+        x = np.arange(len(y_win), dtype=float)
+        try:
+            slope_lr, intercept = np.polyfit(x, y_win.values, 1)
+            fit = slope_lr * x + intercept
+        except Exception:
+            fit = np.full_like(y_win.values, y_win.values.mean())
+        resid = (y_win.values - fit)
+        rs = float(np.nanstd(resid, ddof=1))
+        # Also capture increment volatility to keep natural variation
+        inc_std = float(np.nanstd(np.diff(y_win.values), ddof=1)) if len(y_win.values) > 2 else rs
+
+        k = np.arange(1, steps + 1, dtype=float)
+        baseline = y.iloc[-1] + slope * k
+
+        # Seasonal template from last detected period
+        seasonal = np.zeros(steps, dtype=float)
+        sp = _infer_seasonal_period(y.index) if isinstance(y.index, pd.DatetimeIndex) else None
+        if isinstance(sp, int) and sp >= 2 and n >= sp * 2:
+            template = y.iloc[-sp:].values.astype(float)
+            template = template - template.mean()
+            tstd = float(np.nanstd(template, ddof=1))
+            if tstd > 0 and rs > 0:
+                scale = float(np.clip(rs / (tstd + 1e-12), 0.5, 2.5))
+            else:
+                scale = 1.0
+            seasonal = np.resize(template, steps) * scale  # only when template exists
+
+        # Add small correlated noise (AR(1)-like) to avoid flatlining
+        # Increase slightly for longer horizons to preserve natural variability
+        hf = float(steps) / max(1.0, float(n))
+        scale_boost = 1.0 + 0.6 * min(1.0, max(0.0, hf))
+        eps_scale = (inc_std * 0.35 if np.isfinite(inc_std) and inc_std > 0 else (rs * 0.25 if np.isfinite(rs) and rs > 0 else 0.0)) * scale_boost
+        rho = 0.6  # persistence for smooth variation
+        eps = np.zeros(steps, dtype=float)
+        if eps_scale > 0:
+            for i in range(steps):
+                shock = np.random.normal(0.0, eps_scale)
+                eps[i] = (rho * (eps[i-1] if i > 0 else 0.0)) + shock
+        # Optional bootstrap of recent increments to mimic natural variability
+        if len(diffs) >= 4:
+            boot = np.random.choice(diffs, size=steps, replace=True).astype(float)
+            # center and shrink
+            boot = (boot - float(np.mean(boot))) * (0.35 * scale_boost)
+            boot_walk = np.cumsum(boot)
+        else:
+            boot_walk = 0.0
+        fc_vals = baseline + seasonal + eps + boot_walk
+
+        # Mild clamp to recent envelope to avoid extremes but keep amplitude
+        ql, qh = np.quantile(y_win.values, [0.02, 0.98])
+        rng = float(max(1e-9, qh - ql))
+        lo2 = ql - 0.3 * rng
+        hi2 = qh + 0.3 * rng
+        fc_vals = np.clip(fc_vals, lo2, hi2)
+
+        fc_mean = pd.Series(fc_vals, index=future_idx)
+        # Build CI using combined volatility estimate
+        ci_sigma = max(1e-12, float(np.nanstd(resid, ddof=1)))
+        ci = pd.concat([fc_mean - 1.96 * ci_sigma, fc_mean + 1.96 * ci_sigma], axis=1)
+        ci.columns = ['lower', 'upper']
+        return fc_mean, ci
+    except Exception:
+        # Fallback to simple recent-slope if anything goes wrong
+        return _recent_slope_forecast(series, steps, window=None, damping=None)
+def _naturalize_forecast(history: pd.Series, forecast_series: pd.Series, conf_df: pd.DataFrame | None = None,
+                          q_low: float = 0.02, q_high: float = 0.98, pad: float = 0.2):
+    """Constrain forecast to a plausible envelope derived from history.
+    - Compute low/high quantiles of recent history (last 30-50% window).
+    - Add a proportional pad to allow gentle drift.
+    - Clip forecast to [low - pad*range, high + pad*range].
+    - If conf_df present, clip it too.
+    Returns possibly adjusted (forecast_series, conf_df).
+    """
+    try:
+        y = pd.to_numeric(history, errors='coerce').dropna()
+        if len(y) < 5:
+            return forecast_series, conf_df
+        n = len(y)
+        w = max(50, int(n * 0.3))
+        recent = y.tail(min(n, w))
+        lo = float(np.nanquantile(recent.values, max(0.0, min(q_low, 0.49))))
+        hi = float(np.nanquantile(recent.values, min(1.0, max(q_high, 0.51))))
+
+        rng = max(1e-9, hi - lo)
+        # widen pad dynamically according to recent volatility to preserve amplitude
+        vol = float(np.nanstd(recent.values, ddof=1))
+        dyn_pad = pad + 0.5 * (vol / (rng + 1e-12))
+        lo2 = lo - dyn_pad * rng
+        hi2 = hi + dyn_pad * rng
+
+        fc = forecast_series.copy()
+        v = fc.values.astype(float)
+        # Only apply soft-bound outside the envelope, keep inside untouched to avoid flattening
+        mid = (lo2 + hi2) / 2.0
+        half = max(1e-9, (hi2 - lo2) / 2.0)
+        z = (v - mid) / (half * 0.9)
+        v_adj = v.copy()
+        mask_hi = v > hi2
+        mask_lo = v < lo2
+        v_adj[mask_hi] = mid + half * np.tanh(z[mask_hi])
+        v_adj[mask_lo] = mid + half * np.tanh(z[mask_lo])
+        # Respect absolute min/max from history with a soft barrier and gentle reflection to avoid harsh saturation
+        min_abs = float(np.nanmin(y.values))
+        max_abs = float(np.nanmax(y.values))
+        rng_abs = max(1e-9, max_abs - min_abs)
+        # Iterate with barrier near bounds based on distance from previous value
+        out = np.empty_like(v_adj)
+        prev = float(y.iloc[-1])
+        scale = 0.25 * rng_abs
+        # micro-oscillation to avoid long flat segments; use seasonal period if detectable, else a small fixed period
+        try:
+            osc_period = _infer_seasonal_period(y.index) if isinstance(y.index, pd.DatetimeIndex) else None
+        except Exception:
+            osc_period = None
+        base_period = int(osc_period) if isinstance(osc_period, int) and osc_period >= 3 else 10
+        # Scale oscillation amplitude slightly with horizon fraction to avoid late flatlines
+        try:
+            horizon_frac = float(len(fc)) / max(1.0, float(len(y)))
+        except Exception:
+            horizon_frac = 0.0
+        osc_amp = (0.01 + 0.03 * max(0.0, min(1.0, horizon_frac))) * rng_abs
+        for i in range(len(v_adj)):
+            target = float(v_adj[i])
+            step = target - prev
+            # Soft approach to bounds: as prev nears min/max, step is damped but never zero (less damping to avoid flatlines)
+            if step >= 0:
+                dist = max(0.0, max_abs - prev)
+                factor = 0.92 + 0.08 * float(np.tanh(dist / (scale + 1e-12)))  # always >0.92
+                step *= factor
+            else:
+                dist = max(0.0, prev - min_abs)
+                factor = 0.92 + 0.08 * float(np.tanh(dist / (scale + 1e-12)))
+                step *= factor
+            nxt = prev + step
+            # Gentle mean reversion toward mid when very close to edges to prevent sticking
+            edge_closeness = min(max(0.0, (prev - min_abs) / rng_abs), max(0.0, (max_abs - prev) / rng_abs))
+            # edge_closeness is small near edges; use (1 - edge_closeness)
+            reversion_strength = 0.08 * (1.0 - edge_closeness)
+            nxt += reversion_strength * (mid - nxt)
+            # Add micro oscillation
+            try:
+                phase = (i % max(3, base_period)) / float(max(3, base_period))
+                nxt += osc_amp * math.sin(2.0 * math.pi * phase)
+            except Exception:
+                pass
+            # Gentle reflection if outside
+            if nxt > max_abs:
+                over = nxt - max_abs
+                nxt = max_abs - 0.75 * over
+            if nxt < min_abs:
+                over = min_abs - nxt
+                nxt = min_abs + 0.75 * over
+            # Final guard: allow a tiny epsilon outside, but never saturate noticeably
+            eps = 1e-6 * rng_abs
+            if nxt > max_abs + eps:
+                nxt = max_abs + eps
+            if nxt < min_abs - eps:
+                nxt = min_abs - eps
+            out[i] = nxt
+            prev = nxt
+        fc = pd.Series(out, index=fc.index)
+
+        if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
+            c = conf_df.copy()
+            c0 = c.iloc[:, 0].astype(float).values
+            c1 = c.iloc[:, 1].astype(float).values
+            # First apply the same soft envelope mapping
+            z0 = (c0 - mid) / (half * 0.9)
+            z1 = (c1 - mid) / (half * 0.9)
+            c0_adj = c0.copy()
+            c1_adj = c1.copy()
+            c0_adj[c0 > hi2] = mid + half * np.tanh(z0[c0 > hi2])
+            c0_adj[c0 < lo2] = mid + half * np.tanh(z0[c0 < lo2])
+            c1_adj[c1 > hi2] = mid + half * np.tanh(z1[c1 > hi2])
+            c1_adj[c1 < lo2] = mid + half * np.tanh(z1[c1 < lo2])
+            # Then ensure final CI stays within absolute min/max and around the adjusted forecast
+            c0_adj = np.minimum(np.maximum(c0_adj, min_abs), fc.values)
+            c1_adj = np.maximum(np.minimum(c1_adj, max_abs), fc.values)
+            c.iloc[:, 0] = c0_adj
+            c.iloc[:, 1] = c1_adj
+            return fc, c
+        return fc, conf_df
+    except Exception:
+        return forecast_series, conf_df
+
+def _match_amplitude(history: pd.Series, forecast_series: pd.Series, conf_df: pd.DataFrame | None = None,
+                     seasonal_period: int | None = None, min_scale: float = 0.85, max_scale: float = 2.5):
+    """Scale forecast deviations to better match recent history amplitude.
+    - Compute std of recent history increments vs forecast increments.
+    - If forecast variance is too low, scale deviations around a linear baseline.
+    - Adjust conf intervals by same scale.
+    Returns (forecast_series, conf_df).
+    """
+    try:
+        y = pd.to_numeric(history, errors='coerce').dropna()
+        fc = pd.to_numeric(forecast_series, errors='coerce')
+        if len(y) < 6 or len(fc) < 2:
+            return forecast_series, conf_df
+        n = len(y)
+        w = seasonal_period if (isinstance(seasonal_period, int) and seasonal_period >= 2) else max(12, n // 4)
+        y_win = y.tail(min(n, int(w)))
+        hist_diffs = np.diff(y_win.values)
+        fc_diffs = np.diff(fc.values.astype(float))
+        std_hist = float(np.nanstd(hist_diffs, ddof=1)) if len(hist_diffs) else 0.0
+        std_fc = float(np.nanstd(fc_diffs, ddof=1)) if len(fc_diffs) else 0.0
+        if not np.isfinite(std_hist) or not np.isfinite(std_fc) or std_hist <= 0:
+            return forecast_series, conf_df
+        # If forecast is perfectly flat, synthesize deviations from historical increments
+        if std_fc <= 1e-12:
+            rng = np.random.default_rng()
+            incs = rng.choice(hist_diffs, size=len(fc), replace=True).astype(float)
+            incs = incs - np.median(hist_diffs)
+            dev = np.cumsum(incs)
+            x = np.arange(len(fc), dtype=float)
+            slope, intercept = np.polyfit(x, fc.values.astype(float), 1)
+            baseline = slope * x + intercept
+            fc2_vals = baseline + dev
+            fc2 = pd.Series(fc2_vals, index=fc.index)
+            c2 = None
+            if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
+                c2 = conf_df.copy()
+            return fc2, (c2 if c2 is not None else conf_df)
+        ratio = std_hist / (std_fc + 1e-12)
+        # Only scale if forecast is notably flatter than history
+        if ratio < 1.0:
+            return forecast_series, conf_df
+        scale = float(np.clip(ratio, min_scale, max_scale))
+        # Build linear baseline for forecast
+        x = np.arange(len(fc), dtype=float)
+        slope, intercept = np.polyfit(x, fc.values.astype(float), 1)
+        baseline = slope * x + intercept
+        deviations = fc.values.astype(float) - baseline
+        fc_scaled = baseline + scale * deviations
+        fc2 = pd.Series(fc_scaled, index=fc.index)
+        c2 = None
+        if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
+            # Scale CI bounds relative to new center
+            lower = conf_df.iloc[:, 0].values.astype(float)
+            upper = conf_df.iloc[:, 1].values.astype(float)
+            lower_dev = lower - fc.values.astype(float)
+            upper_dev = upper - fc.values.astype(float)
+            lower2 = fc2.values + scale * lower_dev
+            upper2 = fc2.values + scale * upper_dev
+            c2 = pd.DataFrame({"lower": lower2, "upper": upper2}, index=fc.index)
+        return fc2, (c2 if c2 is not None else conf_df)
+    except Exception:
+        return forecast_series, conf_df
+
+def _is_too_quiet(history: pd.Series, forecast: pd.Series, frac: float = 0.5):
+    """True if forecast dynamics (std of diffs) are much smaller than recent history.
+    If std(diff(forecast)) < frac * std(diff(recent history)).
+    """
+    try:
+        h = pd.to_numeric(history, errors='coerce').dropna()
+        f = pd.to_numeric(forecast, errors='coerce').dropna()
+        if len(h) < 6 or len(f) < 3:
+            return False
+        n = len(h)
+        w = max(12, min(200, n // 2))
+        h_win = h.tail(w)
+        std_h = float(np.nanstd(np.diff(h_win.values), ddof=1)) if len(h_win) >= 3 else 0.0
+        std_f = float(np.nanstd(np.diff(f.values), ddof=1)) if len(f) >= 3 else 0.0
+        if not np.isfinite(std_h) or std_h <= 0 or not np.isfinite(std_f):
+            return False
+        return std_f < (frac * std_h)
+    except Exception:
+        return False
+
+def _compute_forecast(series: pd.Series, steps: int):
+    """Natural-looking forecast that preserves realistic patterns and variance.
+    - Uses simple trend continuation
+    - Adds realistic noise based on historical volatility
+    - Respects historical min/max bounds
+    Returns (fc_mean, conf_df).
+    """
+    def _natural_forecast(s: pd.Series, k: int):
+        s = pd.to_numeric(s, errors='coerce').dropna()
+        idx = _infer_future_index(s.index if hasattr(s, 'index') else pd.RangeIndex(0, 1), k)
+        if s.empty or k <= 0:
+            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+            ci = pd.DataFrame({"lower": zero, "upper": zero})
+            return zero, ci
+        
+        n = len(s)
+        values = s.values.astype(float)
+        last = float(values[-1])
+        
+        # Historical bounds - forecast should stay within reasonable range
+        data_min = float(np.min(values))
+        data_max = float(np.max(values))
+        data_range = data_max - data_min
+        
+        # Use recent window for calculations (adaptive size)
+        window_size = max(20, min(240, n // 2 if n >= 40 else n))
+        recent_data = values[-window_size:]
+        
+        # Calculate simple trend from recent data
+        trend = 0.0
+        if len(recent_data) >= 3:
+            # Use weighted average of recent changes (more weight to recent)
+            changes = np.diff(recent_data)
+            if len(changes) > 0:
+                weights = np.exp(np.linspace(-1, 0, len(changes)))
+                weights = weights / weights.sum()
+                trend = float(np.average(changes, weights=weights))
+        
+        # Calculate historical volatility for realistic variation
+        hist_volatility = 1.0
+        if len(recent_data) >= 3:
+            changes = np.diff(recent_data)
+            hist_volatility = float(np.std(changes, ddof=1))
+        
+        if hist_volatility < 1e-6:
+            hist_volatility = float(np.std(values, ddof=1)) if len(values) > 1 else data_range * 0.1
+        
+        # Create unique seed based on series data for true uniqueness per column
+        # Use multiple aggregates to ensure different columns have different seeds
+        # Avoid np.prod to prevent overflow
+        series_sum = float(np.sum(values))
+        series_mean = float(np.mean(values))
+        series_std = float(np.std(values))
+        # Use first, middle, and last values for uniqueness
+        first_val = float(values[0])
+        mid_val = float(values[len(values)//2])
+        series_hash = hash((
+            series_sum,
+            series_mean,
+            series_std,
+            first_val,
+            mid_val,
+            last,
+            trend,
+            len(s),
+            data_min,
+            data_max
+        ))
+        seed_val = int(abs(series_hash) % (2**31))
+        np.random.seed(seed_val)
+        
+        # Generate forecast using random walk with trend
+        forecast_vals = np.zeros(k, dtype=float)
+        current_value = last
+        
+        for i in range(k):
+            # Add trend step
+            current_value = current_value + trend
+            
+            # Add random variation (realistic noise)
+            noise = np.random.normal(0, hist_volatility * 0.5)
+            current_value = current_value + noise
+            
+            forecast_vals[i] = current_value
+        
+        # Scale forecast to fit within bounds (no clipping)
+        fc_min = float(np.min(forecast_vals))
+        fc_max = float(np.max(forecast_vals))
+        fc_range = fc_max - fc_min
+        
+        # Only scale if forecast exceeds bounds
+        if fc_min < data_min or fc_max > data_max:
+            if fc_range > 1e-9:
+                # Scale to fit within data_min and data_max
+                scaled_vals = data_min + (forecast_vals - fc_min) * (data_range / fc_range)
+                forecast_vals = scaled_vals
+        
+        fc = pd.Series(forecast_vals, index=idx)
+        
+        # Build realistic confidence intervals that expand over time
+        expanding_uncertainty = hist_volatility * np.sqrt(np.arange(1, k + 1))
+        lower = forecast_vals - 1.96 * expanding_uncertainty
+        upper = forecast_vals + 1.96 * expanding_uncertainty
+        ci = pd.DataFrame({"lower": lower, "upper": upper}, index=idx)
+        
+        return fc, ci
+
+    try:
+        s = pd.to_numeric(series, errors='coerce').dropna()
+        if s.empty:
+            idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
+            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+            return zero, pd.DataFrame({"lower": zero, "upper": zero})
+        
+        # Build cache key from series shape, steps, AND actual values
+        # Include summary stats to ensure different columns get different forecasts
+        try:
+            values_hash = hash((
+                float(s.iloc[0]) if len(s) > 0 else 0.0,
+                float(s.iloc[-1]) if len(s) > 0 else 0.0,
+                float(s.mean()),
+                float(s.std())
+            ))
+            cache_key = (tuple(s.shape) if hasattr(s, 'shape') else (len(s),), int(steps), values_hash)
+            cached = FORECAST_CACHE.get(cache_key)
+            if cached is not None:
+                return cached
+        except Exception:
+            cache_key = None
+        
+        max_in = int(app.config.get('FORECAST_MAX_INPUT_POINTS', 4000))
+        if max_in and len(s) > max_in:
+            s = _thin_series(s, max_points=max_in)
+        fc, ci = _natural_forecast(s, steps)
+        
+        # Cache the result
+        try:
+            if cache_key is not None:
+                FORECAST_CACHE.set(cache_key, (fc, ci))
+        except Exception:
+            pass
+        
+        return fc, ci
+    except Exception:
+        # deterministic fallback: use simple trend
+        try:
+            s = pd.to_numeric(series, errors='coerce').dropna()
+            idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
+            if len(s) >= 2:
+                # Simple linear trend fallback
+                trend = float(np.mean(np.diff(s.values[-min(20, len(s)):])))
+                last = float(s.iloc[-1])
+                vals = [last + trend * (i + 1) for i in range(steps)]
+            else:
+                last = float(s.iloc[-1]) if len(s) else 0.0
+                vals = [last] * steps
+            fc = pd.Series(vals, index=idx)
+            std = float(np.std(s.values, ddof=1)) if len(s) > 1 else 1.0
+            ci = pd.DataFrame({"lower": fc.values - 1.96 * std, "upper": fc.values + 1.96 * std}, index=idx)
+            return fc, ci
+        except Exception:
+            idx = _infer_future_index(pd.RangeIndex(0, 1), steps)
+            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+            return zero, pd.DataFrame({"lower": zero, "upper": zero})
 
 def read_csv_fallback(path, **kwargs):
     last_err = None
@@ -1217,94 +1945,27 @@ def _is_too_linear(series_like):
         return False
 
 def _bootstrap_natural_path(series, steps, window=None, base_slope=None, n_samples=200, q_low=0.1, q_high=0.9):
-    y = series.dropna()
-    n = len(y)
-    if n < 5:
-        return _recent_slope_forecast(series, steps, window=None, damping=None)
-
-    w = window or min(max(30, n // 4), n)
-    y_win = y.iloc[-w:].astype(float)
-    diffs = np.diff(y_win.values)
-    if len(diffs) < 3 or np.allclose(diffs, 0):
-        return _recent_slope_forecast(series, steps, window=None, damping=None)
-
-    med = float(np.median(diffs))
-    mad = float(np.median(np.abs(diffs - med))) + 1e-12
-    lo_clip = med - 3.0 * mad
-    hi_clip = med + 3.0 * mad
-
-    bias = base_slope if base_slope is not None else med
-    bias_weight = 0.3  
-
-    future_idx = _infer_future_index(series.index, steps)
-    paths = np.empty((n_samples, steps), dtype=float)
-
-    rng = np.random.default_rng()
-    for i in range(n_samples):
-        incs = rng.choice(diffs, size=steps, replace=True).astype(float)
-        incs = np.clip(incs, lo_clip, hi_clip)
-        incs = incs + bias_weight * bias
-        path = y.iloc[-1] + np.cumsum(incs)
-        paths[i, :] = path
-
-    median_path = np.median(paths, axis=0)
-    lower_path = np.quantile(paths, q_low, axis=0)
-    upper_path = np.quantile(paths, q_high, axis=0)
-
-    median_series = pd.Series(median_path, index=future_idx)
-    lower_series = pd.Series(lower_path, index=future_idx)
-    upper_series = pd.Series(upper_path, index=future_idx)
-    conf_df = pd.concat([lower_series, upper_series], axis=1)
-    conf_df.columns = ['lower', 'upper']
-    return median_series, conf_df
-
-def detect_anomalies(series: pd.Series, contamination=0.02):
     """
-    IsolationForest-based anomaly detection.
-    Returns a tuple: (anomalies_index: pd.Index, anomaly_scores: np.ndarray|None)
-    - anomalies_index: index labels corresponding to detected anomalies
-    - anomaly_scores: anomaly scores for those points (higher = more anomalous), or None if unavailable
+    Bootstrap-style natural forecast helper (thin wrapper around _forecast_natural with envelope adjustment).
     """
     try:
         s = pd.to_numeric(series, errors='coerce').dropna()
-    except Exception:
-        return pd.Index([]), None
-
-    if s.empty or s.shape[0] < 20:
-        return pd.Index([]), None
-
-    try:
-        iso = IsolationForest(n_estimators=200, contamination=float(contamination), random_state=42)
-        X = s.values.reshape(-1, 1)
-        preds = iso.fit_predict(X)  
-        
+        if s.empty:
+            idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
+            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+            ci = pd.DataFrame({"lower": zero, "upper": zero})
+            return zero, ci
+        max_in = int(app.config.get('FORECAST_MAX_INPUT_POINTS', 4000))
+        if max_in and len(s) > max_in:
+            s = _thin_series(s, max_points=max_in)
+        fc, ci = _forecast_natural(s, steps)
         try:
-            scores_all = -iso.decision_function(X)
+            fc, ci = _naturalize_forecast(s, fc, ci)
         except Exception:
-            scores_all = None
-
-        mask = preds == -1
-        anomalies_idx = s.index[mask]
-        if scores_all is not None:
-            scores = scores_all[mask]
-        else:
-            scores = None
-        return anomalies_idx, scores
+            pass
+        return fc, ci
     except Exception:
-        return pd.Index([]), None
-
-def normalize_timeseries(series: pd.Series):
-    s = series.dropna()
-    if not isinstance(s.index, pd.DatetimeIndex) or s.empty:
-        return s
-    freq = s.index.freq or pd.infer_freq(s.index)
-    if freq is None:
-        diffs = pd.Series(s.index).diff().dropna()
-        step = diffs.median() if not diffs.empty else pd.Timedelta(days=1)
-        freq = pd.tseries.frequencies.to_offset(step)
-    s = s.asfreq(freq)
-    s = s.interpolate(method='time', limit=3, limit_direction='both')
-    return s
+        return _recent_slope_forecast(series, steps, window=None, damping=None)
 
 def _try_parse_numeric_series(s: pd.Series) -> pd.Series:
     """Best-effort conversion of object-like numeric strings to floats.
@@ -1363,6 +2024,41 @@ def coerce_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
             if coerced.notna().sum() >= pd.to_numeric(ser, errors='coerce').notna().sum():
                 res[col] = coerced
     return pd.DataFrame(res, index=df.index)
+
+
+def detect_anomalies(series: pd.Series, contamination: float = 0.02):
+    """
+    Detect anomalies in a numeric series using IsolationForest.
+    Returns:
+      - an_idx: index of detected anomalies (pd.Index)
+      - an_score: anomaly scores as a Series indexed by anomaly index (higher = more anomalous)
+    """
+    try:
+        s = pd.to_numeric(series, errors='coerce').dropna()
+    except Exception:
+        s = pd.Series(dtype=float)
+
+    if s is None or len(s) < 5:
+        return pd.Index([]), pd.Series([], dtype=float)
+
+    try:
+        cont = float(contamination) if contamination is not None else 0.02
+    except Exception:
+        cont = 0.02
+    if not (0.0 < cont < 0.5):
+        cont = 0.02
+
+    try:
+        X = s.values.reshape(-1, 1)
+        model = IsolationForest(contamination=cont, random_state=42)
+        preds = model.fit_predict(X)  # -1 = anomaly, 1 = normal
+        scores = -model.decision_function(X)  # higher means more anomalous
+        mask = preds == -1
+        an_idx = s.index[mask]
+        an_score = pd.Series(scores[mask], index=an_idx)
+        return an_idx, an_score
+    except Exception:
+        return pd.Index([]), pd.Series([], dtype=float)
 
 def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict, used_cols: list, is_timeseries: bool, forecast_horizon: int, contamination: float) -> str:
     """Assemble structured stats the AI can leverage for a deeper analysis."""
@@ -1503,7 +2199,8 @@ def upload_file():
 
                 
                 
-                fh = request.form.get('forecast_horizon')
+                fh = request.form.get('forecast_horizon')  # legacy hidden
+                fpct = request.form.get('forecast_pct')
                 cont = request.form.get('contamination')
                 start_view = request.form.get('view') or 'overview'
                 return redirect(url_for(
@@ -1511,6 +2208,7 @@ def upload_file():
                     filename=storage_name,
                     display=orig_name,
                     forecast_horizon=fh,
+                    forecast_pct=fpct,
                     contamination=cont,
                     view=start_view
                 ))
@@ -1836,10 +2534,29 @@ def analyze_file(filename):
     display_name = request.args.get('display') or request.form.get('display') or filename
     active_view = (request.args.get('view') or request.form.get('view') or 'overview').strip().lower()
 
-    default_steps = int(os.getenv("DEFAULT_FORECAST_STEPS", "40"))
-    default_contam = float(os.getenv("DEFAULT_CONTAMINATION", "0.02"))
-    user_steps = _get_arg_int("forecast_horizon", default_steps)
+    default_steps = int(app.config.get('DEFAULT_FORECAST_STEPS', 40))
+    default_contam = float(app.config.get('DEFAULT_CONTAMINATION', 0.02))
+    # New percentage-based horizon; fallback to numeric steps if pct absent.
+    raw_pct = request.args.get('forecast_pct') or request.form.get('forecast_pct')
+    pct = None
+    try:
+        if raw_pct not in (None, ""):
+            pct = float(raw_pct)
+            # Validate percentage is in reasonable range
+            if pct < 0.01 or pct > 0.5:
+                app.logger.warning("forecast_pct out of range (%.4f), clamping to [0.01, 0.5]", pct)
+                pct = max(0.01, min(0.5, pct))
+    except Exception:
+        pct = None
+    user_steps = _get_arg_int("forecast_horizon", default_steps)  # legacy param support
     user_contam = _get_arg_float("contamination", default_contam)
+    # Validate contamination is in valid range for IsolationForest
+    try:
+        if user_contam < 0.001 or user_contam > 0.2:
+            app.logger.warning("contamination out of range (%.4f), clamping to [0.001, 0.2]", user_contam)
+            user_contam = max(0.001, min(0.2, user_contam))
+    except Exception:
+        user_contam = default_contam
 
     if not os.path.exists(filepath) and filename not in DATAFRAME_CACHE:
         flash("The uploaded file is no longer available. Please re-upload it.")
@@ -1874,11 +2591,14 @@ def analyze_file(filename):
         and HASHED_UPLOAD_RE.match(os.path.basename(filepath))
         and os.path.exists(filepath)
     ):
-        _safe_delete(filepath)
+        success, error_msg = _safe_delete(filepath)
+        if not success and error_msg:
+            app.logger.warning("Could not delete uploaded file %s: %s", filepath, error_msg)
 
     _cleanup_uploads_if_configured()
 
-    file_asset = AI_FILE_MAP.get(filename)
+    # Use the uploaded asset (if available) for AI features within this request
+    file_asset = AI_FILE_MAP.get(filename) if 'AI_FILE_MAP' in globals() else None
 
     user_question = None
     ai_answer = None
@@ -1896,6 +2616,7 @@ def analyze_file(filename):
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
     used_cols = []
 
+    # Correlation/precompute metrics for heatmap
     corr_payload = None
     try:
         num_df = coerce_numeric_df(df).select_dtypes(include='number')
@@ -1914,17 +2635,14 @@ def analyze_file(filename):
         if num_df is not None and not num_df.empty and len(num_df.columns) >= 2:
             cols = list(num_df.columns)
             payload = {}
-
             try:
                 spearman = num_df.corr(method='spearman')
             except Exception:
                 spearman = None
-
             try:
                 pearson = num_df.corr(method='pearson')
             except Exception:
                 pearson = None
-
             if spearman is not None:
                 payload["x"] = cols
                 payload["y"] = cols
@@ -1946,10 +2664,38 @@ def analyze_file(filename):
 
     raw_tail = (os.getenv("PLOTLY_TAIL", "all") or "all").strip().lower()
 
+    # Apply percentage-based forecast horizon early (if provided) so all downstream forecast logic uses updated user_steps.
+    total_rows = int(getattr(df, 'shape', (0,))[0]) if hasattr(df, 'shape') else 0
+    try:
+        if 'pct' in locals() and pct and pct > 0 and total_rows > 0:
+            user_steps = max(2, int(math.ceil(total_rows * float(pct))))
+    except Exception:
+        pass
+    # Compute an effective steps value (even for legacy numeric) without upper clamping.
+    try:
+        effective_steps = max(2, int(user_steps))
+    except Exception:
+        effective_steps = 2
+
     # Determine whether to build static/forecast/interactive content based on active_view.
+    # IMPORTANT: To keep upload/overview fast, run heavy forecasting only in the explicit Forecast view.
     build_static = active_view in ("static", "overview")
-    build_forecast = active_view in ("forecast", "overview")
+    build_forecast = active_view == "forecast"
     build_interactive = active_view == "interactive"
+
+    # Per-request timing and budgets to prevent long hangs
+    request_start = time.perf_counter()
+    overview_budget_s = float(os.getenv("OVERVIEW_TIME_BUDGET_SEC", "6.0"))
+    # Slightly higher default budget for forecast view to avoid missing plots under normal loads
+    forecast_budget_s = float(os.getenv("FORECAST_TIME_BUDGET_SEC", "36.0"))
+    budget_s = forecast_budget_s if build_forecast or build_interactive else overview_budget_s
+    # Column limits for forecasting to avoid O(N cols) explosion
+    overview_cols_max = int(os.getenv("OVERVIEW_FORECAST_COLS_MAX", "2"))
+    # Allow more columns by default on Forecast view
+    forecast_cols_max = int(os.getenv("FORECAST_COLS_MAX", "20"))
+    cols_limit = forecast_cols_max if build_forecast else overview_cols_max
+    forecast_done = 0
+    skip_forecasts = False
 
     for column in df.columns:
             
@@ -1986,76 +2732,67 @@ def analyze_file(filename):
                     "title": title_trend
                 })
 
-            if build_forecast and is_timeseries and len(series) >= 10:
+            # Stop forecasting if time/column limits are exceeded
+            # Generate forecasts for any numeric series with sufficient length
+            if build_forecast and not skip_forecasts and len(series) >= 5:
                 try:
-                    steps = max(10, min(240, user_steps))
-                    conf_df = None
-                    fc_mean = None
-                    
-                    try:
-                        hw = ExponentialSmoothing(
-                            series, trend='add', damped_trend=True, seasonal=None,
-                            initialization_method='estimated'
-                        ).fit(optimized=True)
-                        fc_vals = hw.forecast(steps)
-                        future_idx = _infer_future_index(series.index, steps)
-                        fc_mean = pd.Series(fc_vals.values, index=future_idx)
-                        resid_std = float(np.nanstd(getattr(hw, 'resid', series - hw.fittedvalues), ddof=1))
-                        lower = fc_mean - 1.96 * resid_std
-                        upper = fc_mean + 1.96 * resid_std
-                        conf_df = pd.concat([lower, upper], axis=1)
-                        conf_df.columns = ['lower', 'upper']
-                    except Exception as e_hw:
-                        app.logger.warning("Holt-Winters (damped) failed for %s: %s", column, e_hw)
-                    
-                    need_slope = False
-                    if fc_mean is not None:
-                        recent = series.tail(min(len(series), 300)).values
-                        diffs = np.diff(recent)
-                        recent_step = float(np.median(np.abs(diffs))) if len(diffs) else 0.0
-                        slope_fc = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
-                        flat_by_range = np.allclose(fc_mean.values, fc_mean.values[0], rtol=1e-3, atol=1e-6)
-                        flat_by_slope = (recent_step > 0 and abs(slope_fc) < 0.25 * recent_step)
-                    if fc_mean is None or need_slope:
-                        fc_mean, conf_df = _recent_slope_forecast(series, steps, window=min(len(series), 200), damping=None)
-                    
-                    try:
-                        base_slope_est = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
-                        if _is_too_linear(fc_mean):
-                            fc_mean, conf_df = _bootstrap_natural_path(
-                                series, steps, window=min(len(series), 200), base_slope=base_slope_est,
-                                n_samples=200, q_low=0.1, q_high=0.9
-                            )
-                    except Exception as e_nat:
-                        app.logger.warning("Naturalization failed for %s: %s", column, e_nat)
+                    t0 = time.perf_counter()
+                    steps = effective_steps
+                    app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
 
-                    
-                    split_x = str(series.index[-1])
-                    fc_x = [str(i) for i in fc_mean.index]
-                    fc_y = [float(v) for v in fc_mean.values]
-                    if conf_df is not None:
-                        ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
-                        ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
+                    # Unified pipeline
+                    fc_mean, conf_df = _compute_forecast(series, steps)
 
-                    
                     title_fc = f"Forecast for {column}"
                     s_hist = _thin_series(series, max_points=600)
-                    forecast_plots.append({
-                        "img": generate_forecast_plot(
+                    xlab = 'Timestamp' if isinstance(series.index, pd.DatetimeIndex) else 'Index'
+                    try:
+                        img_fc = generate_forecast_plot(
                             s_hist,
                             fc_mean,
                             title_fc,
-                            'Timestamp',
+                            xlab,
                             column,
                             conf_int=conf_df,
-                            history_tail=None  
-                        ),
-                        "title": title_fc
-                    })
+                            history_tail=None
+                        )
+                        forecast_plots.append({"img": img_fc, "title": title_fc})
+                    except Exception as _e:
+                        app.logger.warning("Could not render forecast image for %s: %s", column, _e)
+                    try:
+                        app.logger.info("Forecast plot ready col=%s forecast_points=%d", column, len(fc_mean) if hasattr(fc_mean, '__len__') else -1)
+                    except Exception:
+                        pass
+
+                    dt = time.perf_counter() - t0
+                    forecast_done += 1
+                    app.logger.info("Forecast done col=%s took=%.2fs steps=%s points=%s", column, dt, steps, len(series))
+                    # Enforce budgets
+                    if (time.perf_counter() - request_start) > budget_s or forecast_done >= cols_limit:
+                        skip_forecasts = True
+                        app.logger.info(
+                            "Forecast budget reached: elapsed=%.2fs limit=%.2fs cols=%d/%d",
+                            time.perf_counter() - request_start, budget_s, forecast_done, cols_limit
+                        )
                 except Exception as e:
                     app.logger.warning("Could not generate forecast for %s: %s", column, e)
 
-            if build_forecast and is_timeseries and len(series) >= 10:
+            if build_forecast and not skip_forecasts and len(series) >= 5:
+                try:
+                    if isinstance(series.index, pd.DatetimeIndex):
+                        s_norm = normalize_timeseries(series)
+                        sp = _infer_seasonal_period(s_norm.index)
+                        if sp:
+                            try:
+                                stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=sp)
+                                if stl_img:
+                                    forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
+                            except Exception as _e:
+                                app.logger.warning("STL plot failed for %s: %s", column, _e)
+                except Exception as e:
+                    app.logger.warning("Could not generate forecast for %s: %s", column, e)
+
+            if build_interactive and not skip_forecasts and len(series) >= 5:
                 try:
                     s_norm = normalize_timeseries(series)
                     sp = _infer_seasonal_period(s_norm.index) if isinstance(s_norm.index, pd.DatetimeIndex) else None
@@ -2089,110 +2826,6 @@ def analyze_file(filename):
                     "marker": {"size": 4, "opacity": 0.6}
                 }]
 
-            if build_interactive and is_timeseries and len(series) >= 10:
-                try:
-                    steps = max(10, min(240, user_steps))
-                    conf_df = None
-                    fc_mean = None
-                    
-                    try:
-                        hw = ExponentialSmoothing(
-                            series, trend='add', damped_trend=True, seasonal=None,
-                            initialization_method='estimated'
-                        ).fit(optimized=True)
-                        fc_vals = hw.forecast(steps)
-                        future_idx = _infer_future_index(series.index, steps)
-                        fc_mean = pd.Series(fc_vals.values, index=future_idx)
-                        resid_std = float(np.nanstd(getattr(hw, 'resid', series - hw.fittedvalues), ddof=1))
-                        lower = fc_mean - 1.96 * resid_std
-                        upper = fc_mean + 1.96 * resid_std
-                        conf_df = pd.concat([lower, upper], axis=1)
-                        conf_df.columns = ['lower', 'upper']
-                    except Exception as e_hw:
-                        app.logger.warning("Holt-Winters (damped) failed for %s: %s", column, e_hw)
-                    
-                    need_slope = False
-                    if fc_mean is not None:
-                        recent = series.tail(min(len(series), 300)).values
-                        diffs = np.diff(recent)
-                        recent_step = float(np.median(np.abs(diffs))) if len(diffs) else 0.0
-                        slope_fc = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
-                        flat_by_range = np.allclose(fc_mean.values, fc_mean.values[0], rtol=1e-3, atol=1e-6)
-                        flat_by_slope = (recent_step > 0 and abs(slope_fc) < 0.25 * recent_step)
-                    if fc_mean is None or need_slope:
-                        fc_mean, conf_df = _recent_slope_forecast(series, steps, window=min(len(series), 200), damping=None)
-                    
-                    try:
-                        base_slope_est = float((fc_mean.iloc[-1] - fc_mean.iloc[0]) / max(1, len(fc_mean) - 1))
-                        if _is_too_linear(fc_mean):
-                            fc_mean, conf_df = _bootstrap_natural_path(
-                                series, steps, window=min(len(series), 200), base_slope=base_slope_est,
-                                n_samples=200, q_low=0.1, q_high=0.9
-                            )
-                    except Exception as e_nat:
-                        app.logger.warning("Naturalization failed for %s: %s", column, e_nat)
-
-                    
-                    
-                    split_x = str(series.index[-1])
-                    fc_x = [str(i) for i in fc_mean.index]
-                    fc_y = [float(v) for v in fc_mean.values]
-                    if conf_df is not None:
-                        ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
-                        ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
-
-                    
-                    title_fc = f"Forecast for {column}"
-                    s_hist2 = _thin_series(series, max_points=600)
-                    forecast_plots.append({
-                        "img": generate_forecast_plot(
-                            s_hist2,
-                            fc_mean,
-                            title_fc,
-                            'Timestamp',
-                            column,
-                            conf_int=conf_df,
-                            history_tail=None  
-                        ),
-                        "title": title_fc
-                    })
-                except Exception as e:
-                    app.logger.warning("Could not generate forecast for %s: %s", column, e)
-
-            if build_interactive and is_timeseries and len(series) >= 10:
-                try:
-                    s_norm = normalize_timeseries(series)
-                    sp = _infer_seasonal_period(s_norm.index) if isinstance(s_norm.index, pd.DatetimeIndex) else None
-                    if sp:
-                        stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=sp)
-                       
-                        if stl_img:
-                            forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
-                except Exception:
-                    pass
-
-            if build_interactive:
-                if raw_tail in ("all", "", "0", "-1", "none", "false"):
-                    s_tail = series
-                else:
-                    try:
-                        tail_n = int(raw_tail)
-                        s_tail = series.tail(max(1, tail_n))
-                    except Exception:
-                        s_tail = series
-
-                x_hist = [str(i) for i in s_tail.index]
-                y_hist = [float(v) for v in s_tail.values]
-                traces = [{
-                    "type": "scatter",
-                    "mode": "lines+markers",  
-                    "name": "History",
-                    "x": x_hist,
-                    "y": y_hist,
-                    "line": {"color": "rgb(31,119,180)", "width": 2},
-                    "marker": {"size": 4, "opacity": 0.6}
-                }]
-
             
             if build_interactive and len(an_idx):
                 an_tail_idx = [i for i in an_idx if i in s_tail.index]
@@ -2209,18 +2842,10 @@ def analyze_file(filename):
 
             
             fc_x = fc_y = ci_lower = ci_upper = split_x = None
-            if build_interactive and is_timeseries and len(series) >= 10:
+            if build_interactive and not skip_forecasts and is_timeseries and len(series) >= 5:
                 try:
-                    steps = max(10, min(240, user_steps))
-                    
-                    s_norm = normalize_timeseries(series)
-                    fc_mean, conf_df = _recent_slope_forecast(s_norm, steps=steps, window=None, damping=None)
-                    try:
-                        if _is_too_linear(fc_mean):
-                            fc_mean, conf_df = _bootstrap_natural_path(s_norm, steps=steps, base_slope=None, n_samples=200)
-                    except Exception:
-                        pass
-
+                    steps = effective_steps
+                    fc_mean, conf_df = _compute_forecast(series, steps)
                     split_x = str(series.index[-1])
                     fc_x = [str(i) for i in fc_mean.index]
                     fc_y = [float(v) for v in fc_mean.values]
@@ -2228,7 +2853,7 @@ def analyze_file(filename):
                         ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
                         ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
 
-                    
+                    # Add interactive traces using the forecast
                     if fc_x and ci_lower and ci_upper:
                         ci_group = f"ci-{re.sub(r'[^A-Za-z0-9_-]+', '', str(column))}"
                         traces.append({
@@ -2255,36 +2880,27 @@ def analyze_file(filename):
                             "legendgrouptitle": {"text": "95% CI"}
                         })
 
-                    
                     if fc_x and fc_y:
+                        # Prepend last history point for visual continuity
+                        try:
+                            last_x_hist = str(series.index[-1])
+                            last_y_hist = float(series.iloc[-1])
+                            x_plot = [last_x_hist] + list(fc_x)
+                            y_plot = [last_y_hist] + list(fc_y)
+                        except Exception:
+                            x_plot, y_plot = fc_x, fc_y
                         traces.append({
                             "type": "scatter",
                             "mode": "lines+markers",
                             "name": "Forecast",
-                            "x": fc_x, "y": fc_y,
-                            "line": {"color": "orangered", "width": 3, "dash": "dash"},
+                            "x": x_plot, "y": y_plot,
+                            "line": {"color": "orangered", "width": 3},
                             "marker": {"size": 3}
                         })
-                except Exception:
-                    pass
+                except Exception as e:
+                    app.logger.warning("Interactive forecast build failed for %s: %s", column, e)
 
-            
-            if build_interactive:
-                xaxis = {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True}
-                if is_timeseries:
-                    xaxis.update({
-                        "rangeslider": {"visible": True},
-                        "rangeselector": {
-                            "buttons": [
-                                {"count": 1, "label": "1m", "step": "month", "stepmode": "backward"},
-                                {"count": 6, "label": "6m", "step": "month", "stepmode": "backward"},
-                                {"step": "year", "stepmode": "todate", "label": "YTD"},
-                                {"count": 1, "label": "1y", "step": "year", "stepmode": "backward"},
-                                {"step": "all", "label": "All"}
-                            ]
-                        }
-                    })
-
+                xaxis = {"title": ("Timestamp" if is_timeseries else "Index"), "showgrid": True}
                 layout = {
                     "title": {"text": f"{column} (interactive)", "x": 0.02},
                     "xaxis": xaxis,
@@ -2314,6 +2930,36 @@ def analyze_file(filename):
                 dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
                 interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
 
+    # If in forecast view and no forecast plots were generated (due to errors or strict budgets),
+    # render a fallback forecast for the first eligible numeric column to avoid an empty page.
+    try:
+        if build_forecast and not forecast_plots:
+            for column in df.columns:
+                try:
+                    series = pd.to_numeric(df[column], errors='coerce').dropna()
+                except Exception:
+                    continue
+                if len(series) >= 5:
+                    steps = effective_steps
+                    fc_mean, conf_df = _compute_forecast(series, steps)
+                    title_fc = f"Forecast for {column}"
+                    s_hist = _thin_series(series, max_points=600)
+                    forecast_plots.append({
+                        "img": generate_forecast_plot(
+                            s_hist,
+                            fc_mean,
+                            title_fc,
+                            'Timestamp' if isinstance(series.index, pd.DatetimeIndex) else 'Index',
+                            column,
+                            conf_int=conf_df,
+                            history_tail=None
+                        ),
+                        "title": title_fc
+                    })
+                    break
+    except Exception as e:
+        app.logger.warning("Fallback static forecast failed: %s", e)
+
     buf = io.StringIO()
     try:
         df.info(buf=buf)
@@ -2342,7 +2988,12 @@ def analyze_file(filename):
 
     ai_summary = AI_SUMMARY_CACHE.get(filename)
     if ai_summary is None:
-        if request.method == 'GET' and ensure_ai_ready():
+        # Optionally defer AI summary on overview to keep first load snappy
+        elapsed = time.perf_counter() - request_start
+        defer_ai_on_overview = bool(int(os.getenv("OVERVIEW_DEFER_AI_SUMMARY", "0")))
+        can_do_ai_now = not (active_view == 'overview' and (defer_ai_on_overview or elapsed > budget_s))
+        # Allow AI summary on both GET and POST (POST needed for Q&A to work alongside summary)
+        if can_do_ai_now and ensure_ai_ready():
             try:
                 generated = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
                 ai_summary = generated
@@ -2356,11 +3007,23 @@ def analyze_file(filename):
                 detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
                 ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
         else:
-            reason = AI_STATUS.get('message') or ("AI disabled or not configured." if not AI_ENABLED else "")
-            detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
-            ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
+            if active_view == 'overview':
+                ai_summary = "<p>AI summary deferred to keep the first load fast. Switch to the Forecast view to generate it.</p>"
+            else:
+                reason = AI_STATUS.get('message') or ("AI disabled or not configured." if not AI_ENABLED else "")
+                detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
+                ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
 
     
+    # Log forecast_plots length and per-column stats
+    try:
+        app.logger.info("Static forecast_plots count: %d", len(forecast_plots))
+        for fp in forecast_plots:
+            if isinstance(fp, dict) and 'title' in fp:
+                app.logger.info("Forecast plot: %s", fp['title'])
+    except Exception:
+        pass
+
     analysis.update({
         'head': safe_df_head_html(df),
         'description': safe_df_description_html(df),
@@ -2377,6 +3040,9 @@ def analyze_file(filename):
         'corr': corr_payload,
         'controls': {
             'forecast_horizon': user_steps,
+            'effective_steps': effective_steps,
+            'forecast_pct': pct if pct is not None else None,
+            'total_rows': total_rows,
             'contamination': user_contam
         }
     })
@@ -2390,12 +3056,17 @@ def analyze_file(filename):
         @after_this_request
         def _delete_hashed_upload(response):
             try:
-                _safe_delete(filepath)
-                app.logger.info("Deferred delete of %s done", filepath)
+                success, error_msg = _safe_delete(filepath)
+                if success:
+                    app.logger.info("Deferred delete of %s done", filepath)
+                else:
+                    app.logger.warning("Deferred delete of %s failed: %s", filepath, error_msg or "unknown error")
             except Exception as e:
-                app.logger.warning("Deferred delete of %s failed: %s", filepath, e)
+                app.logger.warning("Deferred delete callback failed for %s: %s", filepath, e)
             return response
 
+    total_dt = time.perf_counter() - request_start
+    app.logger.info("Analyze done file=%s view=%s elapsed=%.2fs cols=%d", filename, active_view, total_dt, len(df.columns))
     return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
 
     # If an unexpected error occurs, Flask's error handler will handle it.
@@ -2580,9 +3251,9 @@ def download_full_report_html(filename):
         static_sections.append(f'<figure><figcaption>Trend for {col}</figcaption><img style="max-width:100%" src="data:image/png;base64,{img_b64}" /></figure>')
         if is_ts and len(s) >= 10:
             try:
-                fc_mean, ci = _bootstrap_natural_path(s, steps=app.config.get('DEFAULT_FORECAST_STEPS', 30))
+                fc_mean, ci = _compute_forecast(s, steps=int(app.config.get('DEFAULT_FORECAST_STEPS', 30)))
             except Exception:
-                fc_mean, ci = _recent_slope_forecast(s, steps=app.config.get('DEFAULT_FORECAST_STEPS', 30))
+                fc_mean, ci = _recent_slope_forecast(s, steps=int(app.config.get('DEFAULT_FORECAST_STEPS', 30)))
             fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast for {col}", 'Timestamp', col, conf_int=ci, history_tail=None)
             forecast_sections.append(f'<figure><figcaption>Forecast for {col}</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
 

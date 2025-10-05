@@ -109,11 +109,12 @@
     <div class="wrap">
       <div class="title">Analysis: {{ display_name }}</div>
       <nav class="nav">
-  <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}">Overview</a>
-  <a title="View static PNG plots" class="pill {{ 'active' if active_view == 'static' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='static') }}">Static</a>
-  <a title="Explore interactively with zoom & hover" class="pill {{ 'active' if active_view == 'interactive' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive') }}">Interactive</a>
-  <a title="Show forecasts with 95% confidence band" class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast') }}">Forecast</a>
-  <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation') }}">Correlation</a>
+  {% set pct = request.args.get('forecast_pct', analysis.controls.get('forecast_pct', 0.10)) %}
+  <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct) }}">Overview</a>
+  <a title="View static PNG plots" class="pill {{ 'active' if active_view == 'static' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='static', forecast_pct=pct) }}">Static</a>
+  <a title="Explore interactively with zoom & hover" class="pill {{ 'active' if active_view == 'interactive' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive', forecast_pct=pct) }}">Interactive</a>
+  <a title="Show forecasts with 95% confidence band" class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Forecast</a>
+  <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct) }}">Correlation</a>
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
       <div class="actions">
@@ -238,6 +239,29 @@
     {% elif active_view == 'forecast' %}
   <section class="panel" style="width:100%;">
         <h3>Forecasts</h3>
+        <div class="row" style="margin-bottom:8px">
+          <label for="forecastPctSelectTop">Forecast horizon</label>
+          <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
+            {% for val,label in [(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+              <option value="{{ '%.2f'|format(val) }}" {% if (pct|float) == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="muted">= {{ analysis.controls.effective_steps }} steps of {{ analysis.controls.total_rows }} rows</span>
+        </div>
+        <script>
+          (function(){
+            const el = document.getElementById('forecastPctSelectTop');
+            if (!el) return;
+            el.addEventListener('change', function(){
+              try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('forecast_pct', this.value);
+                url.searchParams.set('view', 'forecast');
+                window.location.href = url.toString();
+              } catch (e) { /* no-op */ }
+            });
+          })();
+        </script>
         <div class="muted">Full-history context with forecast and 95% CI</div>
         {% if analysis.forecast_plots %}
           <div class="grid grid-2">
@@ -256,6 +280,15 @@
     {% elif active_view == 'interactive' %}
   <section class="panel" style="width:100%;">
         <h3>Interactive charts</h3>
+        <div class="row" style="margin-bottom:8px">
+          <label for="forecastPctSelect">Forecast horizon</label>
+          <select id="forecastPctSelect" title="Set forecast length as percent of original rows (affects forecast view & AI summary)">
+            {% for val,label in [(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+              <option value="{{ '%.2f'|format(val) }}" {% if (pct|float) == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="muted">= {{ analysis.controls.effective_steps }} steps (of {{ analysis.controls.total_rows }} rows) – reloads on change</span>
+        </div>
         <div class="row" style="margin-bottom:8px">
           <label for="colPick">Column</label>
           <select id="colPick">
@@ -497,6 +530,18 @@
           } else {
             document.getElementById('chart').innerHTML = '<div class="muted">No interactive columns available.</div>';
           }
+          function bindPct(id){
+            const el = document.getElementById(id);
+            if(!el) return;
+            el.addEventListener('change', function(){
+              const v = this.value;
+              const url = new URL(window.location.href);
+              url.searchParams.set('forecast_pct', v);
+              window.location.href = url.toString();
+            });
+          }
+          bindPct('forecastPctSelect');
+          bindPct('forecastPctSelectTop');
         });
       </script>
 
