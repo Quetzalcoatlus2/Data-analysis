@@ -114,7 +114,7 @@ DEFAULT_AI_MODEL = (
     os.getenv("GENAI_MODEL")
     or os.getenv("GOOGLE_MODEL")
     # Prefer a free-tier-friendly default when no env override is provided
-    or "models/gemini-2.5-flash"
+    or "models/gemini-2.5-pro"
 )
 MODEL_CACHE = {}
 CURRENT_MODEL_NAME = None
@@ -131,7 +131,7 @@ def _sanitize_error_message(msg: str) -> str:
             return "Google API key invalid or expired."
         if '429' in s or 'rate limit' in s.lower() or 'quota' in s.lower():
             if "doesn't have a free quota" in s.lower() or 'no free quota' in s.lower():
-                return "Selected model has no free-tier quota. Switch to a free model (e.g., gemini-1.5-flash)."
+                return "Selected model has no free-tier quota. Switch to a free model (e.g., gemini-2.5-flash)."
             return "Rate limit exceeded. Please retry after a short pause."
         if 'content blocked' in s.lower() or 'block_reason' in s.lower():
             return "Content was blocked by safety filters."
@@ -990,6 +990,48 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None):
     buf = io.BytesIO(); fig.savefig(buf, format='png', bbox_inches='tight'); buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8'); plt.close(fig); return img
 
+def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
+    """Generate a correlation heatmap as base64 image."""
+    try:
+        import seaborn as sns
+        
+        # Get numeric columns
+        df_num = coerce_numeric_df(df)
+        sel = df_num.select_dtypes(include='number')
+        if sel.empty:
+            return None
+        
+        # Remove constant columns
+        nunique = sel.nunique(dropna=True)
+        sel = sel.loc[:, nunique > 1]
+        
+        if sel.shape[1] < 2:
+            return None
+        
+        # Compute correlation
+        corr = sel.corr(method=method)
+        
+        # Create heatmap
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', center=0,
+                    square=True, linewidths=0.5, cbar_kws={"shrink": 0.8},
+                    vmin=-1, vmax=1, ax=ax)
+        ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+        plt.tight_layout()
+        
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+        buf.seek(0)
+        img = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close(fig)
+        return img
+    except Exception:
+        try:
+            plt.close(fig)
+        except:
+            pass
+        return None
+
 def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
     try:
         if not isinstance(s, pd.Series):
@@ -1383,11 +1425,42 @@ def _seasonality_strength(series: pd.Series, seasonal_period: int | None) -> flo
     except Exception:
         return 0.0
 def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None):
+    """Generate a plot showing historical data and forecast with confidence intervals."""
+    print(f"[PLOT DEBUG] generate_forecast_plot called:")
+    print(f"  - history length: {len(history)}")
+    print(f"  - history index type: {type(history.index)}")
+    print(f"  - history last date: {history.index[-1] if len(history) > 0 else 'N/A'}")
+    print(f"  - history last 3 values: {history.tail(3).tolist() if len(history) >= 3 else history.tolist()}")
+    print(f"  - forecast_series length: {len(forecast_series)}")
+    print(f"  - forecast_series index type: {type(forecast_series.index)}")
+    print(f"  - forecast_series first date: {forecast_series.index[0] if len(forecast_series) > 0 else 'N/A'}")
+    print(f"  - forecast_series last date: {forecast_series.index[-1] if len(forecast_series) > 0 else 'N/A'}")
+    print(f"  - forecast_series first 3 values: {forecast_series.head(3).tolist() if len(forecast_series) >= 3 else forecast_series.tolist()}")
+    print(f"  - forecast_series last 3 values: {forecast_series.tail(3).tolist() if len(forecast_series) >= 3 else forecast_series.tolist()}")
+    
+    # Check if forecast extends beyond history
+    if len(history) > 0 and len(forecast_series) > 0:
+        if forecast_series.index[0] <= history.index[-1]:
+            print(f"  - WARNING: Forecast starts BEFORE or AT history end! This will overlap!")
+            print(f"    History ends: {history.index[-1]}")
+            print(f"    Forecast starts: {forecast_series.index[0]}")
+        else:
+            print(f"  - OK: Forecast starts after history end")
+    
     fig, ax = plt.subplots(figsize=(10, 4))
 
     history_tail_series = history if not history_tail or history_tail <= 0 else history.tail(history_tail)
-    # History exactly as before: line (no markers)
-    history_tail_series.plot(ax=ax, label='History', color='tab:blue', linewidth=1.8)
+    
+    # Use matplotlib ax.plot() for BOTH history and forecast to avoid converter conflicts
+    ax.plot(
+        history_tail_series.index,
+        history_tail_series.values,
+        linestyle='-',
+        color='tab:blue',
+        linewidth=1.8,
+        label='History',
+        zorder=2
+    )
 
     # Forecast: solid line (no point markers) for clarity on dense plots
     # Prepend the last history point to ensure visual continuity
@@ -3264,34 +3337,88 @@ def download_static_plots_zip(filename):
 
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
     bio = io.BytesIO()
+    
+    # Calculate forecast steps as 10% of dataset size
+    total_rows = len(df)
+    forecast_steps = max(10, int(total_rows * 0.1))
+    
     with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        # Generate correlation heatmaps
+        try:
+            spearman_heatmap = generate_correlation_heatmap(df, method='spearman', title='Spearman Correlation Heatmap')
+            if spearman_heatmap:
+                raw = base64.b64decode(spearman_heatmap.encode('utf-8'))
+                zf.writestr("correlation_spearman.png", raw)
+        except Exception:
+            pass
+        
+        try:
+            pearson_heatmap = generate_correlation_heatmap(df, method='pearson', title='Pearson Correlation Heatmap')
+            if pearson_heatmap:
+                raw = base64.b64decode(pearson_heatmap.encode('utf-8'))
+                zf.writestr("correlation_pearson.png", raw)
+        except Exception:
+            pass
+        
+        # Generate plots for each numeric column
         for col in df.columns:
-            
             try:
                 s = pd.to_numeric(df[col], errors='coerce').dropna()
             except Exception:
                 s = pd.Series(dtype=float)
-            if s.empty:
+            if s.empty or len(s) < 3:
                 continue
-            title = f"Trend for {col}"
-            img_b64 = generate_plot(
-                s,
-                title,
-                'Timestamp' if is_timeseries else 'Index',
-                col,
-                anomalies_idx=None
-            )
+            
+            # Trend plot
             try:
+                title = f"Trend for {col}"
+                img_b64 = generate_plot(
+                    s,
+                    title,
+                    'Timestamp' if is_timeseries else 'Index',
+                    col,
+                    anomalies_idx=None
+                )
                 raw = base64.b64decode(img_b64.encode('utf-8'))
                 zf.writestr(f"{secure_filename(str(col))}_trend.png", raw)
             except Exception:
+                pass
+            
+            # STL decomposition (for timeseries with sufficient data)
+            if is_timeseries and len(s) >= 28:
+                try:
+                    s_norm = normalize_timeseries(s)
+                    sp = _infer_seasonal_period(s_norm.index)
+                    if sp and isinstance(sp, int) and sp >= 2 and len(s_norm) >= sp * 2:
+                        stl_img = generate_stl_plot(s_norm, f"STL Decomposition: {col}", seasonal_period=sp)
+                        if stl_img:
+                            raw = base64.b64decode(stl_img.encode('utf-8'))
+                            zf.writestr(f"{secure_filename(str(col))}_stl.png", raw)
+                except Exception:
+                    pass
+            
+            # Forecast (for timeseries)
+            if is_timeseries and len(s) >= 10:
+                try:
+                    fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
+                except Exception:
+                    try:
+                        fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
+                    except Exception:
+                        fc_mean, ci = None, None
                 
-                continue
+                if fc_mean is not None and len(fc_mean) > 0:
+                    try:
+                        fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps)", 'Timestamp', col, conf_int=ci, history_tail=None)
+                        raw = base64.b64decode(fc_b64.encode('utf-8'))
+                        zf.writestr(f"{secure_filename(str(col))}_forecast.png", raw)
+                    except Exception:
+                        pass
 
     bio.seek(0)
     display = request.args.get('display') or filename
     base = os.path.splitext(display)[0]
-    out_name = secure_filename(f"{base}_static_plots.zip")
+    out_name = secure_filename(f"{base}_all_plots.zip")
     resp = make_response(bio.read())
     resp.headers['Content-Type'] = 'application/zip'
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
@@ -3307,7 +3434,7 @@ def download_full_report_html(filename):
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         return ("Not found", 404)
 
-    
+    # Basic dataset info
     head_html = safe_df_head_html(df)
     desc_html = safe_df_description_html(df)
     buf = io.StringIO()
@@ -3323,7 +3450,7 @@ def download_full_report_html(filename):
     except Exception:
         missing_html = ""
 
-    
+    # AI summary
     ai_html = AI_SUMMARY_CACHE.get(filename)
     if ai_html is None:
         try:
@@ -3333,84 +3460,169 @@ def download_full_report_html(filename):
         except Exception:
             ai_html = "<p>AI summary temporarily unavailable.</p>"
 
-    
-    is_ts = isinstance(df.index, pd.DatetimeIndex)
-    static_sections = []
-    forecast_sections = []
-    for col in df.columns:
-        try:
-            s = pd.to_numeric(df[col], errors='coerce').dropna()
-        except Exception:
-            s = pd.Series(dtype=float)
-        img_b64 = generate_plot(s, f"Trend for {col}", 'Timestamp' if is_ts else 'Index', col, anomalies_idx=None)
-        static_sections.append(f'<figure><figcaption>Trend for {col}</figcaption><img style="max-width:100%" src="data:image/png;base64,{img_b64}" /></figure>')
-        if is_ts and len(s) >= 10:
-            try:
-                fc_mean, ci = _compute_forecast(s, steps=int(app.config.get('DEFAULT_FORECAST_STEPS', 30)))
-            except Exception:
-                fc_mean, ci = _recent_slope_forecast(s, steps=int(app.config.get('DEFAULT_FORECAST_STEPS', 30)))
-            fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast for {col}", 'Timestamp', col, conf_int=ci, history_tail=None)
-            forecast_sections.append(f'<figure><figcaption>Forecast for {col}</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
-
-    
+    # Correlation matrix (table and heatmaps)
     corr_html = ""
+    corr_heatmap_spearman = None
+    corr_heatmap_pearson = None
     try:
         df_num = coerce_numeric_df(df)
         sel = df_num.select_dtypes(include='number')
         if not sel.empty:
-            
             nunique = sel.nunique(dropna=True)
             sel = sel.loc[:, nunique > 1]
         if sel.shape[1] >= 2:
             corr = sel.corr(method='spearman').round(3)
             corr_html = corr.to_html()
+            # Generate heatmaps
+            corr_heatmap_spearman = generate_correlation_heatmap(df, method='spearman', title='Spearman Correlation Heatmap')
+            corr_heatmap_pearson = generate_correlation_heatmap(df, method='pearson', title='Pearson Correlation Heatmap')
     except Exception:
         pass
 
+    # Generate plots for each numeric column
+    is_ts = isinstance(df.index, pd.DatetimeIndex)
+    static_sections = []
+    stl_sections = []
+    forecast_sections = []
+    
+    # Calculate forecast steps as 10% of dataset size
+    total_rows = len(df)
+    forecast_steps = max(10, int(total_rows * 0.1))
+    
+    for col in df.columns:
+        try:
+            s = pd.to_numeric(df[col], errors='coerce').dropna()
+            if len(s) < 3:
+                continue
+        except Exception:
+            continue
+        
+        # Ensure series has proper index from dataframe
+        # This is critical for forecast to work correctly with DatetimeIndex
+        if not isinstance(s.index, type(df.index)):
+            try:
+                # Re-align with df to maintain proper index
+                s_temp = df[col].copy()
+                s = pd.to_numeric(s_temp, errors='coerce').dropna()
+            except:
+                pass
+        
+        # Static trend plot
+        try:
+            img_b64 = generate_plot(s, f"Trend for {col}", 'Timestamp' if is_ts else 'Index', col, anomalies_idx=None)
+            static_sections.append(f'<figure><figcaption><strong>Trend: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{img_b64}" /></figure>')
+        except Exception:
+            pass
+        
+        # STL decomposition (for timeseries with sufficient data)
+        if is_ts and len(s) >= 28:
+            try:
+                s_norm = normalize_timeseries(s)
+                sp = _infer_seasonal_period(s_norm.index)
+                if sp and isinstance(sp, int) and sp >= 2 and len(s_norm) >= sp * 2:
+                    stl_img = generate_stl_plot(s_norm, f"STL Decomposition: {col}", seasonal_period=sp)
+                    if stl_img:
+                        stl_sections.append(f'<figure><figcaption><strong>STL Decomposition: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{stl_img}" /></figure>')
+            except Exception:
+                pass
+        
+        # Forecast (for timeseries) - use 10% of data as forecast horizon
+        if is_ts and len(s) >= 10:
+            try:
+                print(f"[DEBUG] Generating forecast for {col}: is_ts={is_ts}, len={len(s)}, steps={forecast_steps}, index_type={type(s.index)}")
+                fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
+                print(f"[DEBUG] Forecast result for {col}: fc_mean is {'None' if fc_mean is None else f'{len(fc_mean)} points'}")
+            except Exception as e:
+                print(f"Forecast error for {col} (_compute_forecast): {e}")
+                try:
+                    fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
+                except Exception as e2:
+                    print(f"Forecast error for {col} (_recent_slope_forecast): {e2}")
+                    fc_mean, ci = None, None
+            
+            if fc_mean is not None and len(fc_mean) > 0:
+                try:
+                    print(f"[DEBUG] Creating forecast plot for {col}")
+                    fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps = 10%)", 'Timestamp', col, conf_int=ci, history_tail=None)
+                    forecast_sections.append(f'<figure><figcaption><strong>Forecast: {col}</strong> ({forecast_steps} steps, 10% of data)</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
+                    print(f"[DEBUG] Successfully created forecast plot for {col}")
+                except Exception as e:
+                    print(f"Forecast plot error for {col}: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"Forecast is None or empty for {col}")
+
+    # Build HTML report
+    print(f"[DEBUG] Report generation complete:")
+    print(f"  - Static sections: {len(static_sections)}")
+    print(f"  - STL sections: {len(stl_sections)}")
+    print(f"  - Forecast sections: {len(forecast_sections)}")
+    if len(forecast_sections) == 0:
+        print(f"  - WARNING: No forecast sections were generated!")
     
     display = request.args.get('display') or filename
-    title = f"Analysis report — {display}"
+    title = f"Analysis Report — {display}"
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>{title}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body {{ font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#0f172a; background:#ffffff; }}
-  h1,h2,h3 {{ color:#0f172a; }}
-  .muted {{ color:#475569; }}
-  figure {{ margin: 0 0 16px 0; }}
-  figcaption {{ margin: 8px 0; font-weight: 600; }}
-  pre {{ white-space: pre-wrap; }}
-  table {{ border-collapse: collapse; }}
-  td, th {{ border:1px solid #e2e8f0; padding:4px 6px; }}
-  img {{ max-width: 100%; }}
-  @page {{ size: A4; margin: 14mm; }}
+  body {{ font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:#0f172a; background:#ffffff; margin: 0; padding: 20px; }}
+  h1 {{ color:#0f172a; border-bottom: 2px solid #0ea5e9; padding-bottom: 8px; }}
+  h2 {{ color:#0f172a; margin-top: 32px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }}
+  h3 {{ color:#334155; margin-top: 24px; }}
+  .muted {{ color:#475569; font-style: italic; }}
+  figure {{ margin: 24px 0; page-break-inside: avoid; }}
+  figcaption {{ margin: 0 0 8px 0; font-weight: 600; font-size: 0.95em; color: #0f172a; }}
+  pre {{ white-space: pre-wrap; background: #f8fafc; padding: 12px; border-radius: 4px; border: 1px solid #e2e8f0; overflow-x: auto; }}
+  table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
+  td, th {{ border:1px solid #cbd5e1; padding:6px 10px; text-align: left; }}
+  th {{ background: #f1f5f9; font-weight: 600; }}
+  img {{ max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 4px; }}
+  .section-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(800px, 1fr)); gap: 24px; }}
+  @media print {{
+    @page {{ size: A4; margin: 14mm; }}
+    figure {{ page-break-inside: avoid; }}
+    h2 {{ page-break-after: avoid; }}
+  }}
 </style></head>
 <body>
   <h1>{title}</h1>
+  <p class="muted">Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 
-  <h2>Overview</h2>
+  <h2>📊 Dataset Overview</h2>
   <h3>Preview</h3>{head_html}
-  <h3>Description</h3>{desc_html}
-  <h3>Info</h3><pre>{info_str}</pre>
-  {"<h3>Missing values</h3>" + missing_html if missing_html else ""}
+  <h3>Statistical Description</h3>{desc_html}
+  <h3>Dataset Info</h3><pre>{info_str}</pre>
+  {"<h3>Missing Values</h3>" + missing_html if missing_html else ""}
 
-  <h2>AI Summary</h2>
+  <h2>🤖 AI Analysis Summary</h2>
   {ai_html}
 
-  <h2>Static trends</h2>
-  {''.join(static_sections) if static_sections else '<div class="muted">No numeric columns to plot.</div>'}
+  <h2>📈 Correlation Matrix</h2>
+  {corr_html if corr_html else '<p class="muted">Not enough numeric columns to compute correlation.</p>'}
 
-  <h2>Forecasts</h2>
-  {''.join(forecast_sections) if forecast_sections else '<div class="muted">No timeseries forecasts available.</div>'}
+  <h2>� Correlation Heatmaps</h2>
+  {"<div class='section-grid'>" + 
+   (f"<figure><figcaption><strong>Spearman Correlation</strong></figcaption><img style='max-width:100%' src='data:image/png;base64,{corr_heatmap_spearman}' /></figure>" if corr_heatmap_spearman else "") +
+   (f"<figure><figcaption><strong>Pearson Correlation</strong></figcaption><img style='max-width:100%' src='data:image/png;base64,{corr_heatmap_pearson}' /></figure>" if corr_heatmap_pearson else "") +
+   "</div>" if (corr_heatmap_spearman or corr_heatmap_pearson) else '<p class="muted">No correlation heatmaps available (requires 2+ numeric columns).</p>'}
 
-  <h2>Correlation</h2>
-  {corr_html if corr_html else '<div class="muted">Not enough numeric columns to compute correlation.</div>'}
+  <h2>�📉 Trend Visualizations</h2>
+  <div class="section-grid">
+    {''.join(static_sections) if static_sections else '<p class="muted">No numeric columns to plot.</p>'}
+  </div>
+
+  {"<h2>🔄 STL Decompositions</h2><div class='section-grid'>" + ''.join(stl_sections) + "</div>" if stl_sections else ""}
+
+  {"<h2>🔮 Forecasts</h2><div class='section-grid'>" + ''.join(forecast_sections) + "</div>" if forecast_sections else ""}
+
 </body></html>
 """
     resp = make_response(html)
     resp.headers['Content-Type'] = 'text/html; charset=utf-8'
     base = os.path.splitext(display)[0]
-    out_name = secure_filename(f"{base}_report.html")
+    out_name = secure_filename(f"{base}_complete_report.html")
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
     return resp
 

@@ -9,7 +9,48 @@ Multi‑format exploratory data analysis, statistical insights, anomaly & trend 
 ## 1. Overview
 This project started as a quick way to upload sensor or tabular datasets (CSV, Excel, TXT, JSON) and get fast, readable analysis. It has evolved into a modular data insight tool with AI summaries, question answering, forecasting visuals, decomposition plots, correlation exploration and performance-aware caching. The application is intentionally self-contained (`app.py` drives everything) to keep iteration speed high.
 
+### Upload Interface
+<div align="center">
+  <img src="screenshots/Upload page.png" alt="Upload Page" width="800"/>
+  <p><em>Clean, intuitive upload interface with configurable analysis options</em></p>
+</div>
+
 ## 2. Key Features (Current State)
+
+### Visual Overview
+
+<div align="center">
+  <img src="screenshots/AI summary.png" alt="AI Summary" width="800"/>
+  <p><em>Comprehensive AI-generated narrative analysis with structured insights</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/AI Q&A.png" alt="AI Q&A" width="800"/>
+  <p><em>Context-aware question answering powered by Gemini AI</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/Static graphs.png" alt="Static Graphs" width="800"/>
+  <p><em>High-quality Matplotlib visualizations with trend analysis</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/Interactive graphs.png" alt="Interactive Graphs" width="800"/>
+  <p><em>Interactive Plotly charts for deeper data exploration</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/Forecasts.png" alt="Forecasts" width="800"/>
+  <p><em>Time series forecasting with confidence intervals and STL decomposition</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/Correlations.png" alt="Correlations" width="800"/>
+  <p><em>Correlation heatmaps with both Spearman and Pearson methods</em></p>
+</div>
+
+
+### Implemented Features
 Implemented:
 - File upload & persistent session dataset registry (multiple datasets retained per run)
 - Automatic schema parsing & numeric coercion with graceful fallbacks

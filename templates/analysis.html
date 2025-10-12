@@ -118,8 +118,8 @@
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
       <div class="actions">
-  <a class="pill" title="Download AI summary (HTML)" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
   <a class="pill" title="Download all static plots as ZIP" href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Images ZIP</a>
+  <a class="pill" title="Download AI summary (HTML)" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
   <a class="pill" title="Download full combined report" href="{{ url_for('download_full_report_html', filename=filename, display=display_name) }}">Full report</a>
   <a class="pill" title="Download cleaned CSV file" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Cleaned CSV</a>
   <a class="pill" title="Upload a new dataset (opens file picker)" href="{{ url_for('upload_file') }}?auto=1">New dataset</a>
