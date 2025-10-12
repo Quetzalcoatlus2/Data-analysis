@@ -3602,13 +3602,13 @@ def download_full_report_html(filename):
   <h2>📈 Correlation Matrix</h2>
   {corr_html if corr_html else '<p class="muted">Not enough numeric columns to compute correlation.</p>'}
 
-  <h2>� Correlation Heatmaps</h2>
+  <h2>📊 Correlation Heatmaps</h2>
   {"<div class='section-grid'>" + 
    (f"<figure><figcaption><strong>Spearman Correlation</strong></figcaption><img style='max-width:100%' src='data:image/png;base64,{corr_heatmap_spearman}' /></figure>" if corr_heatmap_spearman else "") +
    (f"<figure><figcaption><strong>Pearson Correlation</strong></figcaption><img style='max-width:100%' src='data:image/png;base64,{corr_heatmap_pearson}' /></figure>" if corr_heatmap_pearson else "") +
    "</div>" if (corr_heatmap_spearman or corr_heatmap_pearson) else '<p class="muted">No correlation heatmaps available (requires 2+ numeric columns).</p>'}
 
-  <h2>�📉 Trend Visualizations</h2>
+  <h2>📉 Trend Visualizations</h2>
   <div class="section-grid">
     {''.join(static_sections) if static_sections else '<p class="muted">No numeric columns to plot.</p>'}
   </div>
