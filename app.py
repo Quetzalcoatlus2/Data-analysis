@@ -1424,8 +1424,8 @@ def _seasonality_strength(series: pd.Series, seasonal_period: int | None) -> flo
         return float(strength)
     except Exception:
         return 0.0
-def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None):
-    """Generate a plot showing historical data and forecast with confidence intervals."""
+def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None, anomalies_idx=None):
+    """Generate a plot showing historical data and forecast with confidence intervals and anomaly markers."""
     print(f"[PLOT DEBUG] generate_forecast_plot called:")
     print(f"  - history length: {len(history)}")
     print(f"  - history index type: {type(history.index)}")
@@ -1483,6 +1483,26 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         label='Forecast',
         zorder=3
     )
+
+    # Add anomaly markers if provided
+    if anomalies_idx is not None and len(anomalies_idx):
+        try:
+            # Filter anomalies that are within the history_tail_series index
+            aligned_anomalies = history_tail_series.loc[history_tail_series.index.intersection(anomalies_idx)]
+            if len(aligned_anomalies) > 0:
+                ax.scatter(
+                    aligned_anomalies.index,
+                    aligned_anomalies.values,
+                    color='red',
+                    s=40,
+                    zorder=5,
+                    label='Anomaly',
+                    marker='o',
+                    edgecolors='darkred',
+                    linewidths=1.5
+                )
+        except Exception as e:
+            app.logger.warning(f"Could not plot anomalies: {e}")
 
     if conf_int is not None:
         try:
@@ -2847,7 +2867,7 @@ def analyze_file(filename):
 
     # Determine whether to build static/forecast/interactive content based on active_view.
     # IMPORTANT: To keep upload/overview fast, run heavy forecasting only in the explicit Forecast view.
-    build_static = active_view in ("static", "overview")
+    build_static = False  # Static view removed from application
     build_forecast = active_view == "forecast"
     build_interactive = active_view == "interactive"
 
@@ -2911,10 +2931,11 @@ def analyze_file(filename):
                     # Unified pipeline
                     fc_mean, conf_df = _compute_forecast(series, steps)
 
-                    title_fc = f"Forecast for {column}"
+                    title_fc = f"Forecast for {column} (with anomalies)"
                     s_hist = _thin_series(series, max_points=600)
                     xlab = 'Timestamp' if isinstance(series.index, pd.DatetimeIndex) else 'Index'
                     try:
+                        # Pass anomaly indices to the forecast plot generation
                         img_fc = generate_forecast_plot(
                             s_hist,
                             fc_mean,
@@ -2922,7 +2943,8 @@ def analyze_file(filename):
                             xlab,
                             column,
                             conf_int=conf_df,
-                            history_tail=None
+                            history_tail=None,
+                            anomalies_idx=an_idx  # Add anomaly markers to forecast plot
                         )
                         forecast_plots.append({"img": img_fc, "title": title_fc})
                     except Exception as _e:
@@ -3108,6 +3130,8 @@ def analyze_file(filename):
                 except Exception:
                     continue
                 if len(series) >= 5:
+                    # Detect anomalies for fallback forecast
+                    an_idx_fb, _ = detect_anomalies(series, contamination=user_contam)
                     steps = effective_steps
                     fc_mean, conf_df = _compute_forecast(series, steps)
                     title_fc = f"Forecast for {column}"
@@ -3120,7 +3144,8 @@ def analyze_file(filename):
                             'Timestamp' if isinstance(series.index, pd.DatetimeIndex) else 'Index',
                             column,
                             conf_int=conf_df,
-                            history_tail=None
+                            history_tail=None,
+                            anomalies_idx=an_idx_fb
                         ),
                         "title": title_fc
                     })
@@ -3369,7 +3394,10 @@ def download_static_plots_zip(filename):
             if s.empty or len(s) < 3:
                 continue
             
-            # Trend plot
+            # Detect anomalies for this column
+            an_idx, an_score = detect_anomalies(s, contamination=0.02)
+            
+            # Trend plot with anomalies
             try:
                 title = f"Trend for {col}"
                 img_b64 = generate_plot(
@@ -3377,7 +3405,7 @@ def download_static_plots_zip(filename):
                     title,
                     'Timestamp' if is_timeseries else 'Index',
                     col,
-                    anomalies_idx=None
+                    anomalies_idx=an_idx
                 )
                 raw = base64.b64decode(img_b64.encode('utf-8'))
                 zf.writestr(f"{secure_filename(str(col))}_trend.png", raw)
@@ -3409,7 +3437,7 @@ def download_static_plots_zip(filename):
                 
                 if fc_mean is not None and len(fc_mean) > 0:
                     try:
-                        fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps)", 'Timestamp', col, conf_int=ci, history_tail=None)
+                        fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps)", 'Timestamp', col, conf_int=ci, history_tail=None, anomalies_idx=an_idx)
                         raw = base64.b64decode(fc_b64.encode('utf-8'))
                         zf.writestr(f"{secure_filename(str(col))}_forecast.png", raw)
                     except Exception:
@@ -3481,7 +3509,7 @@ def download_full_report_html(filename):
 
     # Generate plots for each numeric column
     is_ts = isinstance(df.index, pd.DatetimeIndex)
-    static_sections = []
+    trend_sections = []
     stl_sections = []
     forecast_sections = []
     
@@ -3507,10 +3535,13 @@ def download_full_report_html(filename):
             except:
                 pass
         
-        # Static trend plot
+        # Detect anomalies for trend plot
+        an_idx, an_score = detect_anomalies(s, contamination=0.02)
+        
+        # Trend plot with anomalies
         try:
-            img_b64 = generate_plot(s, f"Trend for {col}", 'Timestamp' if is_ts else 'Index', col, anomalies_idx=None)
-            static_sections.append(f'<figure><figcaption><strong>Trend: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{img_b64}" /></figure>')
+            img_b64 = generate_plot(s, f"Trend for {col}", 'Timestamp' if is_ts else 'Index', col, anomalies_idx=an_idx)
+            trend_sections.append(f'<figure><figcaption><strong>Trend: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{img_b64}" /></figure>')
         except Exception:
             pass
         
@@ -3543,7 +3574,7 @@ def download_full_report_html(filename):
             if fc_mean is not None and len(fc_mean) > 0:
                 try:
                     print(f"[DEBUG] Creating forecast plot for {col}")
-                    fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps = 10%)", 'Timestamp', col, conf_int=ci, history_tail=None)
+                    fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps = 10%)", 'Timestamp', col, conf_int=ci, history_tail=None, anomalies_idx=an_idx)
                     forecast_sections.append(f'<figure><figcaption><strong>Forecast: {col}</strong> ({forecast_steps} steps, 10% of data)</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
                     print(f"[DEBUG] Successfully created forecast plot for {col}")
                 except Exception as e:
@@ -3555,7 +3586,7 @@ def download_full_report_html(filename):
 
     # Build HTML report
     print(f"[DEBUG] Report generation complete:")
-    print(f"  - Static sections: {len(static_sections)}")
+    print(f"  - Trend sections: {len(trend_sections)}")
     print(f"  - STL sections: {len(stl_sections)}")
     print(f"  - Forecast sections: {len(forecast_sections)}")
     if len(forecast_sections) == 0:
@@ -3599,6 +3630,15 @@ def download_full_report_html(filename):
   <h2>🤖 AI Analysis Summary</h2>
   {ai_html}
 
+  <h2>📉 Trend Visualizations (with Anomaly Detection)</h2>
+  <div class="section-grid">
+    {''.join(trend_sections) if trend_sections else '<p class="muted">No numeric columns to plot.</p>'}
+  </div>
+
+  {"<h2>🔄 STL Decompositions</h2><div class='section-grid'>" + ''.join(stl_sections) + "</div>" if stl_sections else ""}
+
+  {"<h2>🔮 Forecasts (with Anomaly Detection)</h2><div class='section-grid'>" + ''.join(forecast_sections) + "</div>" if forecast_sections else ""}
+
   <h2>📈 Correlation Matrix</h2>
   {corr_html if corr_html else '<p class="muted">Not enough numeric columns to compute correlation.</p>'}
 
@@ -3607,15 +3647,6 @@ def download_full_report_html(filename):
    (f"<figure><figcaption><strong>Spearman Correlation</strong></figcaption><img style='max-width:100%' src='data:image/png;base64,{corr_heatmap_spearman}' /></figure>" if corr_heatmap_spearman else "") +
    (f"<figure><figcaption><strong>Pearson Correlation</strong></figcaption><img style='max-width:100%' src='data:image/png;base64,{corr_heatmap_pearson}' /></figure>" if corr_heatmap_pearson else "") +
    "</div>" if (corr_heatmap_spearman or corr_heatmap_pearson) else '<p class="muted">No correlation heatmaps available (requires 2+ numeric columns).</p>'}
-
-  <h2>📉 Trend Visualizations</h2>
-  <div class="section-grid">
-    {''.join(static_sections) if static_sections else '<p class="muted">No numeric columns to plot.</p>'}
-  </div>
-
-  {"<h2>🔄 STL Decompositions</h2><div class='section-grid'>" + ''.join(stl_sections) + "</div>" if stl_sections else ""}
-
-  {"<h2>🔮 Forecasts</h2><div class='section-grid'>" + ''.join(forecast_sections) + "</div>" if forecast_sections else ""}
 
 </body></html>
 """

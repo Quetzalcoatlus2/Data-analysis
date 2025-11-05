@@ -111,9 +111,8 @@
       <nav class="nav">
   {% set pct = request.args.get('forecast_pct', analysis.controls.get('forecast_pct', 0.10)) %}
   <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct) }}">Overview</a>
-  <a title="View static PNG plots" class="pill {{ 'active' if active_view == 'static' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='static', forecast_pct=pct) }}">Static</a>
   <a title="Explore interactively with zoom & hover" class="pill {{ 'active' if active_view == 'interactive' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive', forecast_pct=pct) }}">Interactive</a>
-  <a title="Show forecasts with 95% confidence band" class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Forecast</a>
+  <a title="Show forecasts with 95% confidence band and anomaly detection" class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Forecast</a>
   <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct) }}">Correlation</a>
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
@@ -218,27 +217,10 @@
         {% endif %}
       </div>
 
-    {% elif active_view == 'static' %}
-  <section class="panel" style="width:100%;">
-        <h3>Static trends</h3>
-        <div class="muted">Full-history PNGs with anomaly markers</div>
-        {% if analysis.plots %}
-          <div class="grid grid-2">
-            {% for p in analysis.plots %}
-              <figure class="panel">
-                <figcaption style="margin-bottom:8px">{{ p.title }}</figcaption>
-                <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
-              </figure>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="muted">No numeric columns to plot.</div>
-        {% endif %}
-      </section>
-
     {% elif active_view == 'forecast' %}
   <section class="panel" style="width:100%;">
-        <h3>Forecasts</h3>
+        <h3>Forecasts & Anomalies</h3>
+        <div class="muted">Full-history context with forecast, 95% confidence intervals, and detected anomalies</div>
         <div class="row" style="margin-bottom:8px">
           <label for="forecastPctSelectTop">Forecast horizon</label>
           <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
