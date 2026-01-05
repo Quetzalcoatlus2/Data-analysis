@@ -4210,3 +4210,55 @@ fpdf.errors.FPDFException: Not enough horizontal space to render a single charac
 2026-01-05 20:56:37,062 - app - INFO - Forecast plot: STL decomposition for Visibility_km
 2026-01-05 20:56:37,066 - app - INFO - Forecast plot: STL decomposition for Press_kPa
 2026-01-05 20:56:37,201 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=27.57s cols=7
+2026-01-05 21:00:05,686 - app - INFO - Application starting - Log file initialized
+2026-01-05 21:00:15,200 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-05 21:00:54,315 - app - INFO - Static forecast_plots count: 0
+2026-01-05 21:00:54,367 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=correlation elapsed=48.22s cols=7
+2026-01-05 21:07:33,940 - app - INFO - Application starting - Log file initialized
+2026-01-05 21:07:35,361 - app - INFO - Forecast start col=Temp_C steps=1757 rows=8784 pct=0.2
+2026-01-05 21:07:36,775 - app - INFO - Forecast plot ready col=Temp_C forecast_points=1757
+2026-01-05 21:07:36,776 - app - INFO - Forecast done col=Temp_C took=1.42s steps=1757 points=8784
+2026-01-05 21:07:43,187 - app - INFO - Forecast start col=Dew Point Temp_C steps=1757 rows=8784 pct=0.2
+2026-01-05 21:07:43,934 - app - INFO - Forecast plot ready col=Dew Point Temp_C forecast_points=1757
+2026-01-05 21:07:43,935 - app - INFO - Forecast done col=Dew Point Temp_C took=0.75s steps=1757 points=8784
+2026-01-05 21:07:48,500 - app - INFO - Forecast start col=Rel Hum_% steps=1757 rows=8784 pct=0.2
+2026-01-05 21:07:49,309 - app - INFO - Forecast plot ready col=Rel Hum_% forecast_points=1757
+2026-01-05 21:07:49,312 - app - INFO - Forecast done col=Rel Hum_% took=0.81s steps=1757 points=8784
+2026-01-05 21:07:54,187 - app - INFO - Forecast start col=Wind Speed_km/h steps=1757 rows=8784 pct=0.2
+2026-01-05 21:07:54,848 - app - INFO - Forecast plot ready col=Wind Speed_km/h forecast_points=1757
+2026-01-05 21:07:54,849 - app - INFO - Forecast done col=Wind Speed_km/h took=0.66s steps=1757 points=8784
+2026-01-05 21:07:59,150 - app - INFO - Forecast start col=Visibility_km steps=1757 rows=8784 pct=0.2
+2026-01-05 21:07:59,910 - app - INFO - Forecast plot ready col=Visibility_km forecast_points=1757
+2026-01-05 21:07:59,913 - app - INFO - Forecast done col=Visibility_km took=0.76s steps=1757 points=8784
+2026-01-05 21:08:04,496 - app - INFO - Forecast start col=Press_kPa steps=1757 rows=8784 pct=0.2
+2026-01-05 21:08:05,301 - app - INFO - Forecast plot ready col=Press_kPa forecast_points=1757
+2026-01-05 21:08:05,302 - app - INFO - Forecast done col=Press_kPa took=0.81s steps=1757 points=8784
+2026-01-05 21:08:13,750 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-05 21:09:10,266 - app - INFO - Static forecast_plots count: 12
+2026-01-05 21:09:10,267 - app - INFO - Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-05 21:09:10,269 - app - INFO - Forecast plot: STL decomposition for Temp_C
+2026-01-05 21:09:10,270 - app - INFO - Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-05 21:09:10,271 - app - INFO - Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-05 21:09:10,273 - app - INFO - Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-05 21:09:10,275 - app - INFO - Forecast plot: STL decomposition for Rel Hum_%
+2026-01-05 21:09:10,276 - app - INFO - Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-05 21:09:10,277 - app - INFO - Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-05 21:09:10,279 - app - INFO - Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-05 21:09:10,279 - app - INFO - Forecast plot: STL decomposition for Visibility_km
+2026-01-05 21:09:10,280 - app - INFO - Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-05 21:09:10,281 - app - INFO - Forecast plot: STL decomposition for Press_kPa
+2026-01-05 21:09:10,336 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=95.93s cols=7
+2026-01-05 21:09:35,416 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 21:09:35,493 - app - INFO - Loaded Arial font successfully
+2026-01-05 21:09:35,494 - app - INFO - Adding page...
+2026-01-05 21:09:35,497 - app - INFO - Page added. Page No: 1
+2026-01-05 21:09:35,614 - app - INFO - Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 21:16:03,335 - app - INFO - Application starting - Log file initialized
+2026-01-05 21:16:23,426 - app - INFO - Static forecast_plots count: 0
+2026-01-05 21:16:23,542 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=8.45s cols=7
+2026-01-05 21:16:26,976 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-05 21:17:44,521 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 21:17:46,749 - app - INFO - Loaded Arial font successfully
+2026-01-05 21:17:46,753 - app - INFO - Adding page...
+2026-01-05 21:17:47,021 - app - INFO - Page added. Page No: 1
+2026-01-05 21:17:48,552 - app - INFO - Table won't fit (needed 80, left 66.26674999999994), adding page

@@ -3797,6 +3797,23 @@ def download_static_plots_zip(filename):
             except Exception:
                 pass
             
+            # Distribution histogram
+            try:
+                fig, ax = plt.subplots(figsize=(8, 5))
+                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
+                ax.set_title(f"Distribution: {col}")
+                ax.set_xlabel(col)
+                ax.set_ylabel("Frequency")
+                ax.grid(True, alpha=0.3)
+                
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+                plt.close(fig)
+                buf.seek(0)
+                zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
+            except Exception:
+                pass
+            
             # STL decomposition (for timeseries with sufficient data)
             if is_timeseries and len(s) >= 28:
                 try:
@@ -4163,8 +4180,9 @@ def download_full_report_pdf(filename):
             corr_heatmap_pearson = generate_correlation_heatmap(df, method='pearson', title='Pearson Correlation')
             if corr_heatmap_pearson:
                 ensure_corr_header()
-                # Keep-with-next logic
-                if pdf.get_y() > 200:
+                # Keep label and image together - add page if not enough space for both
+                # Image height is approximately 100-120mm, so break earlier
+                if pdf.get_y() > 120:
                     pdf.add_page()
                     
                 pdf.set_font(font_family, 'B', 10)
