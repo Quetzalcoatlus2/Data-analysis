@@ -3895,7 +3895,7 @@ class PDFReport(FPDF):
         self.set_y(-15)
         self.set_font('helvetica', 'I', 8)
         self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
-        self.cell(0, 10, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}', align='R')
+        self.cell(0, 10, f'Generated: {datetime.now().strftime("%H:%M %d.%m.%Y")}', align='R')
 
 @app.route('/download/<filename>/report.pdf', methods=['GET'])
 def download_full_report_pdf(filename):

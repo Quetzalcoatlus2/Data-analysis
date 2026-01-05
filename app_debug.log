@@ -4182,3 +4182,31 @@ fpdf.errors.FPDFException: Not enough horizontal space to render a single charac
 2026-01-05 20:54:17,870 - app - INFO - Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
 2026-01-05 20:54:18,507 - app - INFO - Forecast plot ready col=Wind Speed_km/h forecast_points=879
 2026-01-05 20:54:18,508 - app - INFO - Forecast done col=Wind Speed_km/h took=0.64s steps=879 points=8784
+2026-01-05 20:54:22,655 - app - INFO - Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2026-01-05 20:54:23,473 - app - INFO - Forecast plot ready col=Visibility_km forecast_points=879
+2026-01-05 20:54:23,476 - app - INFO - Forecast done col=Visibility_km took=0.82s steps=879 points=8784
+2026-01-05 20:54:27,267 - app - INFO - Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2026-01-05 20:54:27,931 - app - INFO - Forecast plot ready col=Press_kPa forecast_points=879
+2026-01-05 20:54:27,936 - app - INFO - Forecast done col=Press_kPa took=0.67s steps=879 points=8784
+2026-01-05 20:54:31,042 - app - INFO - Static forecast_plots count: 12
+2026-01-05 20:54:31,043 - app - INFO - Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-05 20:54:31,044 - app - INFO - Forecast plot: STL decomposition for Temp_C
+2026-01-05 20:54:31,045 - app - INFO - Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-05 20:54:31,047 - app - INFO - Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-05 20:54:31,048 - app - INFO - Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-05 20:54:31,049 - app - INFO - Forecast plot: STL decomposition for Rel Hum_%
+2026-01-05 20:54:31,049 - app - INFO - Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-05 20:54:31,050 - app - INFO - Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-05 20:54:31,051 - app - INFO - Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-05 20:54:31,052 - app - INFO - Forecast plot: STL decomposition for Visibility_km
+2026-01-05 20:54:31,053 - app - INFO - Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-05 20:54:31,054 - app - INFO - Forecast plot: STL decomposition for Press_kPa
+2026-01-05 20:54:31,091 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=28.39s cols=7
+2026-01-05 20:56:36,930 - app - INFO - Static forecast_plots count: 6
+2026-01-05 20:56:36,982 - app - INFO - Forecast plot: STL decomposition for Temp_C
+2026-01-05 20:56:37,028 - app - INFO - Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-05 20:56:37,052 - app - INFO - Forecast plot: STL decomposition for Rel Hum_%
+2026-01-05 20:56:37,058 - app - INFO - Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-05 20:56:37,062 - app - INFO - Forecast plot: STL decomposition for Visibility_km
+2026-01-05 20:56:37,066 - app - INFO - Forecast plot: STL decomposition for Press_kPa
+2026-01-05 20:56:37,201 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=27.57s cols=7
