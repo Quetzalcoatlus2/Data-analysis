@@ -1,58 +1,211 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <title>Analysis - {{ display_name }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark">
   <style>
-  
     :root[data-theme="light"] {
-      --bg: #ffffff; --panel: #f8fafc; --text: #0f172a; --muted: #475569;
-      --border: #e2e8f0; --link: #0ea5e9; --accent: #0ea5e9; --accent-2: #f97316;
+      --bg: #ffffff;
+      --panel: #f8fafc;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --link: #0ea5e9;
+      --accent: #0ea5e9;
+      --accent-2: #f97316;
     }
-    :root[data-theme="dark"] {
-      --bg: #0b1220; --panel: #111827; --text: #e5e7eb; --muted: #9ca3af;
-      --border: #1f2937; --link: #93c5fd; --accent: #60a5fa; --accent-2: #f97316;
-    }
-  html, body { background: var(--bg); color: var(--text); margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow-x:hidden; }
-    a { color: var(--link); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    header { position: sticky; top: 0; z-index: 10; background: color-mix(in oklab, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
-  .wrap { width: 100%; margin: 0; padding: 12px clamp(14px,2vw,28px); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .wrap .actions { display:flex; gap:8px; flex-wrap:wrap; padding-right: clamp(24px, 3vw, 56px); }
-  @media (max-width:800px) { .wrap .actions { padding-right: clamp(16px, 4vw, 40px); } }
-    .wrap .nav { flex-wrap:wrap; }
-    @media (max-width: 1300px) {
-      .wrap nav.nav { flex: 1 1 100%; order: 10; }
-      .wrap > .nav + .nav { order: 11; }
-      .wrap .spacer { display:none; }
-    }
-    .title { font-size: 18px; font-weight: 600; color: var(--text); margin-right: 8px; }
-    .nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .pill { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
-    .pill.active { color: var(--text); background: color-mix(in oklab, var(--panel) 80%, var(--bg)); border-color: color-mix(in oklab, var(--border) 80%, var(--bg)); }
-    .spacer { flex: 1; }
-    .btn { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
-  .content { width:100%; margin:0; padding: 20px clamp(14px,2vw,32px) 60px; }
-    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-    .grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 16px; }
-    @media (min-width: 900px) { .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    img.plot { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); }
-    .muted { color: var(--muted); }
-    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-    select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 
-    .table-center table { width: 100%; }
+    :root[data-theme="dark"] {
+      --bg: #0b1220;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: #1f2937;
+      --link: #93c5fd;
+      --accent: #60a5fa;
+      --accent-2: #f97316;
+    }
+
+    html,
+    body {
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .wrap {
+      width: 100%;
+      margin: 0;
+      padding: 12px clamp(14px, 2vw, 28px);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .wrap .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-right: clamp(24px, 3vw, 56px);
+    }
+
+    @media (max-width:800px) {
+      .wrap .actions {
+        padding-right: clamp(16px, 4vw, 40px);
+      }
+    }
+
+    .wrap .nav {
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 1300px) {
+      .wrap nav.nav {
+        flex: 1 1 100%;
+        order: 10;
+      }
+
+      .wrap>.nav+.nav {
+        order: 11;
+      }
+
+      .wrap .spacer {
+        display: none;
+      }
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin-right: 8px;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .pill.active {
+      color: var(--text);
+      background: color-mix(in oklab, var(--panel) 80%, var(--bg));
+      border-color: color-mix(in oklab, var(--border) 80%, var(--bg));
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .btn {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    .content {
+      width: 100%;
+      margin: 0;
+      padding: 20px clamp(14px, 2vw, 32px) 60px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    @media (min-width: 900px) {
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    img.plot {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    select {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .table-center table {
+      width: 100%;
+    }
+
     .table-center table th,
-    .table-center table thead th { text-align: center !important; }
+    .table-center table thead th {
+      text-align: center !important;
+    }
   </style>
   {% set active_view = request.args.get('view', 'overview') %}
   {% if active_view in ['interactive', 'correlation'] %}
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   {% endif %}
   <script>
-    (function() {
+    (function () {
       const saved = localStorage.getItem('theme') || 'light';
       document.documentElement.setAttribute('data-theme', saved);
       function setThemeButtonLabel() {
@@ -61,7 +214,7 @@
         const cur = document.documentElement.getAttribute('data-theme') || 'light';
         btn.textContent = cur === 'light' ? 'Dark mode' : 'Light mode';
       }
-      window.toggleTheme = function() {
+      window.toggleTheme = function () {
         const cur = document.documentElement.getAttribute('data-theme') || 'light';
         const next = cur === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
@@ -70,7 +223,7 @@
         setThemeButtonLabel();
       };
       window.addEventListener('DOMContentLoaded', setThemeButtonLabel);
-      window.getThemeVars = function() {
+      window.getThemeVars = function () {
         const s = getComputedStyle(document.documentElement);
         const pick = n => (s.getPropertyValue(n) || '').trim();
         return {
@@ -86,43 +239,57 @@
   </script>
   <script>
 
-(function () {
-  let p;
-  window.loadPlotly = function loadPlotly() {
-    if (window.Plotly) return Promise.resolve(window.Plotly);
-    if (p) return p;
-    p = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
-      s.async = true;
-      s.onload = () => resolve(window.Plotly);
-      s.onerror = (e) => reject(new Error('Failed to load Plotly'));
-      document.head.appendChild(s);
-    });
-    return p;
-  };
-})();
-</script>
+    (function () {
+      let p;
+      window.loadPlotly = function loadPlotly() {
+        if (window.Plotly) return Promise.resolve(window.Plotly);
+        if (p) return p;
+        p = new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
+          s.async = true;
+          s.onload = () => resolve(window.Plotly);
+          s.onerror = (e) => reject(new Error('Failed to load Plotly'));
+          document.head.appendChild(s);
+        });
+        return p;
+      };
+    })();
+  </script>
 </head>
+
 <body>
   <header>
     <div class="wrap">
       <div class="title">Analysis: {{ display_name }}</div>
       <nav class="nav">
-  {% set pct = request.args.get('forecast_pct', analysis.controls.get('forecast_pct', 0.10)) %}
-  <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct) }}">Overview</a>
-  <a title="Explore interactively with zoom & hover" class="pill {{ 'active' if active_view == 'interactive' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive', forecast_pct=pct) }}">Interactive</a>
-  <a title="Show forecasts with 95% confidence band and anomaly detection" class="pill {{ 'active' if active_view == 'forecast' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Forecast</a>
-  <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}" href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct) }}">Correlation</a>
+        {% set pct = request.args.get('forecast_pct', analysis.controls.get('forecast_pct', 0.10)) %}
+        <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}"
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct) }}">Overview</a>
+        <a title="Explore interactively with zoom & hover"
+          class="pill {{ 'active' if active_view == 'interactive' else '' }}"
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive', forecast_pct=pct) }}">Interactive</a>
+        <a title="Show forecasts with 95% confidence band and anomaly detection"
+          class="pill {{ 'active' if active_view == 'forecast' else '' }}"
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Forecast</a>
+        <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}"
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct) }}">Correlation</a>
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
       <div class="actions">
-  <a class="pill" title="Download all static plots as ZIP" href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Images ZIP</a>
-  <a class="pill" title="Download AI summary (HTML)" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
-  <a class="pill" title="Download full combined report" href="{{ url_for('download_full_report_html', filename=filename, display=display_name) }}">Full report</a>
-  <a class="pill" title="Download cleaned CSV file" href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Cleaned CSV</a>
-  <a class="pill" title="Upload a new dataset (opens file picker)" href="{{ url_for('upload_file') }}?auto=1">New dataset</a>
-  <button id="themeToggle" title="Toggle light / dark theme" class="btn" type="button" onclick="toggleTheme()" style="padding:8px 14px;">Theme</button>
+        <a class="pill" title="Download all static plots as ZIP"
+          href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Images ZIP</a>
+        <a class="pill" title="Download AI summary (HTML)"
+          href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
+        <a class="pill" title="Download full combined report (PDF)"
+          href="{{ url_for('download_full_report_pdf', filename=filename, display=display_name) }}">Full report
+          (PDF)</a>
+        <a class="pill" title="Download cleaned CSV file"
+          href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Cleaned CSV</a>
+        <a class="pill" title="Upload a new dataset (opens file picker)" href="{{ url_for('upload_file') }}?auto=1">New
+          dataset</a>
+        <button id="themeToggle" title="Toggle light / dark theme" class="btn" type="button" onclick="toggleTheme()"
+          style="padding:8px 14px;">Theme</button>
       </div>
     </div>
   </header>
@@ -134,292 +301,335 @@
     {% if active_view == 'overview' %}
 
 
-      <section id="ai-assistant" class="panel" style="margin-bottom: 16px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-          <h2 style="margin:0;">AI assistant</h2>
-          <div>
-            <a class="pill" href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">Download AI summary</a>
-            <a class="pill" href="{{ url_for('download_ai_summary_pdf', filename=filename, display=display_name) }}">Download AI summary (PDF)</a>
-          </div>
-        </div>
-
-        <h3 style="margin-top:10px;">AI summary</h3>
-        <div>{{ analysis.ai_summary | safe }}</div>
-
-        <h3 style="margin-top:16px;">Ask the AI about this dataset</h3>
-        <form id="qaForm" method="POST" action="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}"
-              style="display:flex; gap:8px; align-items:center;">
-          <input id="questionInput" type="text" name="question" value="{{ analysis.user_question or '' }}"
-                 placeholder="e.g., What drives the recent spikes?"
-                 style="flex:1; background: var(--panel); color: var(--text); border:1px solid var(--border); border-radius:8px; padding:8px" />
-          <button id="askBtn" type="submit" class="btn" disabled>Ask</button>
-        </form>
-        <script>
-          (function(){
-            const inp = document.getElementById('questionInput');
-            const btn = document.getElementById('askBtn');
-            const form = document.getElementById('qaForm');
-            function sync(){
-              const v = (inp.value||'').trim();
-              btn.disabled = v.length === 0;
-            }
-            if (inp && btn){
-              inp.addEventListener('input', sync);
-              sync();
-              form.addEventListener('submit', function(e){
-                if (btn.disabled) e.preventDefault();
-              });
-            }
-          })();
-        </script>
-
-        {% if analysis.user_question %}
-          <div class="muted" style="margin-top:8px">Question: {{ analysis.user_question }}</div>
-        {% endif %}
-        {% if analysis.ai_answer %}
-          <div style="margin-top:8px">{{ analysis.ai_answer | safe }}</div>
-        {% endif %}
-      </section>
-
-      {% if analysis.ai_answer %}
-      <script>
-        try { document.getElementById('ai-assistant').scrollIntoView({behavior:'smooth', block:'start'}); } catch(e) {}
-      </script>
-      {% endif %}
-
-  <div class="grid" style="grid-template-columns: 1fr;">
-        <section class="panel">
-          <h3>Preview</h3>
-          <div class="muted">Top rows of your dataset</div>
-          <div class="table-center">
-            {{ analysis.head | safe }}
-          </div>
-        </section>
-
-        <section class="panel">
-          <h3>Description</h3>
-          <div class="muted">Pandas describe()</div>
-          <div class="table-center">
-            {{ analysis.description | safe }}
-          </div>
-        </section>
-
-        <section class="panel">
-          <h3>Info</h3>
-          <pre style="white-space:pre-wrap">{{ analysis.info }}</pre>
-        </section>
-
-        {% if analysis.missing_values %}
-          <section class="panel">
-            <h3>Missing values</h3>
-            {{ analysis.missing_values | safe }}
-          </section>
-        {% endif %}
+    <section id="ai-assistant" class="panel" style="margin-bottom: 16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <h2 style="margin:0;">AI assistant</h2>
       </div>
 
-    {% elif active_view == 'forecast' %}
-  <section class="panel" style="width:100%;">
-        <h3>Forecasts & Anomalies</h3>
-        <div class="muted">Full-history context with forecast, 95% confidence intervals, and detected anomalies</div>
-        <div class="row" style="margin-bottom:8px">
-          <label for="forecastPctSelectTop">Forecast horizon</label>
-          <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
-            {% for val,label in [(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
-              <option value="{{ '%.2f'|format(val) }}" {% if (pct|float) == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-          <span class="muted">= {{ analysis.controls.effective_steps }} steps of {{ analysis.controls.total_rows }} rows</span>
-        </div>
-        <script>
-          (function(){
-            const el = document.getElementById('forecastPctSelectTop');
-            if (!el) return;
-            el.addEventListener('change', function(){
-              try {
-                const url = new URL(window.location.href);
-                url.searchParams.set('forecast_pct', this.value);
-                url.searchParams.set('view', 'forecast');
-                window.location.href = url.toString();
-              } catch (e) { /* no-op */ }
+      <h3 style="margin-top:10px;">AI summary</h3>
+      <div>{{ analysis.ai_summary | safe }}</div>
+
+      <h3 style="margin-top:16px;">Ask the AI about this dataset</h3>
+      <form id="qaForm" method="POST"
+        action="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}"
+        style="display:flex; gap:8px; align-items:center;">
+        <input id="questionInput" type="text" name="question" value="{{ analysis.user_question or '' }}"
+          placeholder="e.g., What drives the recent spikes?"
+          style="flex:1; background: var(--panel); color: var(--text); border:1px solid var(--border); border-radius:8px; padding:8px" />
+        <button id="askBtn" type="submit" class="btn" disabled>Ask</button>
+      </form>
+      <script>
+        (function () {
+          const inp = document.getElementById('questionInput');
+          const btn = document.getElementById('askBtn');
+          const form = document.getElementById('qaForm');
+          function sync() {
+            const v = (inp.value || '').trim();
+            btn.disabled = v.length === 0;
+          }
+          if (inp && btn) {
+            inp.addEventListener('input', sync);
+            sync();
+            form.addEventListener('submit', function (e) {
+              if (btn.disabled) e.preventDefault();
             });
-          })();
-        </script>
-        <div class="muted">Full-history context with forecast and 95% CI</div>
-        {% if analysis.forecast_plots %}
-          <div class="grid grid-2">
-            {% for p in analysis.forecast_plots %}
-              <figure class="panel">
-                <figcaption style="margin-bottom:8px">{{ p.title }}</figcaption>
-                <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
-              </figure>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="muted">No timeseries forecasts available.</div>
-        {% endif %}
+          }
+        })();
+      </script>
+
+      {% if analysis.user_question %}
+      <div class="muted" style="margin-top:8px">Question: {{ analysis.user_question }}</div>
+      {% endif %}
+      {% if analysis.ai_answer %}
+      <div style="margin-top:8px">{{ analysis.ai_answer | safe }}</div>
+      {% endif %}
+    </section>
+
+    {% if analysis.ai_answer %}
+    <script>
+      try { document.getElementById('ai-assistant').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { }
+    </script>
+    {% endif %}
+
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <section class="panel">
+        <h3>Preview</h3>
+        <div class="muted">Top rows of your dataset</div>
+        <div class="table-center">
+          {{ analysis.head | safe }}
+        </div>
       </section>
+
+      <section class="panel">
+        <h3>Description</h3>
+        <div class="muted">Pandas describe()</div>
+        <div class="table-center">
+          {{ analysis.description | safe }}
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>Info</h3>
+        <pre style="white-space:pre-wrap">{{ analysis.info }}</pre>
+      </section>
+
+      {% if analysis.missing_values %}
+      <section class="panel">
+        <h3>Missing values</h3>
+        {{ analysis.missing_values | safe }}
+      </section>
+      {% endif %}
+    </div>
+
+    {% elif active_view == 'forecast' %}
+    <section class="panel" style="width:100%;">
+      <h3>Forecasts & Anomalies</h3>
+      <div class="muted">Full-history context with forecast, 95% confidence intervals, and detected anomalies</div>
+      <div class="row" style="margin-bottom:8px">
+        <label for="forecastPctSelectTop">Forecast horizon</label>
+        <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
+          {% for val,label in [(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+          <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <span class="muted">= {{ analysis.controls.effective_steps }} steps of {{ analysis.controls.total_rows }}
+          rows</span>
+      </div>
+      <script>
+        (function () {
+          const el = document.getElementById('forecastPctSelectTop');
+          if (!el) return;
+          el.addEventListener('change', function () {
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.set('forecast_pct', this.value);
+              url.searchParams.set('view', 'forecast');
+              window.location.href = url.toString();
+            } catch (e) { /* no-op */ }
+          });
+        })();
+      </script>
+      <div class="muted">Full-history context with forecast and 95% CI</div>
+      {% if analysis.forecast_plots %}
+      <div class="grid grid-2">
+        {% for p in analysis.forecast_plots %}
+        <figure class="panel">
+          <figcaption style="margin-bottom:8px">{{ p.title }}</figcaption>
+          <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
+        </figure>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="muted">No timeseries forecasts available.</div>
+      {% endif %}
+    </section>
 
     {% elif active_view == 'interactive' %}
-  <section class="panel" style="width:100%;">
-        <h3>Interactive charts</h3>
-        <div class="row" style="margin-bottom:8px">
-          <label for="forecastPctSelect">Forecast horizon</label>
-          <select id="forecastPctSelect" title="Set forecast length as percent of original rows (affects forecast view & AI summary)">
-            {% for val,label in [(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
-              <option value="{{ '%.2f'|format(val) }}" {% if (pct|float) == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-          <span class="muted">= {{ analysis.controls.effective_steps }} steps (of {{ analysis.controls.total_rows }} rows) – reloads on change</span>
-        </div>
-        <div class="row" style="margin-bottom:8px">
-          <label for="colPick">Column</label>
-          <select id="colPick">
-            {% for col in analysis.columns %}
-              <option value="{{ col }}">{{ col }}</option>
-            {% endfor %}
-          </select>
-          <span class="muted">Only the selected column is rendered to keep things fast.</span>
-        </div>
-        <div id="chart" class="panel" style="min-height:420px"></div>
-        <div id="dist" class="panel" style="min-height:220px"></div>
-      </section>
+    <section class="panel" style="width:100%;">
+      <h3>Interactive charts</h3>
+      <div class="row" style="margin-bottom:8px">
+        <label for="forecastPctSelect">Forecast horizon</label>
+        <select id="forecastPctSelect"
+          title="Set forecast length as percent of original rows (affects forecast view & AI summary)">
+          {% for val,label in [(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+          <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <span class="muted">= {{ analysis.controls.effective_steps }} steps (of {{ analysis.controls.total_rows }} rows)
+          – reloads on change</span>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <label for="colPick">Column</label>
+        <select id="colPick">
+          {% for col in analysis.columns %}
+          <option value="{{ col }}">{{ col }}</option>
+          {% endfor %}
+        </select>
+        <span class="muted">Only the selected column is rendered to keep things fast.</span>
+      </div>
+      <div id="chart" class="panel" style="min-height:420px"></div>
+      <div id="dist" class="panel" style="min-height:220px"></div>
+    </section>
 
-      <script id="interactivePayload" type="application/json">{{ (analysis.interactive or []) | tojson }}</script>
-      <script id="interactiveConfig" type="application/json">{{ {'filename': filename, 'fullHistoryUrl': url_for('full_history_json')} | tojson }}</script>
+    <script id="interactivePayload" type="application/json">{{ (analysis.interactive or []) | tojson }}</script>
+    <script id="interactiveConfig"
+      type="application/json">{{ {'filename': filename, 'fullHistoryUrl': url_for('full_history_json')} | tojson }}</script>
 
-      <script>
-        const ipEl = document.getElementById('interactivePayload');
-        const interactivePayload = JSON.parse((ipEl && ipEl.textContent) || '[]');
-        const cfgEl = document.getElementById('interactiveConfig');
-        const config = JSON.parse((cfgEl && cfgEl.textContent) || '{}');
-        const filename = config.filename || null;
-        const fullHistoryUrl = config.fullHistoryUrl || null;
-        const interactiveMap = {};
-        for (const item of interactivePayload) interactiveMap[item.column] = item;
+    <script>
+      const ipEl = document.getElementById('interactivePayload');
+      const interactivePayload = JSON.parse((ipEl && ipEl.textContent) || '[]');
+      const cfgEl = document.getElementById('interactiveConfig');
+      const config = JSON.parse((cfgEl && cfgEl.textContent) || '{}');
+      const filename = config.filename || null;
+      const fullHistoryUrl = config.fullHistoryUrl || null;
+      const interactiveMap = {};
+      for (const item of interactivePayload) interactiveMap[item.column] = item;
 
-        function applyThemeLayoutDefaults(layout) {
-          const t = getThemeVars();
-          const isDark = t.bg && /^#0|^#1|^#2/i.test(t.bg.trim());
-          const gridColor = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
-          layout.paper_bgcolor = t.panel;
-          layout.plot_bgcolor = t.panel;
-          layout.font = { color: t.text };
-          layout.margin = layout.margin || { l: 50, r: 20, t: 28, b: 48 };
-          layout.legend = Object.assign({ orientation: 'h' }, layout.legend || {});
-          layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
-          layout.title = null;
-          if (!layout.xaxis) layout.xaxis = {};
-          Object.assign(layout.xaxis, {
-            showgrid: true,
-            gridcolor: gridColor,
-            gridwidth: 1,
-            automargin: true,
-            nticks: 10
-          });
-          if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
-          Object.assign(layout.xaxis.rangeselector, {
-            visible: true,
-            bgcolor: t.panel,
-            activecolor: t.border,
-            font: { color: t.text },
-            buttons: [
-              {count: 1, label: '1m', step: 'month', stepmode: 'backward'},
-              {count: 6, label: '6m', step: 'month', stepmode: 'backward'},
-              {step: 'year', stepmode: 'todate', label: 'YTD'},
-              {count: 1, label: '1y', step: 'year', stepmode: 'backward'},
-              {step: 'all', label: 'All'}
-            ]
-          });
-          if (!layout.yaxis) layout.yaxis = {};
-          Object.assign(layout.yaxis, {
-            showgrid: true,
-            gridcolor: gridColor,
-            gridwidth: 1,
-            automargin: true,
-            nticks: 8
-          });
+      function applyThemeLayoutDefaults(layout) {
+        const t = getThemeVars();
+        const isDark = t.bg && /^#0|^#1|^#2/i.test(t.bg.trim());
+        const gridColor = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
+        layout.paper_bgcolor = t.panel;
+        layout.plot_bgcolor = t.panel;
+        layout.font = { color: t.text };
+        layout.margin = layout.margin || { l: 50, r: 20, t: 28, b: 48 };
+        layout.legend = Object.assign({ orientation: 'h' }, layout.legend || {});
+        layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
+        layout.title = null;
+        if (!layout.xaxis) layout.xaxis = {};
+        Object.assign(layout.xaxis, {
+          showgrid: true,
+          gridcolor: gridColor,
+          gridwidth: 1,
+          automargin: true,
+          nticks: 10
+        });
+        if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
+        Object.assign(layout.xaxis.rangeselector, {
+          visible: true,
+          bgcolor: t.panel,
+          activecolor: t.border,
+          font: { color: t.text },
+          buttons: [
+            { count: 1, label: '1m', step: 'month', stepmode: 'backward' },
+            { count: 6, label: '6m', step: 'month', stepmode: 'backward' },
+            { step: 'year', stepmode: 'todate', label: 'YTD' },
+            { count: 1, label: '1y', step: 'year', stepmode: 'backward' },
+            { step: 'all', label: 'All' }
+          ]
+        });
+        if (!layout.yaxis) layout.yaxis = {};
+        Object.assign(layout.yaxis, {
+          showgrid: true,
+          gridcolor: gridColor,
+          gridwidth: 1,
+          automargin: true,
+          nticks: 8
+        });
+      }
+
+      function hexToRgba(hex, alpha) {
+        if (!hex) return `rgba(90,90,160,${alpha || 1})`;
+        const h = hex.replace('#', '');
+        if (h.length === 3) {
+          const r = parseInt(h[0] + h[0], 16), g = parseInt(h[1] + h[1], 16), b = parseInt(h[2] + h[2], 16);
+          return `rgba(${r},${g},${b},${alpha})`;
+        } else if (h.length === 6) {
+          const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+          return `rgba(${r},${g},${b},${alpha})`;
         }
-
-        function hexToRgba(hex, alpha) {
-          if (!hex) return `rgba(90,90,160,${alpha||1})`;
-          const h = hex.replace('#','');
-            if (h.length === 3) {
-              const r = parseInt(h[0]+h[0],16), g = parseInt(h[1]+h[1],16), b = parseInt(h[2]+h[2],16);
-              return `rgba(${r},${g},${b},${alpha})`;
-            } else if (h.length === 6) {
-              const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
-              return `rgba(${r},${g},${b},${alpha})`;
-            }
-          return `rgba(90,90,160,${alpha||1})`;
+        return `rgba(90,90,160,${alpha || 1})`;
+      }
+      function renderFromPayload(item) {
+        const traces = (item.traces || []).map(t => ({ ...t }));
+        const tvars = getThemeVars();
+        const accent = tvars.accent || '#0ea5e9';
+        const accentBand = tvars.accent2 || '#f97316';
+        const ciFill = hexToRgba(accentBand, 0.22);
+        const ciLine = hexToRgba(accentBand, 0.95);
+        const forecastIdx = [];
+        const ciIdx = [];
+        for (let i = 0; i < traces.length; i++) {
+          const nm = (traces[i].name || '').toLowerCase();
+          if (nm.includes('forecast')) forecastIdx.push(i);
+          if (/\bci\b|conf|interval/.test(nm)) ciIdx.push(i);
         }
-        function renderFromPayload(item) {
-          const traces = (item.traces || []).map(t => ({ ...t }));
-          const tvars = getThemeVars();
-          const accent = tvars.accent || '#0ea5e9';
-          const accentBand = tvars.accent2 || '#f97316';
-          const ciFill = hexToRgba(accentBand, 0.22);
-          const ciLine = hexToRgba(accentBand, 0.95);
-          const forecastIdx = [];
-          const ciIdx = [];
-          for (let i = 0; i < traces.length; i++) {
-            const nm = (traces[i].name || '').toLowerCase();
-            if (nm.includes('forecast')) forecastIdx.push(i);
-            if (/\bci\b|conf|interval/.test(nm)) ciIdx.push(i);
+        // Style forecast main line
+        forecastIdx.forEach((idx, rel) => {
+          const tr = traces[idx];
+          tr.legendgroup = 'forecast';
+          if (rel === 0) {
+            tr.name = (tr.name && tr.name.trim()) || 'Forecast';
+            tr.showlegend = true;
+            tr.mode = tr.mode || 'lines';
+            tr.line = Object.assign({ width: 2, color: accent }, tr.line || {});
+            tr.legendrank = 10; // ensure appears early
           }
-          // Style forecast main line
-          forecastIdx.forEach((idx, rel) => {
-            const tr = traces[idx];
-            tr.legendgroup = 'forecast';
-            if (rel === 0) {
-              tr.name = (tr.name && tr.name.trim()) || 'Forecast';
-              tr.showlegend = true;
-              tr.mode = tr.mode || 'lines';
-              tr.line = Object.assign({ width: 2, color: accent }, tr.line || {});
-              tr.legendrank = 10; // ensure appears early
-            }
-          });
-          // Style CI traces: first acts as controller in legend, others hidden but toggle together
-          ciIdx.forEach((idx, rel) => {
-            const tr = traces[idx];
-            tr.name = '95% CI';
-            tr.mode = 'lines';
-            tr.line = Object.assign({ width: 0.8, dash: 'dot', color: ciLine }, tr.line || {});
-            if (!tr.fill) tr.fill = 'tonexty';
-            if (!tr.fillcolor) tr.fillcolor = ciFill;
-            if (tr.marker) delete tr.marker;
-            if (!tr.hovertemplate) tr.hovertemplate = '%{y}<extra>95% CI</extra>';
-            tr.meta = (rel === 0) ? 'ci-controller' : 'ci-member';
-            tr.showlegend = rel === 0; // only first one appears in legend
-            if (rel === 0) tr.legendrank = 9999; // push to end
-          });
-          const layout = Object.assign({}, item.layout || {});
-          applyThemeLayoutDefaults(layout);
-          Plotly.newPlot('chart', traces, layout, { displayModeBar: true, responsive: true });
+        });
+        // Style CI traces: first acts as controller in legend, others hidden but toggle together
+        ciIdx.forEach((idx, rel) => {
+          const tr = traces[idx];
+          tr.name = '95% CI';
+          tr.mode = 'lines';
+          tr.line = Object.assign({ width: 0.8, dash: 'dot', color: ciLine }, tr.line || {});
+          if (!tr.fill) tr.fill = 'tonexty';
+          if (!tr.fillcolor) tr.fillcolor = ciFill;
+          if (tr.marker) delete tr.marker;
+          if (!tr.hovertemplate) tr.hovertemplate = '%{y}<extra>95% CI</extra>';
+          tr.meta = (rel === 0) ? 'ci-controller' : 'ci-member';
+          tr.showlegend = rel === 0; // only first one appears in legend
+          if (rel === 0) tr.legendrank = 9999; // push to end
+        });
+        const layout = Object.assign({}, item.layout || {});
+        applyThemeLayoutDefaults(layout);
+        Plotly.newPlot('chart', traces, layout, { displayModeBar: true, responsive: true });
 
-          // Attach legend toggle handler once to control all CI traces together
-          const chartEl = document.getElementById('chart');
-          if (!chartEl._ciLegendBound) {
-            chartEl._ciLegendBound = true;
-            chartEl.on('plotly_legendclick', function(evt){
-              const d = chartEl.data[evt.curveNumber];
-              if (!d || d.meta !== 'ci-controller') return; // let default for others
-              const currentlyVisible = d.visible === undefined || d.visible === true;
-              const newVis = currentlyVisible ? 'legendonly' : true;
-              // apply to all CI traces
-              chartEl.data.forEach((t,i) => {
-                if (t.meta === 'ci-controller' || t.meta === 'ci-member') {
-                  Plotly.restyle(chartEl, { visible: newVis }, [i]);
-                }
-              });
-              return false; // prevent default toggling (we handled it)
+        // Attach legend toggle handler once to control all CI traces together
+        const chartEl = document.getElementById('chart');
+        if (!chartEl._ciLegendBound) {
+          chartEl._ciLegendBound = true;
+          chartEl.on('plotly_legendclick', function (evt) {
+            const d = chartEl.data[evt.curveNumber];
+            if (!d || d.meta !== 'ci-controller') return; // let default for others
+            const currentlyVisible = d.visible === undefined || d.visible === true;
+            const newVis = currentlyVisible ? 'legendonly' : true;
+            // apply to all CI traces
+            chartEl.data.forEach((t, i) => {
+              if (t.meta === 'ci-controller' || t.meta === 'ci-member') {
+                Plotly.restyle(chartEl, { visible: newVis }, [i]);
+              }
             });
-          }
+            return false; // prevent default toggling (we handled it)
+          });
+        }
 
-          const dist = item.distribution || null;
-          if (dist && Array.isArray(dist.values)) {
-            const t = getThemeVars();
+        const dist = item.distribution || null;
+        if (dist && Array.isArray(dist.values)) {
+          const t = getThemeVars();
+          Plotly.newPlot('dist', [{
+            type: 'histogram', name: dist.name, x: dist.values, marker: { color: t.accent }
+          }], {
+            title: null,
+            paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
+            margin: { l: 40, r: 10, t: 20, b: 40 },
+            hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
+          }, { responsive: true });
+        } else {
+          document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
+        }
+      }
+
+      async function renderByFetch(column) {
+        try {
+          const u = new URL(fullHistoryUrl, window.location.origin);
+          u.searchParams.set('filename', filename);
+          u.searchParams.set('max_points', 'all');
+          const res = await fetch(u.toString(), { cache: 'no-store' });
+          const data = await res.json();
+          const found = (data.series || []).find(s => s.name === column);
+          if (!found) throw new Error('Series not found: ' + column);
+
+          const t = getThemeVars();
+          const hist = {
+            type: 'scatter',
+            mode: 'lines',
+            name: 'History',
+            x: found.x,
+            y: found.y,
+            line: { color: 'rgb(31,119,180)', width: 2 }
+          };
+          const layout = {
+            xaxis: { title: found.x_is_time ? 'Timestamp' : 'Index', type: found.x_is_time ? 'date' : undefined },
+            yaxis: { title: column }
+          };
+          applyThemeLayoutDefaults(layout);
+          layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
+          Plotly.newPlot('chart', [hist], layout, { responsive: true });
+
+          const vals = (found.y || []).filter(v => Number.isFinite(v));
+          if (vals.length) {
             Plotly.newPlot('dist', [{
-              type: 'histogram', name: dist.name, x: dist.values, marker: { color: t.accent }
+              type: 'histogram', name: column, x: vals, marker: { color: t.accent }
             }], {
               title: null,
               paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
@@ -429,173 +639,132 @@
           } else {
             document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
           }
+        } catch (e) {
+          document.getElementById('chart').innerHTML = '<div class="muted">Failed to load interactive data.</div>';
+          document.getElementById('dist').innerHTML = '';
         }
+      }
 
-        async function renderByFetch(column) {
-          try {
-            const u = new URL(fullHistoryUrl, window.location.origin);
-            u.searchParams.set('filename', filename);
-            u.searchParams.set('max_points', 'all');
-            const res = await fetch(u.toString(), { cache: 'no-store' });
-            const data = await res.json();
-            const found = (data.series || []).find(s => s.name === column);
-            if (!found) throw new Error('Series not found: ' + column);
+      function onPickChange() {
+        const col = document.getElementById('colPick').value;
+        if (interactiveMap[col]) renderFromPayload(interactiveMap[col]);
+        else renderByFetch(col);
+      }
 
-            const t = getThemeVars();
-            const hist = {
-              type: 'scatter',
-              mode: 'lines',
-              name: 'History',
-              x: found.x,
-              y: found.y,
-              line: { color: 'rgb(31,119,180)', width: 2 }
-            };
-            const layout = {
-              xaxis: { title: found.x_is_time ? 'Timestamp' : 'Index', type: found.x_is_time ? 'date' : undefined },
-              yaxis: { title: column }
-            };
-            applyThemeLayoutDefaults(layout);
-            layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
-            Plotly.newPlot('chart', [hist], layout, { responsive: true });
 
-            const vals = (found.y || []).filter(v => Number.isFinite(v));
-            if (vals.length) {
-              Plotly.newPlot('dist', [{
-                type: 'histogram', name: column, x: vals, marker: { color: t.accent }
-              }], {
-                title: null,
-                paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-                margin: { l: 40, r: 10, t: 20, b: 40 },
-                hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
-              }, { responsive: true });
-            } else {
-              document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
-            }
-          } catch (e) {
-            document.getElementById('chart').innerHTML = '<div class="muted">Failed to load interactive data.</div>';
-            document.getElementById('dist').innerHTML = '';
-          }
+      window.applyThemeToPlots = function () {
+        const t = getThemeVars();
+        const chart = document.getElementById('chart');
+        const dist = document.getElementById('dist');
+        const relayout = {
+          paper_bgcolor: t.panel,
+          plot_bgcolor: t.panel,
+          font: { color: t.text },
+          'xaxis.rangeselector.bgcolor': t.panel,
+          'xaxis.rangeselector.activecolor': t.border,
+          'xaxis.rangeselector.font.color': t.text
+        };
+        if (chart && chart.data) Plotly.relayout(chart, relayout);
+        if (dist && dist.data) Plotly.relayout(dist, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
+        const corrEl = document.getElementById('corr');
+        if (corrEl && corrEl.data) Plotly.relayout(corrEl, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
+        const pear = document.getElementById('pearson');
+        if (pear && pear.data) Plotly.relayout(pear, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
+      };
+
+      window.addEventListener('DOMContentLoaded', () => {
+        const sel = document.getElementById('colPick');
+        if (sel && sel.options.length) {
+          onPickChange();
+          sel.addEventListener('change', onPickChange);
+        } else {
+          document.getElementById('chart').innerHTML = '<div class="muted">No interactive columns available.</div>';
         }
-
-        function onPickChange() {
-          const col = document.getElementById('colPick').value;
-          if (interactiveMap[col]) renderFromPayload(interactiveMap[col]);
-          else renderByFetch(col);
+        function bindPct(id) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('change', function () {
+            const v = this.value;
+            const url = new URL(window.location.href);
+            url.searchParams.set('forecast_pct', v);
+            window.location.href = url.toString();
+          });
         }
+        bindPct('forecastPctSelect');
+        bindPct('forecastPctSelectTop');
+      });
+    </script>
 
-  
-        window.applyThemeToPlots = function() {
-          const t = getThemeVars();
-          const chart = document.getElementById('chart');
-          const dist = document.getElementById('dist');
-          const relayout = {
+    {% elif active_view == 'correlation' %}
+    <section class="panel">
+      <h3>Correlation</h3>
+      {% if analysis.corr and analysis.corr.z %}
+      <div id="corr" class="panel" style="min-height:520px"></div>
+      <script id="corrPayload" type="application/json">{{ analysis.corr | tojson }}</script>
+      <script>
+        const corrPayloadEl = document.getElementById('corrPayload');
+        const corrData = JSON.parse((corrPayloadEl && corrPayloadEl.textContent) || '{}');
+        const t = getThemeVars();
+        const spearmanData = [{
+          z: corrData.z,
+          x: corrData.x,
+          y: corrData.y,
+          type: 'heatmap',
+          colorscale: [
+            [0, '#0b1327'],
+            [0.5, t.accent],
+            [1, t.accent2]
+          ],
+          zmin: -1, zmax: 1
+        }];
+        const spearmanLayout = {
+          title: { text: 'Spearman correlation', x: 0.02 },
+          xaxis: { side: 'top', automargin: true },
+          yaxis: { autorange: 'reversed', automargin: true },
+          paper_bgcolor: t.panel,
+          plot_bgcolor: t.panel,
+          font: { color: t.text },
+          margin: { l: 120, r: 10, t: 60, b: 60 }
+        };
+        Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
+
+        // Pearson correlation (if provided)
+        if (corrData && corrData.pearson && corrData.pearson.z) {
+          const pearDiv = document.createElement('div');
+          pearDiv.id = 'pearson';
+          pearDiv.className = 'panel';
+          pearDiv.style.minHeight = '520px';
+          document.currentScript.parentElement.appendChild(pearDiv);
+          const pearData = [{
+            z: corrData.pearson.z,
+            x: corrData.pearson.x,
+            y: corrData.pearson.y,
+            type: 'heatmap',
+            colorscale: [
+              [0, '#0b1327'],
+              [0.5, t.accent],
+              [1, t.accent2]
+            ],
+            zmin: -1, zmax: 1
+          }];
+          const pearLayout = {
+            title: { text: 'Pearson correlation', x: 0.02 },
+            xaxis: { side: 'top', automargin: true },
+            yaxis: { autorange: 'reversed', automargin: true },
             paper_bgcolor: t.panel,
             plot_bgcolor: t.panel,
             font: { color: t.text },
-            'xaxis.rangeselector.bgcolor': t.panel,
-            'xaxis.rangeselector.activecolor': t.border,
-            'xaxis.rangeselector.font.color': t.text
+            margin: { l: 120, r: 10, t: 60, b: 60 }
           };
-          if (chart && chart.data) Plotly.relayout(chart, relayout);
-          if (dist && dist.data) Plotly.relayout(dist, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
-          const corrEl = document.getElementById('corr');
-          if (corrEl && corrEl.data) Plotly.relayout(corrEl, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
-          const pear = document.getElementById('pearson');
-          if (pear && pear.data) Plotly.relayout(pear, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
-        };
-
-        window.addEventListener('DOMContentLoaded', () => {
-          const sel = document.getElementById('colPick');
-          if (sel && sel.options.length) {
-            onPickChange();
-            sel.addEventListener('change', onPickChange);
-          } else {
-            document.getElementById('chart').innerHTML = '<div class="muted">No interactive columns available.</div>';
-          }
-          function bindPct(id){
-            const el = document.getElementById(id);
-            if(!el) return;
-            el.addEventListener('change', function(){
-              const v = this.value;
-              const url = new URL(window.location.href);
-              url.searchParams.set('forecast_pct', v);
-              window.location.href = url.toString();
-            });
-          }
-          bindPct('forecastPctSelect');
-          bindPct('forecastPctSelectTop');
-        });
+          Plotly.newPlot('pearson', pearData, pearLayout, { responsive: true });
+        }
       </script>
-
-    {% elif active_view == 'correlation' %}
-      <section class="panel">
-        <h3>Correlation</h3>
-        {% if analysis.corr and analysis.corr.z %}
-          <div id="corr" class="panel" style="min-height:520px"></div>
-          <script id="corrPayload" type="application/json">{{ analysis.corr | tojson }}</script>
-          <script>
-            const corrPayloadEl = document.getElementById('corrPayload');
-            const corrData = JSON.parse((corrPayloadEl && corrPayloadEl.textContent) || '{}');
-            const t = getThemeVars();
-            const spearmanData = [{
-              z: corrData.z,
-              x: corrData.x,
-              y: corrData.y,
-              type: 'heatmap',
-              colorscale: [
-                [0, '#0b1327'],
-                [0.5, t.accent],
-                [1, t.accent2]
-              ],
-              zmin: -1, zmax: 1
-            }];
-            const spearmanLayout = {
-              title: { text: 'Spearman correlation', x: 0.02 },
-              xaxis: { side: 'top', automargin: true },
-              yaxis: { autorange: 'reversed', automargin: true },
-              paper_bgcolor: t.panel,
-              plot_bgcolor: t.panel,
-              font: { color: t.text },
-              margin: { l: 120, r: 10, t: 60, b: 60 }
-            };
-            Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
-
-            // Pearson correlation (if provided)
-            if (corrData && corrData.pearson && corrData.pearson.z) {
-              const pearDiv = document.createElement('div');
-              pearDiv.id = 'pearson';
-              pearDiv.className = 'panel';
-              pearDiv.style.minHeight = '520px';
-              document.currentScript.parentElement.appendChild(pearDiv);
-              const pearData = [{
-                z: corrData.pearson.z,
-                x: corrData.pearson.x,
-                y: corrData.pearson.y,
-                type: 'heatmap',
-                colorscale: [
-                  [0, '#0b1327'],
-                  [0.5, t.accent],
-                  [1, t.accent2]
-                ],
-                zmin: -1, zmax: 1
-              }];
-              const pearLayout = {
-                title: { text: 'Pearson correlation', x: 0.02 },
-                xaxis: { side: 'top', automargin: true },
-                yaxis: { autorange: 'reversed', automargin: true },
-                paper_bgcolor: t.panel,
-                plot_bgcolor: t.panel,
-                font: { color: t.text },
-                margin: { l: 120, r: 10, t: 60, b: 60 }
-              };
-              Plotly.newPlot('pearson', pearData, pearLayout, { responsive: true });
-            }
-          </script>
-        {% else %}
-          <div class="muted">Not enough numeric columns to compute correlation.</div>
-        {% endif %}
-      </section>
+      {% else %}
+      <div class="muted">Not enough numeric columns to compute correlation.</div>
+      {% endif %}
+    </section>
     {% endif %}
   </main>
 </body>
+
 </html>

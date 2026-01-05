@@ -1,0 +1,545 @@
+2026-01-05 14:21:58,150 - app - INFO - Application starting - Log file initialized
+2026-01-05 14:22:05,548 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:22:42,193 - app - INFO - Static forecast_plots count: 0
+2026-01-05 14:22:42,278 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=43.74s cols=7
+2026-01-05 14:22:49,461 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:22:49,568 - app - INFO - Loaded Arial font successfully
+2026-01-05 14:22:49,570 - app - INFO - Adding page...
+2026-01-05 14:22:49,573 - app - INFO - Page added. Page No: 1
+2026-01-05 14:22:49,855 - app - ERROR - Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:22:49,859 - app - ERROR - Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3647, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3603, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:27:45,727 - app - INFO - Application starting - Log file initialized
+2026-01-05 14:27:54,786 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:28:33,033 - app - INFO - Static forecast_plots count: 0
+2026-01-05 14:28:33,098 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=47.09s cols=7
+2026-01-05 14:29:50,097 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:29:50,201 - app - INFO - Loaded Arial font successfully
+2026-01-05 14:29:50,204 - app - INFO - Adding page...
+2026-01-05 14:29:50,208 - app - INFO - Page added. Page No: 1
+2026-01-05 14:36:14,191 - app - INFO - Application starting - Log file initialized
+2026-01-05 14:36:22,718 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:36:57,965 - app - INFO - Static forecast_plots count: 0
+2026-01-05 14:36:58,063 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=43.62s cols=7
+2026-01-05 14:37:02,512 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:37:02,603 - app - INFO - Loaded Arial font successfully
+2026-01-05 14:37:02,605 - app - INFO - Adding page...
+2026-01-05 14:37:02,610 - app - INFO - Page added. Page No: 1
+2026-01-05 14:37:02,924 - app - ERROR - Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:37:02,930 - app - ERROR - Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3666, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3610, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:37:12,580 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:37:12,654 - app - INFO - Loaded Arial font successfully
+2026-01-05 14:37:12,655 - app - INFO - Adding page...
+2026-01-05 14:37:12,658 - app - INFO - Page added. Page No: 1
+2026-01-05 14:37:12,907 - app - ERROR - Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:37:12,914 - app - ERROR - Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3666, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3610, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:46:16,175 - app - INFO - Application starting - Log file initialized
+2026-01-05 14:46:25,976 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:46:26,309 - app - WARNING - Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 14:46:26,476 - app - WARNING - Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,563 - app - WARNING - Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,675 - app - WARNING - Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,767 - app - WARNING - Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,880 - app - WARNING - Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 34.849216498s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 34
+}
+]
+2026-01-05 14:46:26,888 - app - INFO - Rate limit detected, waiting 10.0 seconds before retry...
+2026-01-05 14:46:37,028 - app - WARNING - Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 14:46:37,214 - app - WARNING - Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,315 - app - WARNING - Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,415 - app - WARNING - Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,515 - app - WARNING - Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,621 - app - WARNING - Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 24.10585661s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 24
+}
+]
+2026-01-05 14:46:37,625 - app - INFO - Rate limit detected, waiting 20.0 seconds before retry...
+2026-01-05 14:46:57,789 - app - WARNING - Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 14:46:57,881 - app - WARNING - Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,286 - app - WARNING - Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,389 - app - WARNING - Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,489 - app - WARNING - Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,597 - app - WARNING - Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 3.134462093s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 3
+}
+]
+2026-01-05 14:46:58,600 - app - WARNING - AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 3.961700557s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 3
+}
+]
+2026-01-05 14:46:58,783 - app - INFO - Static forecast_plots count: 0
+2026-01-05 14:46:58,867 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=42.29s cols=7
+2026-01-05 14:47:18,970 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:47:19,080 - app - INFO - Loaded Arial font successfully
+2026-01-05 14:47:19,082 - app - INFO - Adding page...
+2026-01-05 14:47:19,085 - app - INFO - Page added. Page No: 1
+2026-01-05 14:55:07,186 - app - INFO - Application starting - Log file initialized
+2026-01-05 14:55:12,926 - app - WARNING - Model candidate failed (models/gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 48.892978475s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 48
+}
+]
+2026-01-05 14:55:13,036 - app - WARNING - Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 48.694379965s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 48
+}
+]
+2026-01-05 14:55:13,227 - app - WARNING - Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,307 - app - WARNING - Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,427 - app - WARNING - Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,527 - app - WARNING - Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,683 - app - WARNING - Model candidate failed (gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 48.091304654s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 48
+}
+]
+2026-01-05 14:55:13,830 - app - WARNING - Model candidate failed (models/gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 47.943781458s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 47
+}
+]
+2026-01-05 14:55:13,931 - app - WARNING - Model candidate failed (gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:14,030 - app - WARNING - Model candidate failed (models/gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:14,032 - app - WARNING - Lazy model init failed: No working Gemini model available. Check API key/network or try a different model.
+2026-01-05 14:55:14,035 - app - INFO - Static forecast_plots count: 0
+2026-01-05 14:55:14,104 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=6.61s cols=7
+2026-01-05 14:55:50,235 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:55:50,356 - app - INFO - Loaded Arial font successfully
+2026-01-05 14:55:50,358 - app - INFO - Adding page...
+2026-01-05 14:55:50,361 - app - INFO - Page added. Page No: 1
+2026-01-05 15:02:36,427 - app - INFO - Application starting - Log file initialized
+2026-01-05 15:02:42,321 - app - WARNING - Model candidate failed (models/gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 19.478754286s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 19
+}
+]
+2026-01-05 15:02:42,427 - app - WARNING - Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 19.301638102s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 19
+}
+]
+2026-01-05 15:02:42,522 - app - WARNING - Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,624 - app - WARNING - Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,706 - app - WARNING - Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,812 - app - WARNING - Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,907 - app - WARNING - Model candidate failed (gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 18.817611092s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 18
+}
+]
+2026-01-05 15:02:43,110 - app - WARNING - Model candidate failed (models/gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 18.705794283s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 18
+}
+]
+2026-01-05 15:02:43,198 - app - WARNING - Model candidate failed (gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:43,307 - app - WARNING - Model candidate failed (models/gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:43,310 - app - WARNING - Lazy model init failed: No working Gemini model available. Check API key/network or try a different model.
+2026-01-05 15:02:43,313 - app - INFO - Static forecast_plots count: 0
+2026-01-05 15:02:43,404 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=6.58s cols=7
+2026-01-05 15:02:47,955 - app - INFO - Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 15:02:48,060 - app - INFO - Loaded Arial font successfully
+2026-01-05 15:02:48,062 - app - INFO - Adding page...
+2026-01-05 15:02:48,065 - app - INFO - Page added. Page No: 1

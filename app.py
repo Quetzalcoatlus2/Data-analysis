@@ -4,6 +4,7 @@ import io
 import base64
 import zipfile
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
+from fpdf import FPDF
 
 from datetime import datetime, timedelta
 import pandas as pd
@@ -114,7 +115,7 @@ DEFAULT_AI_MODEL = (
     os.getenv("GENAI_MODEL")
     or os.getenv("GOOGLE_MODEL")
     # Prefer a free-tier-friendly default when no env override is provided
-    or "models/gemini-2.5-pro"
+    or "models/gemini-3.0-flash"
 )
 MODEL_CACHE = {}
 CURRENT_MODEL_NAME = None
@@ -131,7 +132,7 @@ def _sanitize_error_message(msg: str) -> str:
             return "Google API key invalid or expired."
         if '429' in s or 'rate limit' in s.lower() or 'quota' in s.lower():
             if "doesn't have a free quota" in s.lower() or 'no free quota' in s.lower():
-                return "Selected model has no free-tier quota. Switch to a free model (e.g., gemini-2.5-flash)."
+                return "Selected model has no free-tier quota. Switch to a free model (e.g., gemini-3.0-flash)."
             return "Rate limit exceeded. Please retry after a short pause."
         if 'content blocked' in s.lower() or 'block_reason' in s.lower():
             return "Content was blocked by safety filters."
@@ -178,6 +179,8 @@ def _normalize_model_aliases(name: str) -> list[str]:
     
     # Prioritize free-tier models early in the fallback chain
     preferred_fallbacks = [
+        "gemini-3.0-flash", "models/gemini-3.0-flash",
+        "gemini-2.5-flash", "models/gemini-2.5-flash",
         "gemini-1.5-flash", "models/gemini-1.5-flash",
         "gemini-2.5-pro", "models/gemini-2.5-pro",
         "gemini-1.5-pro", "models/gemini-1.5-pro",
@@ -980,7 +983,7 @@ def get_or_cache_ai_summary_for(filename: str, df: pd.DataFrame, extra_context: 
 
 def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None):
     fig, ax = plt.subplots(figsize=(10, 4))
-    data.plot(ax=ax, label='History', color='tab:blue', lw=2)
+    data.plot(ax=ax, label='History', color='tab:blue', lw=1.2)
     if anomalies_idx is not None and len(anomalies_idx):
         aligned = data.loc[data.index.intersection(anomalies_idx)]
         ax.scatter(aligned.index, aligned.values, color='red', s=18, zorder=5, label='Anomaly')
@@ -1457,7 +1460,7 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         history_tail_series.values,
         linestyle='-',
         color='tab:blue',
-        linewidth=1.8,
+        linewidth=1.2,
         label='History',
         zorder=2
     )
@@ -1478,7 +1481,7 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         y_plot,
         linestyle='-',
         color='orangered',
-        linewidth=2.6,
+        linewidth=1.8,
         alpha=0.98,
         label='Forecast',
         zorder=3
@@ -2378,6 +2381,19 @@ def upload_file():
 
                 
                 try:
+                   # Configure basic logging
+                    logging.basicConfig(level=logging.INFO)
+
+                    # Add file handler for debugging persistence
+                    fh = logging.FileHandler('app_debug.log')
+                    fh.setLevel(logging.INFO)
+                    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    fh.setFormatter(formatter)
+                    app.logger.addHandler(fh)
+                    app.logger.info("Application starting - Log file initialized")
+
+                    # Increase upload size limit to 64MB
+                    app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
                     size_bytes = os.path.getsize(final_path)
                     if size_bytes <= app.config['AI_FULL_UPLOAD_MAX_MB'] * 1024 * 1024:
                         uploaded = genai.upload_file(path=final_path, mime_type="text/csv", display_name=orig_name)
@@ -3453,6 +3469,373 @@ def download_static_plots_zip(filename):
     return resp
 
 
+
+class PDFReport(FPDF):
+    def __init__(self, title_str, display_name):
+        super().__init__()
+        self.report_title = title_str
+        self.display_name = display_name
+    
+    def header(self):
+        try:
+            # Determine strictness based on available fonts
+            font_family = "Arial" if "Arial" in self.fonts else "helvetica"
+            
+            # Defensive: Always sanitize for now to rule out encoding issues causing crashes
+            # We can relax this later once we confirm stability.
+            # Even with Arial, fpdf2 might have issues with some chars if not fully compatible.
+            safe_title = self.report_title.encode('latin-1', 'replace').decode('latin-1')
+            safe_display = f"Dataset: {self.display_name}".encode('latin-1', 'replace').decode('latin-1')
+            
+            # Override if we are confident (testing phase: use safe versions first)
+            # If Arial is prevalent, we can try to use raw strings in a sub-try
+            if font_family == "Arial":
+                 # Use raw strings but catch error
+                 try:
+                     self.set_font("Arial", 'B', 15)
+                     self.cell(0, 10, self.report_title, border=False, new_x="LMARGIN", new_y="NEXT", align='C')
+                     self.set_font("Arial", 'I', 10)
+                     self.cell(0, 5, f"Dataset: {self.display_name}", border=False, new_x="LMARGIN", new_y="NEXT", align='C')
+                 except Exception as e:
+                     app.logger.error(f"Header Arial rendering failed: {e}")
+                     # Fallback to safe/helvetica logic locally
+                     self.set_font("helvetica", 'B', 15)
+                     self.cell(0, 10, safe_title, border=False, new_x="LMARGIN", new_y="NEXT", align='C')
+                     self.set_font("helvetica", 'I', 10)
+                     self.cell(0, 5, safe_display, border=False, new_x="LMARGIN", new_y="NEXT", align='C')
+            else:
+                self.set_font("helvetica", 'B', 15)
+                self.cell(0, 10, safe_title, border=False, new_x="LMARGIN", new_y="NEXT", align='C')
+                
+                self.set_font("helvetica", 'I', 10)
+                self.cell(0, 5, safe_display, border=False, new_x="LMARGIN", new_y="NEXT", align='C')
+            
+            self.ln(5)
+            self.set_draw_color(200, 200, 200)
+            self.line(10, self.get_y(), 200, self.get_y())
+            self.ln(10)
+        except Exception as e:
+            app.logger.error(f"CRITICAL HEADER FAILURE: {e}")
+            # Do nothing more to avoid crashing add_page context
+            pass
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('helvetica', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
+        self.cell(0, 10, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}', align='R')
+
+@app.route('/download/<filename>/report.pdf', methods=['GET'])
+def download_full_report_pdf(filename):
+    if not HASHED_UPLOAD_RE.match(filename):
+        return ("Not found", 404)
+
+    df = get_dataframe_for(filename)
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        return ("Not found", 404)
+
+    display = request.args.get('display') or filename
+    
+    try:
+        app.logger.info(f"Starting PDF generation for {filename}, display={display}")
+        pdf = PDFReport("Data Analysis Report", display)
+        pdf.alias_nb_pages()
+        
+        # Try to load a unicode font (Arial) from Windows fonts to support emojis/UTF-8
+        # Load BEFORE add_page because header() needs it
+        try:
+            # Common paths for Arial on Windows
+            font_path = "C:\\Windows\\Fonts\\arial.ttf"
+            if os.path.exists(font_path):
+                # fpdf2 add_font(family, style, fname, uni=True) 
+                # Note: 'unique' arg is not supported on all versions
+                pdf.add_font("Arial", "", font_path)
+                app.logger.info("Loaded Arial font successfully")
+            else:
+                pass
+        except Exception as e:
+            app.logger.warning(f"Could not load custom font: {e}")
+
+        app.logger.info("Adding page...")
+        pdf.add_page()
+        app.logger.info(f"Page added. Page No: {pdf.page_no()}")
+        
+        # Set default font
+        if "Arial" in pdf.fonts:
+             pdf.set_font("Arial", size=12)
+        else:
+             pdf.set_font("helvetica", size=12)
+
+        # Helper for adding sections
+        def add_section_title(title, new_page=True):
+            if new_page:
+                pdf.add_page()
+            else:
+                pdf.ln(5)
+            
+            # Use Arial if available, else helvetica
+            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+            pdf.set_font(font_family, style="B", size=13)
+            pdf.set_fill_color(240, 240, 240)
+            pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT", fill=True)
+            pdf.ln(2)
+            pdf.set_font(font_family, size=10)
+
+        def add_text_block(text, courier=False, is_html=False):
+            if courier:
+                pdf.set_font("Courier", size=9)
+            elif "Arial" in pdf.fonts:
+                pdf.set_font("Arial", size=10)
+            else:
+                pdf.set_font("helvetica", size=10)
+            
+            # Use write_html if requested (for AI summary)
+            if is_html:
+                try:
+                    pdf.write_html(text)
+                    pdf.ln(5)
+                    # Reset font
+                    font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+                    pdf.set_font(font_family, size=10)
+                    return
+                except Exception as e:
+                    app.logger.error(f"HTML rendering failed: {e}")
+                    # Fallthrough
+            
+            # Fallback or standard text
+            if pdf.page_no() == 0:
+                app.logger.warning("No page open in fallback, adding one.")
+                pdf.add_page()
+                
+            if "Arial" in pdf.fonts:
+                pdf.multi_cell(0, 5, text)
+            else:
+                 safe_text = text.encode('latin-1', 'replace').decode('latin-1')
+                 pdf.multi_cell(0, 5, safe_text)
+            pdf.ln(5)
+            # Reset
+            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+            pdf.set_font(font_family, size=10)
+
+        # Basic Info
+        # First section doesn't need a new page (already on p1)
+        add_section_title("1. Dataset Overview", new_page=False)
+        
+        buf = io.StringIO()
+        df.info(buf=buf)
+        info_str = buf.getvalue()
+        
+        font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+        
+        pdf.set_font(font_family, 'B', 10)
+        pdf.cell(0, 6, "Structure:", new_x="LMARGIN", new_y="NEXT")
+        add_text_block(info_str, courier=True)
+        
+        pdf.set_font(font_family, 'B', 10)
+        pdf.cell(0, 6, "First 5 Rows:", new_x="LMARGIN", new_y="NEXT")
+        add_text_block(df.head().to_string(), courier=True)
+
+        pdf.set_font(font_family, 'B', 10)
+        pdf.cell(0, 6, "Statistical Description:", new_x="LMARGIN", new_y="NEXT")
+        add_text_block(df.describe().to_string(), courier=True)
+
+        # Missing Values
+        try:
+            mv = df.isnull().sum()
+            mvf = mv[mv > 0]
+            if not mvf.empty:
+                pdf.set_font(font_family, 'B', 10)
+                pdf.cell(0, 6, "Missing Values:", new_x="LMARGIN", new_y="NEXT")
+                add_text_block(mvf.to_string(), courier=True)
+        except:
+            pass
+
+        # AI Summary
+        ai_html = AI_SUMMARY_CACHE.get(filename)
+        if ai_html:
+            add_section_title("2. AI Analysis Summary")
+            # Use write_html to preserve formatting
+            add_text_block(ai_html, is_html=True)
+
+        # Correlation Heatmaps
+        try:
+            corr_header_added = False
+            
+            # Helper to check/add header
+            def ensure_corr_header():
+                nonlocal corr_header_added
+                if not corr_header_added:
+                    add_section_title("3. Correlation Analysis")
+                    corr_header_added = True
+
+            corr_heatmap_spearman = generate_correlation_heatmap(df, method='spearman', title='Spearman Correlation')
+            if corr_heatmap_spearman:
+                ensure_corr_header()
+                # Keep-with-next logic: If near bottom, page break
+                if pdf.get_y() > 200: # Approx 297mm height, safety margin
+                    pdf.add_page()
+                    
+                pdf.set_font(font_family, 'B', 10)
+                pdf.cell(0, 8, "Spearman Correlation:", new_x="LMARGIN", new_y="NEXT")
+                img_data = base64.b64decode(corr_heatmap_spearman)
+                # Keep image within page width
+                pdf.image(io.BytesIO(img_data), w=150, x=30)
+                pdf.ln(5)
+
+            corr_heatmap_pearson = generate_correlation_heatmap(df, method='pearson', title='Pearson Correlation')
+            if corr_heatmap_pearson:
+                ensure_corr_header()
+                # Keep-with-next logic
+                if pdf.get_y() > 200:
+                    pdf.add_page()
+                    
+                pdf.set_font(font_family, 'B', 10)
+                pdf.cell(0, 8, "Pearson Correlation:", new_x="LMARGIN", new_y="NEXT")
+                img_data = base64.b64decode(corr_heatmap_pearson)
+                pdf.image(io.BytesIO(img_data), w=150, x=30)
+                pdf.ln(5)
+        except Exception as e:
+            app.logger.error(f"Error adding correlation heatmaps to PDF: {e}")
+
+        # Plots
+        # Plots
+        add_section_title("4. Column Analysis", new_page=True)
+        
+        is_ts = isinstance(df.index, pd.DatetimeIndex)
+        first_col = True
+        
+        for col in df.columns:
+            try:
+                s = pd.to_numeric(df[col], errors='coerce').dropna()
+                if len(s) < 3:
+                    continue
+            except:
+                continue
+                
+            if not isinstance(s.index, type(df.index)):
+                 try:
+                     s_temp = df[col].copy()
+                     s = pd.to_numeric(s_temp, errors='coerce').dropna()
+                 except:
+                     pass
+
+            # Force new page for EACH column to ensure clean layout
+            # We don't use add_section_title here because we want a specific format
+            # FIX: Only add page if it's NOT the first column (title page covers it)
+            if first_col:
+                first_col = False
+            else:
+                pdf.add_page()
+            
+            # Use Arial if available
+            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+            pdf.set_font(font_family, 'B', 12)
+            pdf.set_fill_color(245, 245, 245)
+            # Column Title
+            pdf.cell(0, 8, f"Column: {col}", new_x="LMARGIN", new_y="NEXT", fill=True)
+            pdf.ln(2)
+            pdf.set_font(font_family, size=10)
+            
+            pdf.ln(5)
+            # Visual separator for column
+            pdf.set_draw_color(100, 100, 100)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(2)
+            
+            pdf.set_font(font_family, style="B", size=11)
+            # Safe column name
+            if "Arial" in pdf.fonts:
+                pdf.cell(0, 8, f"Column: {col}", new_x="LMARGIN", new_y="NEXT")
+            else:
+                safe_col = col.encode('latin-1', 'replace').decode('latin-1')
+                pdf.cell(0, 8, f"Column: {safe_col}", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font(font_family, size=10)
+
+            # Distribution
+            try:
+                fig, ax = plt.subplots(figsize=(7, 3.5))
+                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
+                ax.set_title(f"Distribution: {col}")
+                ax.set_xlabel(col)
+                ax.set_ylabel("Frequency")
+                ax.grid(True, alpha=0.3)
+                
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+                plt.close(fig)
+                buf.seek(0)
+                pdf.image(buf, w=140, x=35)
+                pdf.ln(2)
+            except Exception:
+                pass
+                
+            # STL
+            if is_ts and len(s) >= 28:
+                try:
+                    s_norm = normalize_timeseries(s)
+                    sp = _infer_seasonal_period(s_norm.index)
+                    if sp and isinstance(sp, int) and sp >= 2 and len(s_norm) >= sp * 2:
+                        stl_b64 = generate_stl_plot(s_norm, f"STL Decomposition: {col}", seasonal_period=sp)
+                        if stl_b64:
+                            pdf.image(io.BytesIO(base64.b64decode(stl_b64)), w=140, x=35)
+                            pdf.ln(2)
+                except Exception:
+                    pass
+            
+            # Forecast (for timeseries)
+            if is_ts and len(s) >= 10:
+                try:
+                    # Forecast logic from download_full_report_html
+                    total_rows = len(df)
+                    forecast_steps = max(10, int(total_rows * 0.1))
+                    
+                    fc_mean, ci = None, None
+                    try:
+                         fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
+                    except Exception as e:
+                        try:
+                            fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
+                        except Exception:
+                            fc_mean, ci = None, None
+                    
+                    if fc_mean is not None and len(fc_mean) > 0:
+                        # Find anomaly index if available
+                        an_idx, _ = detect_anomalies(s, contamination=0.02)
+                        
+                        fc_b64 = generate_forecast_plot(
+                            s, 
+                            fc_mean, 
+                            f"Forecast: {col} ({forecast_steps} steps)", 
+                            'Timestamp', 
+                            col, 
+                            conf_int=ci, 
+                            history_tail=None, 
+                            anomalies_idx=an_idx
+                        )
+                        if fc_b64:
+                            pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=140, x=35)
+                            pdf.ln(2)
+                except Exception as e:
+                    app.logger.error(f"Error adding forecast to PDF for {col}: {e}")
+                    pass
+    except Exception as e:
+        app.logger.error(f"Error generating PDF: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({"ok": False, "message": f"PDF generation failed: {str(e)}"}), 500
+
+    out = io.BytesIO()
+    pdf.output(out)
+    out.seek(0)
+    
+    base = os.path.splitext(display)[0]
+    out_name = secure_filename(f"{base}_report.pdf")
+    
+    return make_response(out.read(), 200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': f'attachment; filename="{out_name}"'
+    })
+
 @app.route('/download/<filename>/report.html', methods=['GET'])
 def download_full_report_html(filename):
     if not HASHED_UPLOAD_RE.match(filename):
@@ -3509,7 +3892,7 @@ def download_full_report_html(filename):
 
     # Generate plots for each numeric column
     is_ts = isinstance(df.index, pd.DatetimeIndex)
-    trend_sections = []
+    distribution_sections = []
     stl_sections = []
     forecast_sections = []
     
@@ -3535,15 +3918,28 @@ def download_full_report_html(filename):
             except:
                 pass
         
-        # Detect anomalies for trend plot
+        # Detect anomalies for forecast plots
         an_idx, an_score = detect_anomalies(s, contamination=0.02)
         
-        # Trend plot with anomalies
+        # Generate distribution histogram for this column
         try:
-            img_b64 = generate_plot(s, f"Trend for {col}", 'Timestamp' if is_ts else 'Index', col, anomalies_idx=an_idx)
-            trend_sections.append(f'<figure><figcaption><strong>Trend: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{img_b64}" /></figure>')
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
+            ax.set_title(f"Distribution: {col}")
+            ax.set_xlabel(col)
+            ax.set_ylabel("Frequency")
+            ax.grid(True, alpha=0.3)
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            dist_img = base64.b64encode(buf.read()).decode('utf-8')
+            plt.close(fig)
+            distribution_sections.append(f'<figure><figcaption><strong>Distribution: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{dist_img}" /></figure>')
         except Exception:
-            pass
+            try:
+                plt.close(fig)
+            except:
+                pass
         
         # STL decomposition (for timeseries with sufficient data)
         if is_ts and len(s) >= 28:
@@ -3586,7 +3982,7 @@ def download_full_report_html(filename):
 
     # Build HTML report
     print(f"[DEBUG] Report generation complete:")
-    print(f"  - Trend sections: {len(trend_sections)}")
+    print(f"  - Distribution sections: {len(distribution_sections)}")
     print(f"  - STL sections: {len(stl_sections)}")
     print(f"  - Forecast sections: {len(forecast_sections)}")
     if len(forecast_sections) == 0:
@@ -3630,10 +4026,7 @@ def download_full_report_html(filename):
   <h2>🤖 AI Analysis Summary</h2>
   {ai_html}
 
-  <h2>📉 Trend Visualizations (with Anomaly Detection)</h2>
-  <div class="section-grid">
-    {''.join(trend_sections) if trend_sections else '<p class="muted">No numeric columns to plot.</p>'}
-  </div>
+  {"<h2>📊 Value Distributions</h2><div class='section-grid'>" + ''.join(distribution_sections) + "</div>" if distribution_sections else ""}
 
   {"<h2>🔄 STL Decompositions</h2><div class='section-grid'>" + ''.join(stl_sections) + "</div>" if stl_sections else ""}
 
@@ -3657,11 +4050,7 @@ def download_full_report_html(filename):
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
     return resp
 
-@app.route('/download/<filename>/report.pdf', methods=['GET'])
-def download_full_report_pdf(filename):
-    if not HASHED_UPLOAD_RE.match(filename):
-        return jsonify({"ok": False, "message": "Invalid filename."}), 400
-    return jsonify({"ok": False, "message": "PDF export is disabled."}), 501
+
 
 @app.route('/full_history_json', methods=['GET'])
 def full_history_json():

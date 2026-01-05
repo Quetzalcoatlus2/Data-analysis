@@ -27757,3 +27757,1051 @@ Please retry in 4.734442534s. [violations {
 2025-11-05 13:07:59,255 INFO app: Forecast plot: STL decomposition for Press_kPa
 2025-11-05 13:07:59,311 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=36.21s cols=7
 2025-11-05 13:07:59,328 INFO werkzeug: 127.0.0.1 - - [05/Nov/2025 13:07:59] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast&forecast_pct=0.10 HTTP/1.1" 200 -
+2025-11-05 13:09:27,371 INFO werkzeug: 127.0.0.1 - - [05/Nov/2025 13:09:27] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2025-11-05 13:12:40,207 INFO app: Static forecast_plots count: 6
+2025-11-05 13:12:40,209 INFO app: Forecast plot: STL decomposition for Temp_C
+2025-11-05 13:12:40,210 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2025-11-05 13:12:40,211 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2025-11-05 13:12:40,211 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2025-11-05 13:12:40,211 INFO app: Forecast plot: STL decomposition for Visibility_km
+2025-11-05 13:12:40,212 INFO app: Forecast plot: STL decomposition for Press_kPa
+2025-11-05 13:12:40,251 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=26.83s cols=7
+2025-11-05 13:12:40,347 INFO werkzeug: 127.0.0.1 - - [05/Nov/2025 13:12:40] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive&forecast_pct=0.10 HTTP/1.1" 200 -
+2025-11-05 13:27:32,024 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-11-05 13:27:38,166 INFO werkzeug:  * Restarting with stat
+2025-11-05 13:27:50,648 INFO app: Attempting to configure AI...
+2025-11-05 13:27:50,648 INFO app: AI configured successfully.
+2025-11-05 13:27:50,659 INFO app: Talisman enabled.
+2025-11-05 13:27:50,665 INFO app: Rate limiting enabled: 120/hour
+2025-11-05 13:27:50,665 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-11-05 13:27:50,704 WARNING werkzeug:  * Debugger is active!
+2025-11-05 13:27:50,714 INFO werkzeug:  * Debugger PIN: 499-309-609
+2025-11-05 13:27:55,305 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-11-05 13:27:55,984 INFO werkzeug:  * Restarting with stat
+2025-11-05 13:28:05,620 INFO app: Attempting to configure AI...
+2025-11-05 13:28:05,621 INFO app: AI configured successfully.
+2025-11-05 13:28:05,632 INFO app: Talisman enabled.
+2025-11-05 13:28:05,637 INFO app: Rate limiting enabled: 120/hour
+2025-11-05 13:28:05,639 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-11-05 13:28:05,666 WARNING werkzeug:  * Debugger is active!
+2025-11-05 13:28:05,672 INFO werkzeug:  * Debugger PIN: 499-309-609
+2025-11-05 13:28:19,189 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2025-11-05 13:28:19,976 INFO werkzeug:  * Restarting with stat
+2025-11-05 13:28:28,698 INFO app: Attempting to configure AI...
+2025-11-05 13:28:28,699 INFO app: AI configured successfully.
+2025-11-05 13:28:28,709 INFO app: Talisman enabled.
+2025-11-05 13:28:28,713 INFO app: Rate limiting enabled: 120/hour
+2025-11-05 13:28:28,714 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2025-11-05 13:28:28,743 WARNING werkzeug:  * Debugger is active!
+2025-11-05 13:28:28,751 INFO werkzeug:  * Debugger PIN: 499-309-609
+2026-01-05 13:12:36,287 INFO app: Attempting to configure AI...
+2026-01-05 13:12:36,324 INFO app: AI configured successfully.
+2026-01-05 13:17:57,266 INFO app: Attempting to configure AI...
+2026-01-05 13:17:57,271 INFO app: AI configured successfully.
+2026-01-05 13:18:37,263 INFO app: Attempting to configure AI...
+2026-01-05 13:18:37,266 INFO app: AI configured successfully.
+2026-01-05 13:20:05,066 INFO app: Attempting to configure AI...
+2026-01-05 13:20:05,068 INFO app: AI configured successfully.
+2026-01-05 13:20:05,079 INFO app: Talisman enabled.
+2026-01-05 13:20:05,083 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:20:05,084 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:20:05,166 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 13:20:05,166 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 13:20:05,171 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:20:17,080 INFO app: Attempting to configure AI...
+2026-01-05 13:20:17,081 INFO app: AI configured successfully.
+2026-01-05 13:20:17,092 INFO app: Talisman enabled.
+2026-01-05 13:20:17,097 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:20:17,098 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:20:17,131 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:20:17,151 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:20:34,018 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:20:34] "GET / HTTP/1.1" 200 -
+2026-01-05 13:20:35,669 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:20:35] "GET /favicon.ico HTTP/1.1" 404 -
+2026-01-05 13:21:16,930 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:21:16] "POST / HTTP/1.1" 302 -
+2026-01-05 13:21:26,478 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 13:22:02,570 INFO app: Static forecast_plots count: 0
+2026-01-05 13:22:02,615 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=45.26s cols=7
+2026-01-05 13:22:02,659 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:22:02] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:22:48,444 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:22:48] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 13:24:57,802 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 13:24:58,591 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2026-01-05 13:24:58,592 INFO app: Forecast done col=Temp_C took=0.79s steps=879 points=8784
+2026-01-05 13:25:03,524 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 13:25:04,211 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2026-01-05 13:25:04,212 INFO app: Forecast done col=Dew Point Temp_C took=0.69s steps=879 points=8784
+2026-01-05 13:25:08,285 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2026-01-05 13:25:09,050 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2026-01-05 13:25:09,051 INFO app: Forecast done col=Rel Hum_% took=0.77s steps=879 points=8784
+2026-01-05 13:25:13,012 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2026-01-05 13:25:13,552 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2026-01-05 13:25:13,553 INFO app: Forecast done col=Wind Speed_km/h took=0.54s steps=879 points=8784
+2026-01-05 13:25:17,941 INFO app: Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2026-01-05 13:25:18,565 INFO app: Forecast plot ready col=Visibility_km forecast_points=879
+2026-01-05 13:25:18,566 INFO app: Forecast done col=Visibility_km took=0.62s steps=879 points=8784
+2026-01-05 13:25:22,164 INFO app: Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2026-01-05 13:25:22,692 INFO app: Forecast plot ready col=Press_kPa forecast_points=879
+2026-01-05 13:25:22,693 INFO app: Forecast done col=Press_kPa took=0.53s steps=879 points=8784
+2026-01-05 13:25:25,951 INFO app: Static forecast_plots count: 12
+2026-01-05 13:25:25,951 INFO app: Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-05 13:25:25,952 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-05 13:25:25,953 INFO app: Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-05 13:25:25,953 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-05 13:25:25,954 INFO app: Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-05 13:25:25,954 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-05 13:25:25,955 INFO app: Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-05 13:25:25,956 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-05 13:25:25,956 INFO app: Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-05 13:25:25,957 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-05 13:25:25,958 INFO app: Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-05 13:25:25,958 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-05 13:25:25,994 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=29.18s cols=7
+2026-01-05 13:25:26,002 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:25:26] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-05 13:26:02,563 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 13:26:06,111 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:26:17,491 INFO app: Attempting to configure AI...
+2026-01-05 13:26:17,492 INFO app: AI configured successfully.
+2026-01-05 13:26:17,502 INFO app: Talisman enabled.
+2026-01-05 13:26:17,505 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:26:17,506 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:26:17,532 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:26:17,539 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:26:17,777 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:26:17] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive&forecast_pct=0.10 HTTP/1.1" 302 -
+2026-01-05 13:26:17,811 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:26:17] "GET / HTTP/1.1" 200 -
+2026-01-05 13:27:06,726 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:27:06] "POST / HTTP/1.1" 302 -
+2026-01-05 13:27:15,152 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 13:27:51,960 INFO app: Static forecast_plots count: 0
+2026-01-05 13:27:51,993 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=44.90s cols=7
+2026-01-05 13:27:52,030 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:27:52] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:28:23,562 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:28:23] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 13:32:19,044 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 13:32:23,023 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:32:33,451 INFO app: Attempting to configure AI...
+2026-01-05 13:32:33,453 INFO app: AI configured successfully.
+2026-01-05 13:32:33,472 INFO app: Talisman enabled.
+2026-01-05 13:32:33,476 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:32:33,478 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:32:33,518 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:32:33,527 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:33:12,622 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:33:12] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 13:33:24,406 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:33:24] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 13:33:32,526 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 13:34:08,129 INFO app: Static forecast_plots count: 0
+2026-01-05 13:34:08,181 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=43.42s cols=7
+2026-01-05 13:34:08,232 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:34:08] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:34:25,796 WARNING app: Could not load custom font: FPDF.add_font() got an unexpected keyword argument 'unique'
+2026-01-05 13:34:26,148 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:34:26,150 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:34:26] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 13:34:39,796 WARNING app: Could not load custom font: FPDF.add_font() got an unexpected keyword argument 'unique'
+2026-01-05 13:34:39,904 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:34:39,905 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:34:39] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 13:34:44,227 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:34:44] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 501 -
+2026-01-05 13:34:49,359 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:34:49] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 13:35:20,409 WARNING app: Could not load custom font: FPDF.add_font() got an unexpected keyword argument 'unique'
+2026-01-05 13:35:20,503 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:35:20,504 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:35:20] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 13:37:35,314 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\test_pdf.py', reloading
+2026-01-05 13:37:37,966 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:37:45,841 INFO app: Attempting to configure AI...
+2026-01-05 13:37:45,842 INFO app: AI configured successfully.
+2026-01-05 13:37:45,850 INFO app: Talisman enabled.
+2026-01-05 13:37:45,854 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:37:45,855 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:37:45,880 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:37:45,884 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:38:56,115 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 13:38:57,422 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:39:05,521 INFO app: Attempting to configure AI...
+2026-01-05 13:39:05,522 INFO app: AI configured successfully.
+2026-01-05 13:39:05,532 INFO app: Talisman enabled.
+2026-01-05 13:39:05,535 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:39:05,536 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:39:05,560 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:39:05,566 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:39:55,500 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:39:55] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 13:40:08,826 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:40:08] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 13:40:17,736 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 13:40:53,863 INFO app: Static forecast_plots count: 0
+2026-01-05 13:40:53,888 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=44.68s cols=7
+2026-01-05 13:40:53,928 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:40:53] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:41:07,677 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:41:07,678 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:41:07] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 13:41:20,254 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:41:20] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 501 -
+2026-01-05 13:41:35,683 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:41:35] "GET / HTTP/1.1" 200 -
+2026-01-05 13:41:36,405 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:41:36] "GET /favicon.ico HTTP/1.1" 404 -
+2026-01-05 13:41:46,241 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:41:46] "POST / HTTP/1.1" 302 -
+2026-01-05 13:41:49,398 INFO app: Static forecast_plots count: 0
+2026-01-05 13:41:49,432 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.07s cols=7
+2026-01-05 13:41:49,435 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:41:49] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:41:54,439 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:41:54,440 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:41:54] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 13:42:37,327 INFO app: Attempting to configure AI...
+2026-01-05 13:42:37,328 INFO app: AI configured successfully.
+2026-01-05 13:42:37,344 INFO app: Talisman enabled.
+2026-01-05 13:42:37,348 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:42:37,349 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:42:37,408 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 13:42:37,409 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 13:42:37,413 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:42:45,329 INFO app: Attempting to configure AI...
+2026-01-05 13:42:45,329 INFO app: AI configured successfully.
+2026-01-05 13:42:45,343 INFO app: Talisman enabled.
+2026-01-05 13:42:45,346 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:42:45,347 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:42:45,378 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:42:45,387 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:42:49,895 INFO app: Static forecast_plots count: 0
+2026-01-05 13:42:49,924 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.12s cols=7
+2026-01-05 13:42:49,927 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:42:49] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:43:08,131 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:43:08] "GET / HTTP/1.1" 200 -
+2026-01-05 13:43:16,280 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:43:16] "POST / HTTP/1.1" 302 -
+2026-01-05 13:43:19,508 INFO app: Static forecast_plots count: 0
+2026-01-05 13:43:19,535 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.11s cols=7
+2026-01-05 13:43:19,537 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:43:19] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:43:22,266 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:43:22,268 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:43:22] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 13:45:01,845 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\repro_error.py', reloading
+2026-01-05 13:45:02,106 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\repro_error.py', reloading
+2026-01-05 13:45:03,063 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:45:04,627 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:45:16,153 INFO app: Attempting to configure AI...
+2026-01-05 13:45:16,163 INFO app: AI configured successfully.
+2026-01-05 13:45:16,284 INFO app: Talisman enabled.
+2026-01-05 13:45:16,306 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:45:16,313 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:45:16,583 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:45:16,606 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:45:19,580 INFO app: Attempting to configure AI...
+2026-01-05 13:45:19,581 INFO app: AI configured successfully.
+2026-01-05 13:45:19,593 INFO app: Talisman enabled.
+2026-01-05 13:45:19,597 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:45:19,597 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:45:19,624 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:45:19,630 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:45:40,960 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 13:45:41,284 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 13:45:41,756 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:45:42,256 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:45:51,687 INFO app: Attempting to configure AI...
+2026-01-05 13:45:51,688 INFO app: AI configured successfully.
+2026-01-05 13:45:51,715 INFO app: Talisman enabled.
+2026-01-05 13:45:51,718 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:45:51,719 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:45:51,751 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:45:51,756 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:45:51,804 INFO app: Attempting to configure AI...
+2026-01-05 13:45:51,805 INFO app: AI configured successfully.
+2026-01-05 13:45:51,816 INFO app: Talisman enabled.
+2026-01-05 13:45:51,820 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:45:51,821 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:45:51,855 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:45:51,864 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:45:59,651 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\repro_error.py', reloading
+2026-01-05 13:45:59,837 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\repro_error.py', reloading
+2026-01-05 13:46:00,538 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:46:00,717 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:46:11,794 INFO app: Attempting to configure AI...
+2026-01-05 13:46:11,799 INFO app: AI configured successfully.
+2026-01-05 13:46:11,807 INFO app: Attempting to configure AI...
+2026-01-05 13:46:11,808 INFO app: AI configured successfully.
+2026-01-05 13:46:11,810 INFO app: Talisman enabled.
+2026-01-05 13:46:11,814 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:46:11,814 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:46:11,818 INFO app: Talisman enabled.
+2026-01-05 13:46:11,824 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:46:11,824 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:46:11,848 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:46:11,854 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:46:11,857 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:46:11,865 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:48:04,605 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:48:04] "GET / HTTP/1.1" 200 -
+2026-01-05 13:48:13,283 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:48:13] "POST / HTTP/1.1" 302 -
+2026-01-05 13:48:23,033 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 13:48:56,890 INFO app: Static forecast_plots count: 0
+2026-01-05 13:48:56,922 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=43.30s cols=7
+2026-01-05 13:48:56,974 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:48:56] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:50:20,624 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:50:20,626 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:50:20] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 13:50:31,417 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:50:31] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 501 -
+2026-01-05 13:51:36,777 INFO app: Attempting to configure AI...
+2026-01-05 13:51:36,780 INFO app: AI configured successfully.
+2026-01-05 13:51:36,797 INFO app: Talisman enabled.
+2026-01-05 13:51:36,802 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:51:36,805 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:51:36,904 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 13:51:36,905 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 13:51:36,912 INFO werkzeug:  * Restarting with stat
+2026-01-05 13:51:53,699 INFO app: Attempting to configure AI...
+2026-01-05 13:51:53,715 INFO app: AI configured successfully.
+2026-01-05 13:51:53,814 INFO app: Talisman enabled.
+2026-01-05 13:51:53,860 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 13:51:53,873 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 13:51:54,115 WARNING werkzeug:  * Debugger is active!
+2026-01-05 13:51:54,164 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 13:51:55,073 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:51:55] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 302 -
+2026-01-05 13:51:55,273 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:51:55] "GET / HTTP/1.1" 200 -
+2026-01-05 13:52:14,745 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:52:14] "POST / HTTP/1.1" 302 -
+2026-01-05 13:52:25,605 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 13:53:08,272 INFO app: Static forecast_plots count: 0
+2026-01-05 13:53:08,336 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=53.23s cols=7
+2026-01-05 13:53:08,415 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:53:08] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 13:53:14,139 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 13:53:14,142 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 13:53:14] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:10:08,429 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:10:08,432 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:10:08] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:10:19,424 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 14:10:20,350 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2026-01-05 14:10:20,351 INFO app: Forecast done col=Temp_C took=0.93s steps=879 points=8784
+2026-01-05 14:10:25,333 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 14:10:26,115 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2026-01-05 14:10:26,117 INFO app: Forecast done col=Dew Point Temp_C took=0.78s steps=879 points=8784
+2026-01-05 14:10:33,011 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2026-01-05 14:10:34,048 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2026-01-05 14:10:34,049 INFO app: Forecast done col=Rel Hum_% took=1.04s steps=879 points=8784
+2026-01-05 14:10:40,574 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2026-01-05 14:10:41,548 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2026-01-05 14:10:41,549 INFO app: Forecast done col=Wind Speed_km/h took=0.97s steps=879 points=8784
+2026-01-05 14:10:47,000 INFO app: Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2026-01-05 14:10:47,809 INFO app: Forecast plot ready col=Visibility_km forecast_points=879
+2026-01-05 14:10:47,810 INFO app: Forecast done col=Visibility_km took=0.81s steps=879 points=8784
+2026-01-05 14:10:53,148 INFO app: Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2026-01-05 14:10:54,266 INFO app: Forecast plot ready col=Press_kPa forecast_points=879
+2026-01-05 14:10:54,267 INFO app: Forecast done col=Press_kPa took=1.12s steps=879 points=8784
+2026-01-05 14:10:58,558 INFO app: Static forecast_plots count: 12
+2026-01-05 14:10:58,560 INFO app: Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-05 14:10:58,560 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-05 14:10:58,561 INFO app: Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-05 14:10:58,562 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-05 14:10:58,563 INFO app: Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-05 14:10:58,564 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-05 14:10:58,565 INFO app: Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-05 14:10:58,566 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-05 14:10:58,568 INFO app: Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-05 14:10:58,569 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-05 14:10:58,570 INFO app: Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-05 14:10:58,571 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-05 14:10:58,632 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=40.05s cols=7
+2026-01-05 14:10:58,642 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:10:58] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-05 14:11:03,198 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:11:03,201 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:11:03] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:11:57,678 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:11:57] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 14:12:03,823 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:12:03] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 14:12:14,185 INFO app: Static forecast_plots count: 0
+2026-01-05 14:12:14,244 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=4.66s cols=7
+2026-01-05 14:12:14,249 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:12:14] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-05 14:12:21,077 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:12:21] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 14:12:29,996 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:12:29] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 14:15:24,526 INFO werkzeug:  * Detected change in 'c:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 14:15:29,282 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:15:45,386 INFO app: Attempting to configure AI...
+2026-01-05 14:15:45,388 INFO app: AI configured successfully.
+2026-01-05 14:15:45,403 INFO app: Talisman enabled.
+2026-01-05 14:15:45,408 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:15:45,410 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:15:45,469 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:15:45,479 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:16:37,361 INFO app: Attempting to configure AI...
+2026-01-05 14:16:37,362 INFO app: AI configured successfully.
+2026-01-05 14:16:37,374 INFO app: Talisman enabled.
+2026-01-05 14:16:37,382 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:16:37,383 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:16:37,506 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 14:16:37,507 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 14:16:37,512 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:16:52,090 INFO app: Attempting to configure AI...
+2026-01-05 14:16:52,092 INFO app: AI configured successfully.
+2026-01-05 14:16:52,114 INFO app: Talisman enabled.
+2026-01-05 14:16:52,122 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:16:52,124 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:16:52,179 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:16:52,193 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:17:26,385 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:17:26] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 14:17:38,068 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:17:38] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 14:17:48,000 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:18:20,071 INFO app: Static forecast_plots count: 0
+2026-01-05 14:18:20,147 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=41.64s cols=7
+2026-01-05 14:18:20,222 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:18:20] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 14:18:25,227 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:18:25,347 INFO app: Loaded Arial font successfully
+2026-01-05 14:18:25,348 INFO app: Adding page...
+2026-01-05 14:18:25,350 INFO app: Page added. Page No: 1
+2026-01-05 14:18:25,639 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:18:25,648 ERROR app: Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3614, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3570, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:18:25,652 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:18:25] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:18:33,612 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:18:33] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/ai_summary.html?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 14:18:39,397 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:18:39,486 INFO app: Loaded Arial font successfully
+2026-01-05 14:18:39,488 INFO app: Adding page...
+2026-01-05 14:18:39,489 INFO app: Page added. Page No: 1
+2026-01-05 14:18:39,672 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:18:39,675 ERROR app: Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3614, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3570, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:18:39,678 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:18:39] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:21:11,031 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 14:21:15,789 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:21:31,479 INFO app: Attempting to configure AI...
+2026-01-05 14:21:31,481 INFO app: AI configured successfully.
+2026-01-05 14:21:31,500 INFO app: Talisman enabled.
+2026-01-05 14:21:31,507 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:21:31,508 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:21:31,565 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:21:31,574 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:21:47,628 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:21:47] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 14:21:58,150 INFO app: Application starting - Log file initialized
+2026-01-05 14:21:58,157 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:21:58] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 14:22:05,548 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:22:42,193 INFO app: Static forecast_plots count: 0
+2026-01-05 14:22:42,278 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=43.74s cols=7
+2026-01-05 14:22:42,348 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:22:42] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 14:22:49,461 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:22:49,568 INFO app: Loaded Arial font successfully
+2026-01-05 14:22:49,570 INFO app: Adding page...
+2026-01-05 14:22:49,573 INFO app: Page added. Page No: 1
+2026-01-05 14:22:49,855 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:22:49,859 ERROR app: Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3647, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3603, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:22:49,862 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:22:49] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:25:41,028 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 14:25:45,040 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:25:58,131 INFO app: Attempting to configure AI...
+2026-01-05 14:25:58,133 INFO app: AI configured successfully.
+2026-01-05 14:25:58,148 INFO app: Talisman enabled.
+2026-01-05 14:25:58,155 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:25:58,156 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:25:58,203 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:25:58,213 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:27:35,430 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:27:35] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 14:27:45,727 INFO app: Application starting - Log file initialized
+2026-01-05 14:27:45,732 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:27:45] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 14:27:54,786 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:28:33,033 INFO app: Static forecast_plots count: 0
+2026-01-05 14:28:33,098 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=47.09s cols=7
+2026-01-05 14:28:33,188 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:28:33] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 14:29:50,097 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:29:50,201 INFO app: Loaded Arial font successfully
+2026-01-05 14:29:50,204 INFO app: Adding page...
+2026-01-05 14:29:50,208 INFO app: Page added. Page No: 1
+2026-01-05 14:30:32,639 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:30:32] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 14:34:34,805 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 14:34:39,523 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:34:52,475 INFO app: Attempting to configure AI...
+2026-01-05 14:34:52,476 INFO app: AI configured successfully.
+2026-01-05 14:34:52,490 INFO app: Talisman enabled.
+2026-01-05 14:34:52,496 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:34:52,497 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:34:52,539 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:34:52,545 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:35:57,885 INFO app: get_dataframe_for: file not found on disk: datasets\uploaded\664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv
+2026-01-05 14:35:57,890 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:35:57] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 404 -
+2026-01-05 14:36:03,719 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:36:03] "GET / HTTP/1.1" 200 -
+2026-01-05 14:36:14,191 INFO app: Application starting - Log file initialized
+2026-01-05 14:36:14,196 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:36:14] "POST / HTTP/1.1" 302 -
+2026-01-05 14:36:22,718 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:36:57,965 INFO app: Static forecast_plots count: 0
+2026-01-05 14:36:58,063 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=43.62s cols=7
+2026-01-05 14:36:58,154 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:36:58] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 14:37:02,512 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:37:02,603 INFO app: Loaded Arial font successfully
+2026-01-05 14:37:02,605 INFO app: Adding page...
+2026-01-05 14:37:02,610 INFO app: Page added. Page No: 1
+2026-01-05 14:37:02,924 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:37:02,930 ERROR app: Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3666, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3610, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:37:02,935 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:37:02] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:37:12,580 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:37:12,654 INFO app: Loaded Arial font successfully
+2026-01-05 14:37:12,655 INFO app: Adding page...
+2026-01-05 14:37:12,658 INFO app: Page added. Page No: 1
+2026-01-05 14:37:12,907 ERROR app: Error generating PDF: No page open, you need to call add_page() first
+2026-01-05 14:37:12,914 ERROR app: Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3666, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3610, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\venv\Lib\site-packages\fpdf\fpdf.py", line 241, in wrapper
+    raise FPDFException("No page open, you need to call add_page() first")
+fpdf.errors.FPDFException: No page open, you need to call add_page() first
+
+2026-01-05 14:37:12,918 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:37:12] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 14:38:26,727 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\repro_error.py', reloading
+2026-01-05 14:38:30,645 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:38:42,218 INFO app: Attempting to configure AI...
+2026-01-05 14:38:42,219 INFO app: AI configured successfully.
+2026-01-05 14:38:42,235 INFO app: Talisman enabled.
+2026-01-05 14:38:42,241 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:38:42,242 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:38:42,291 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:38:42,297 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:39:37,449 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 14:39:39,609 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:39:52,182 INFO app: Attempting to configure AI...
+2026-01-05 14:39:52,183 INFO app: AI configured successfully.
+2026-01-05 14:39:52,195 INFO app: Talisman enabled.
+2026-01-05 14:39:52,201 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:39:52,203 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:39:52,246 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:39:52,252 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:43:23,791 INFO app: get_dataframe_for: file not found on disk: datasets\uploaded\664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv
+2026-01-05 14:43:23,796 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:43:23] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 404 -
+2026-01-05 14:43:28,591 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:43:28] "GET / HTTP/1.1" 200 -
+2026-01-05 14:46:16,175 INFO app: Application starting - Log file initialized
+2026-01-05 14:46:16,182 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:46:16] "POST / HTTP/1.1" 302 -
+2026-01-05 14:46:25,976 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 14:46:26,309 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 14:46:26,476 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,563 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,675 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,767 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:26,880 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 34.849216498s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 34
+}
+]
+2026-01-05 14:46:26,888 INFO app: Rate limit detected, waiting 10.0 seconds before retry...
+2026-01-05 14:46:37,028 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 14:46:37,214 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,315 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,415 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,515 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:37,621 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 24.10585661s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 24
+}
+]
+2026-01-05 14:46:37,625 INFO app: Rate limit detected, waiting 20.0 seconds before retry...
+2026-01-05 14:46:57,789 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 14:46:57,881 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,286 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,389 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,489 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:46:58,597 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 3.134462093s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 3
+}
+]
+2026-01-05 14:46:58,600 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 3.961700557s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 3
+}
+]
+2026-01-05 14:46:58,783 INFO app: Static forecast_plots count: 0
+2026-01-05 14:46:58,867 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=42.29s cols=7
+2026-01-05 14:46:58,943 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:46:58] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 14:47:18,970 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:47:19,080 INFO app: Loaded Arial font successfully
+2026-01-05 14:47:19,082 INFO app: Adding page...
+2026-01-05 14:47:19,085 INFO app: Page added. Page No: 1
+2026-01-05 14:48:01,987 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:48:01] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 14:53:04,506 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 14:53:08,279 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:53:20,064 INFO app: Attempting to configure AI...
+2026-01-05 14:53:20,066 INFO app: AI configured successfully.
+2026-01-05 14:53:20,081 INFO app: Talisman enabled.
+2026-01-05 14:53:20,088 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:53:20,090 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:53:20,138 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:53:20,147 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:53:43,545 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 14:53:45,782 INFO werkzeug:  * Restarting with stat
+2026-01-05 14:53:58,440 INFO app: Attempting to configure AI...
+2026-01-05 14:53:58,441 INFO app: AI configured successfully.
+2026-01-05 14:53:58,458 INFO app: Talisman enabled.
+2026-01-05 14:53:58,464 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 14:53:58,468 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 14:53:58,513 WARNING werkzeug:  * Debugger is active!
+2026-01-05 14:53:58,521 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 14:54:57,288 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:54:57] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 14:55:07,186 INFO app: Application starting - Log file initialized
+2026-01-05 14:55:07,191 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:55:07] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 14:55:12,926 WARNING app: Model candidate failed (models/gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 48.892978475s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 48
+}
+]
+2026-01-05 14:55:13,036 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 48.694379965s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 48
+}
+]
+2026-01-05 14:55:13,227 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,307 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,427 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,527 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:13,683 WARNING app: Model candidate failed (gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 48.091304654s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 48
+}
+]
+2026-01-05 14:55:13,830 WARNING app: Model candidate failed (models/gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 47.943781458s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 47
+}
+]
+2026-01-05 14:55:13,931 WARNING app: Model candidate failed (gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:14,030 WARNING app: Model candidate failed (models/gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 14:55:14,032 WARNING app: Lazy model init failed: No working Gemini model available. Check API key/network or try a different model.
+2026-01-05 14:55:14,035 INFO app: Static forecast_plots count: 0
+2026-01-05 14:55:14,104 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=6.61s cols=7
+2026-01-05 14:55:14,159 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:55:14] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 14:55:50,235 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 14:55:50,356 INFO app: Loaded Arial font successfully
+2026-01-05 14:55:50,358 INFO app: Adding page...
+2026-01-05 14:55:50,361 INFO app: Page added. Page No: 1
+2026-01-05 14:56:34,811 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 14:56:34] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 15:00:38,273 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 15:00:43,428 INFO werkzeug:  * Restarting with stat
+2026-01-05 15:01:05,461 INFO app: Attempting to configure AI...
+2026-01-05 15:01:05,468 INFO app: AI configured successfully.
+2026-01-05 15:01:05,499 INFO app: Talisman enabled.
+2026-01-05 15:01:05,508 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 15:01:05,509 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 15:01:05,577 WARNING werkzeug:  * Debugger is active!
+2026-01-05 15:01:05,588 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 15:02:27,338 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 15:02:27] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 15:02:36,427 INFO app: Application starting - Log file initialized
+2026-01-05 15:02:36,434 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 15:02:36] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 15:02:42,321 WARNING app: Model candidate failed (models/gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 19.478754286s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 19
+}
+]
+2026-01-05 15:02:42,427 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 19.301638102s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 19
+}
+]
+2026-01-05 15:02:42,522 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,624 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,706 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,812 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:42,907 WARNING app: Model candidate failed (gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 18.817611092s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 18
+}
+]
+2026-01-05 15:02:43,110 WARNING app: Model candidate failed (models/gemini-2.5-pro): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.5-pro
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.5-pro
+Please retry in 18.705794283s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerDay-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-pro"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 18
+}
+]
+2026-01-05 15:02:43,198 WARNING app: Model candidate failed (gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:43,307 WARNING app: Model candidate failed (models/gemini-1.5-pro): 404 models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 15:02:43,310 WARNING app: Lazy model init failed: No working Gemini model available. Check API key/network or try a different model.
+2026-01-05 15:02:43,313 INFO app: Static forecast_plots count: 0
+2026-01-05 15:02:43,404 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=6.58s cols=7
+2026-01-05 15:02:43,462 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 15:02:43] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 15:02:47,955 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 15:02:48,060 INFO app: Loaded Arial font successfully
+2026-01-05 15:02:48,062 INFO app: Adding page...
+2026-01-05 15:02:48,065 INFO app: Page added. Page No: 1
+2026-01-05 15:03:31,289 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 15:03:31] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
