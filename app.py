@@ -1429,26 +1429,8 @@ def _seasonality_strength(series: pd.Series, seasonal_period: int | None) -> flo
         return 0.0
 def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None, anomalies_idx=None):
     """Generate a plot showing historical data and forecast with confidence intervals and anomaly markers."""
-    print(f"[PLOT DEBUG] generate_forecast_plot called:")
-    print(f"  - history length: {len(history)}")
-    print(f"  - history index type: {type(history.index)}")
-    print(f"  - history last date: {history.index[-1] if len(history) > 0 else 'N/A'}")
-    print(f"  - history last 3 values: {history.tail(3).tolist() if len(history) >= 3 else history.tolist()}")
-    print(f"  - forecast_series length: {len(forecast_series)}")
-    print(f"  - forecast_series index type: {type(forecast_series.index)}")
-    print(f"  - forecast_series first date: {forecast_series.index[0] if len(forecast_series) > 0 else 'N/A'}")
-    print(f"  - forecast_series last date: {forecast_series.index[-1] if len(forecast_series) > 0 else 'N/A'}")
-    print(f"  - forecast_series first 3 values: {forecast_series.head(3).tolist() if len(forecast_series) >= 3 else forecast_series.tolist()}")
-    print(f"  - forecast_series last 3 values: {forecast_series.tail(3).tolist() if len(forecast_series) >= 3 else forecast_series.tolist()}")
-    
-    # Check if forecast extends beyond history
-    if len(history) > 0 and len(forecast_series) > 0:
-        if forecast_series.index[0] <= history.index[-1]:
-            print(f"  - WARNING: Forecast starts BEFORE or AT history end! This will overlap!")
-            print(f"    History ends: {history.index[-1]}")
-            print(f"    Forecast starts: {forecast_series.index[0]}")
-        else:
-            print(f"  - OK: Forecast starts after history end")
+    # Debug info removed for performance
+    # app.logger.debug(f"[PLOT] generate_forecast_plot history={len(history)} forecast={len(forecast_series)}")
     
     fig, ax = plt.subplots(figsize=(10, 4))
 
@@ -1481,8 +1463,8 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         y_plot,
         linestyle='-',
         color='orangered',
-        linewidth=1.8,
-        alpha=0.98,
+        linewidth=1.2,
+        alpha=0.9,
         label='Forecast',
         zorder=3
     )
@@ -2912,15 +2894,18 @@ def analyze_file(filename):
                 continue
             used_cols.append(column)
             
-            an_idx, an_score = detect_anomalies(series, contamination=user_contam)
-            if len(an_idx):
-                try:
-                    anomalies_found[str(column)] = [str(i) for i in an_idx]
-                except Exception:
-                    try:
-                        anomalies_found[str(column)] = [str(i) for i in list(an_idx)]
-                    except Exception:
-                        anomalies_found[str(column)] = []
+            # Optimization: Only run anomaly detection if we are in a view that needs it
+            # or if we are reasonably sure it won't kill performance (e.g. small number of columns)
+            # 'overview' doesn't show anomalies in the UI directly, only in AI context.
+            # We skip it for overview on large datasets to speed up transitions.
+            an_idx = []
+            if build_forecast or build_interactive or len(df.columns) < 10:
+                 an_idx, an_score = detect_anomalies(series, contamination=user_contam)
+                 if len(an_idx):
+                     try:
+                         anomalies_found[str(column)] = [str(i) for i in an_idx]
+                     except Exception:
+                        pass
 
             if build_static:
                 title_trend = f"Trend for {column}"
@@ -3199,8 +3184,8 @@ def analyze_file(filename):
     if ai_summary is None:
         # Optionally defer AI summary on overview to keep first load snappy
         elapsed = time.perf_counter() - request_start
-        defer_ai_on_overview = bool(int(os.getenv("OVERVIEW_DEFER_AI_SUMMARY", "0")))
-        can_do_ai_now = not (active_view == 'overview' and (defer_ai_on_overview or elapsed > budget_s))
+        defer_ai_on_overview = False # Always try to load AI summary if possible
+        can_do_ai_now = True # not (active_view == 'overview' and (defer_ai_on_overview or elapsed > budget_s))
         # Allow AI summary on both GET and POST (POST needed for Q&A to work alongside summary)
         if can_do_ai_now and ensure_ai_ready():
             try:
@@ -3216,12 +3201,11 @@ def analyze_file(filename):
                 detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
                 ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
         else:
-            if active_view == 'overview':
-                ai_summary = "<p>AI summary deferred to keep the first load fast. Switch to the Forecast view to generate it.</p>"
-            else:
-                reason = AI_STATUS.get('message') or ("AI disabled or not configured." if not AI_ENABLED else "")
-                detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
-                ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
+            # If we are here, it means ensure_ai_ready() failed (since we forced can_do_ai_now=True).
+            # Report the actual reason (e.g. No API key) instead of saying "deferred".
+            reason = AI_STATUS.get('message') or ("AI disabled or not configured." if not AI_ENABLED else "")
+            detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
+            ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
 
     
     # Log forecast_plots length and per-column stats
@@ -3617,6 +3601,68 @@ def download_full_report_pdf(filename):
             font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
             pdf.set_font(font_family, size=10)
 
+        def add_df_table(df_table, title=None):
+            """Renders a pandas DataFrame as a table in the PDF."""
+            # Use fpdf2's built-in table context if available, otherwise manual
+            try:
+                # Basic data prep: Convert all to string, handle truncation
+                max_cols = 10
+                if len(df_table.columns) > max_cols:
+                    df_display = df_table.iloc[:, :max_cols].copy()
+                    df_display["..."] = "..."
+                else:
+                    df_display = df_table.copy()
+                
+                # Convert all to string
+                df_display = df_display.astype(str)
+                
+                # Include header
+                headers = [str(c) for c in df_display.columns]
+                # If we want the index to be the first column
+                data = []
+                for idx, row in df_display.iterrows():
+                    row_data = [str(idx)] + [str(x) for x in row.values]
+                    data.append(row_data)
+                
+                headers = ["Index"] + headers
+                
+                # Estimate table height: Header + Rows
+                row_height_est = 8
+                # If title is present, add its height
+                title_height = 8 if title else 0
+                
+                total_height_est = (len(data) + 1) * row_height_est + title_height
+                
+                # If table won't fit on current page (with some margin), add value
+                space_left = pdf.h - pdf.b_margin - pdf.get_y()
+                
+                # Add page if needed
+                if total_height_est > space_left and total_height_est < (pdf.h - pdf.t_margin - pdf.b_margin):
+                     app.logger.info("Table won't fit (needed %s, left %s), adding page", total_height_est, space_left)
+                     pdf.add_page()
+
+                # Print Title NOW, after potential page break
+                if title:
+                    pdf.set_font("Arial" if "Arial" in pdf.fonts else "helvetica", 'B', 10)
+                    pdf.cell(0, 6, title, new_x="LMARGIN", new_y="NEXT")
+
+                # Print Table
+                pdf.set_font("Arial" if "Arial" in pdf.fonts else "helvetica", size=8)
+                with pdf.table() as table:
+                    row = table.row()
+                    for h in headers:
+                        row.cell(h)
+                    for data_row in data:
+                        row = table.row()
+                        for item in data_row:
+                            row.cell(item)
+                
+                pdf.ln(2)
+            except Exception as e:
+                app.logger.warning(f"Table rendering failed, falling back to text: {e}")
+                # Fallback
+                add_text_block(df_table.to_string(), courier=True)
+
         # Basic Info
         # First section doesn't need a new page (already on p1)
         add_section_title("1. Dataset Overview", new_page=False)
@@ -3627,17 +3673,14 @@ def download_full_report_pdf(filename):
         
         font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
         
-        pdf.set_font(font_family, 'B', 10)
-        pdf.cell(0, 6, "Structure:", new_x="LMARGIN", new_y="NEXT")
         add_text_block(info_str, courier=True)
-        
-        pdf.set_font(font_family, 'B', 10)
-        pdf.cell(0, 6, "First 5 Rows:", new_x="LMARGIN", new_y="NEXT")
-        add_text_block(df.head().to_string(), courier=True)
 
-        pdf.set_font(font_family, 'B', 10)
-        pdf.cell(0, 6, "Statistical Description:", new_x="LMARGIN", new_y="NEXT")
-        add_text_block(df.describe().to_string(), courier=True)
+        
+        # Use new table function for head
+        add_df_table(df.head(), title="First 5 Rows:")
+
+        # Use new table function for describe
+        add_df_table(df.describe(), title="Statistical Description:")
 
         # Missing Values
         try:
