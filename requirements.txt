@@ -6,6 +6,7 @@ numpy
 werkzeug
 matplotlib
 google-generativeai
+google-auth
 statsmodels
 python-dotenv
 ruff

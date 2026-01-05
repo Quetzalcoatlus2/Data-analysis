@@ -31510,3 +31510,1245 @@ violations {
 2026-01-05 16:19:29,056 INFO app: Page added. Page No: 1
 2026-01-05 16:19:29,166 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
 2026-01-05 16:20:17,931 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 16:20:17] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 17:08:07,866 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 17:08:07] "GET / HTTP/1.1" 200 -
+2026-01-05 18:09:43,272 INFO app: Attempting to configure AI...
+2026-01-05 18:09:43,277 INFO app: AI configured successfully.
+2026-01-05 18:12:22,918 INFO app: Attempting to configure AI...
+2026-01-05 18:12:22,921 INFO app: AI configured successfully.
+2026-01-05 18:12:22,956 INFO app: Talisman enabled.
+2026-01-05 18:12:22,971 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 18:12:22,974 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 18:12:23,138 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 18:12:23,142 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 18:12:23,150 INFO werkzeug:  * Restarting with stat
+2026-01-05 18:12:30,281 INFO app: Attempting to configure AI...
+2026-01-05 18:12:30,282 INFO app: AI configured successfully.
+2026-01-05 18:12:30,293 INFO app: Talisman enabled.
+2026-01-05 18:12:30,297 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 18:12:30,298 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 18:12:30,326 WARNING werkzeug:  * Debugger is active!
+2026-01-05 18:12:30,462 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 18:12:54,200 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 18:12:54] "GET / HTTP/1.1" 200 -
+2026-01-05 18:13:02,975 INFO app: Application starting - Log file initialized
+2026-01-05 18:13:02,979 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 18:13:02] "POST / HTTP/1.1" 302 -
+2026-01-05 18:13:06,184 INFO app: Static forecast_plots count: 0
+2026-01-05 18:13:06,221 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=2.95s cols=7
+2026-01-05 18:13:06,272 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 18:13:06] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 18:13:08,361 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 18:13:08,503 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 18:13:08,588 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:08,678 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:08,776 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:08,859 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:08,978 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 52.765705421s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 52
+}
+]
+2026-01-05 18:13:08,986 INFO app: Rate limit detected, waiting 10.0 seconds before retry...
+2026-01-05 18:13:19,106 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 18:13:19,188 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:19,286 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:19,372 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:19,469 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:19,571 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 42.169042012s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 42
+}
+]
+2026-01-05 18:13:19,573 INFO app: Rate limit detected, waiting 20.0 seconds before retry...
+2026-01-05 18:13:39,675 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 18:13:39,762 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:39,858 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:39,942 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:40,042 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:13:40,139 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 21.600207584s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 21
+}
+]
+2026-01-05 18:13:40,142 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 22.069142534s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 22
+}
+]
+2026-01-05 18:13:40,269 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 18:13:40] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 18:13:50,156 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 18:13:50,781 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2026-01-05 18:13:50,782 INFO app: Forecast done col=Temp_C took=0.63s steps=879 points=8784
+2026-01-05 18:13:54,384 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 18:13:55,282 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2026-01-05 18:13:55,283 INFO app: Forecast done col=Dew Point Temp_C took=0.90s steps=879 points=8784
+2026-01-05 18:13:58,592 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2026-01-05 18:13:59,279 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2026-01-05 18:13:59,280 INFO app: Forecast done col=Rel Hum_% took=0.69s steps=879 points=8784
+2026-01-05 18:14:02,405 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2026-01-05 18:14:02,985 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2026-01-05 18:14:02,986 INFO app: Forecast done col=Wind Speed_km/h took=0.58s steps=879 points=8784
+2026-01-05 18:14:06,531 INFO app: Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2026-01-05 18:14:07,036 INFO app: Forecast plot ready col=Visibility_km forecast_points=879
+2026-01-05 18:14:07,037 INFO app: Forecast done col=Visibility_km took=0.51s steps=879 points=8784
+2026-01-05 18:14:10,723 INFO app: Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2026-01-05 18:14:11,255 INFO app: Forecast plot ready col=Press_kPa forecast_points=879
+2026-01-05 18:14:11,256 INFO app: Forecast done col=Press_kPa took=0.53s steps=879 points=8784
+2026-01-05 18:14:14,565 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 18:14:14,641 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:14,753 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:14,829 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:14,934 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:15,023 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 46.71841423s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 46
+}
+]
+2026-01-05 18:14:15,025 INFO app: Rate limit detected, waiting 10.0 seconds before retry...
+2026-01-05 18:14:25,136 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 18:14:25,211 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:25,332 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:25,415 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:25,515 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:25,616 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 36.128488242s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 36
+}
+]
+2026-01-05 18:14:25,618 INFO app: Rate limit detected, waiting 20.0 seconds before retry...
+2026-01-05 18:14:45,741 WARNING app: Rate limit or no free quota; switching model to gemini-1.5-flash
+2026-01-05 18:14:45,810 WARNING app: Model candidate failed (gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:45,922 WARNING app: Model candidate failed (models/gemini-1.5-flash): 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:45,996 WARNING app: Model candidate failed (gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:46,109 WARNING app: Model candidate failed (models/gemini-3.0-flash): 404 models/gemini-3.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2026-01-05 18:14:46,198 WARNING app: Model candidate failed (gemini-2.5-flash): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 15.542680824s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 15
+}
+]
+2026-01-05 18:14:46,200 WARNING app: AI summary failed, falling back. Error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash
+Please retry in 16.000794054s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 20
+}
+, retry_delay {
+  seconds: 16
+}
+]
+2026-01-05 18:14:46,288 INFO app: Static forecast_plots count: 12
+2026-01-05 18:14:46,289 INFO app: Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-05 18:14:46,291 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-05 18:14:46,292 INFO app: Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-05 18:14:46,293 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-05 18:14:46,293 INFO app: Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-05 18:14:46,294 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-05 18:14:46,295 INFO app: Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-05 18:14:46,296 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-05 18:14:46,297 INFO app: Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-05 18:14:46,298 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-05 18:14:46,298 INFO app: Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-05 18:14:46,300 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-05 18:14:46,323 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=56.89s cols=7
+2026-01-05 18:14:46,331 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 18:14:46] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-05 19:08:09,075 INFO app: Attempting to configure AI...
+2026-01-05 19:08:09,080 INFO app: AI configured successfully.
+2026-01-05 19:08:09,105 INFO app: Talisman enabled.
+2026-01-05 19:08:09,111 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 19:08:09,113 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 19:08:09,207 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 19:08:09,208 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 19:08:09,213 INFO werkzeug:  * Restarting with stat
+2026-01-05 19:08:43,513 INFO app: Attempting to configure AI...
+2026-01-05 19:08:43,518 INFO app: AI configured successfully.
+2026-01-05 19:08:43,541 INFO app: Talisman enabled.
+2026-01-05 19:08:43,552 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 19:08:43,554 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 19:08:43,605 WARNING werkzeug:  * Debugger is active!
+2026-01-05 19:08:43,622 INFO werkzeug:  * Debugger PIN: 804-916-551
+2026-01-05 19:08:44,029 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:08:44] "GET / HTTP/1.1" 200 -
+2026-01-05 19:09:34,934 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:09:34] "GET / HTTP/1.1" 200 -
+2026-01-05 19:09:36,337 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:09:36] "GET /favicon.ico HTTP/1.1" 404 -
+2026-01-05 19:09:45,688 INFO app: Application starting - Log file initialized
+2026-01-05 19:09:45,712 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:09:45] "POST / HTTP/1.1" 302 -
+2026-01-05 19:09:56,437 INFO app: Static forecast_plots count: 0
+2026-01-05 19:09:56,531 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=9.81s cols=7
+2026-01-05 19:09:56,653 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:09:56] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 19:09:57,638 WARNING app: Model candidate failed (models/gemini-2.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:57,736 WARNING app: Model candidate failed (gemini-2.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:57,840 WARNING app: Model candidate failed (gemini-3.0-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:57,923 WARNING app: Model candidate failed (models/gemini-3.0-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:58,019 WARNING app: Model candidate failed (gemini-1.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:58,108 WARNING app: Model candidate failed (models/gemini-1.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:58,208 WARNING app: Model candidate failed (gemini-2.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:58,291 WARNING app: Model candidate failed (models/gemini-2.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:58,395 WARNING app: Model candidate failed (gemini-1.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:58,475 WARNING app: Model candidate failed (models/gemini-1.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:09:58,482 WARNING app: Lazy model init failed: No working Gemini model available. Check API key/network or try a different model.
+2026-01-05 19:09:58,766 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:09:58] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 19:10:21,668 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 19:10:24,702 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2026-01-05 19:10:24,708 INFO app: Forecast done col=Temp_C took=3.04s steps=879 points=8784
+2026-01-05 19:10:33,987 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 19:10:35,708 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2026-01-05 19:10:35,715 INFO app: Forecast done col=Dew Point Temp_C took=1.73s steps=879 points=8784
+2026-01-05 19:10:43,519 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2026-01-05 19:10:45,128 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2026-01-05 19:10:45,134 INFO app: Forecast done col=Rel Hum_% took=1.61s steps=879 points=8784
+2026-01-05 19:10:53,958 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2026-01-05 19:10:54,965 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2026-01-05 19:10:54,967 INFO app: Forecast done col=Wind Speed_km/h took=1.01s steps=879 points=8784
+2026-01-05 19:11:01,062 INFO app: Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2026-01-05 19:11:02,130 INFO app: Forecast plot ready col=Visibility_km forecast_points=879
+2026-01-05 19:11:02,132 INFO app: Forecast done col=Visibility_km took=1.07s steps=879 points=8784
+2026-01-05 19:11:09,990 INFO app: Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2026-01-05 19:11:10,892 INFO app: Forecast plot ready col=Press_kPa forecast_points=879
+2026-01-05 19:11:10,894 INFO app: Forecast done col=Press_kPa took=0.90s steps=879 points=8784
+2026-01-05 19:11:18,870 WARNING app: Model candidate failed (models/gemini-2.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:18,967 WARNING app: Model candidate failed (gemini-2.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,063 WARNING app: Model candidate failed (gemini-3.0-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,146 WARNING app: Model candidate failed (models/gemini-3.0-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,250 WARNING app: Model candidate failed (gemini-1.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,320 WARNING app: Model candidate failed (models/gemini-1.5-flash): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,421 WARNING app: Model candidate failed (gemini-2.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,496 WARNING app: Model candidate failed (models/gemini-2.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,599 WARNING app: Model candidate failed (gemini-1.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,669 WARNING app: Model candidate failed (models/gemini-1.5-pro): 403 Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: "SERVICE_DISABLED"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "serviceTitle"
+  value: "Generative Language API"
+}
+metadata {
+  key: "containerInfo"
+  value: "888384164917"
+}
+metadata {
+  key: "consumer"
+  value: "projects/888384164917"
+}
+metadata {
+  key: "activationUrl"
+  value: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+, locale: "en-US"
+message: "Generative Language API has not been used in project 888384164917 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."
+, links {
+  description: "Google developers console API activation"
+  url: "https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=888384164917"
+}
+]
+2026-01-05 19:11:19,671 WARNING app: Lazy model init failed: No working Gemini model available. Check API key/network or try a different model.
+2026-01-05 19:11:19,672 INFO app: Static forecast_plots count: 12
+2026-01-05 19:11:19,673 INFO app: Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-05 19:11:19,674 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-05 19:11:19,677 INFO app: Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-05 19:11:19,678 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-05 19:11:19,680 INFO app: Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-05 19:11:19,681 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-05 19:11:19,682 INFO app: Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-05 19:11:19,684 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-05 19:11:19,685 INFO app: Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-05 19:11:19,686 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-05 19:11:19,687 INFO app: Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-05 19:11:19,688 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-05 19:11:19,731 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=58.97s cols=7
+2026-01-05 19:11:19,743 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:11:19] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-05 19:13:01,758 INFO app: Static forecast_plots count: 0
+2026-01-05 19:13:01,799 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=2.77s cols=7
+2026-01-05 19:13:01,809 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:13:01] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=overview&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-05 19:58:10,133 INFO app: Attempting to configure AI...
+2026-01-05 19:58:10,138 INFO app: AI configured successfully using service account credentials.
+2026-01-05 19:58:10,147 INFO app: Talisman enabled.
+2026-01-05 19:58:10,153 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 19:58:10,154 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 19:58:10,236 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 19:58:10,237 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 19:58:10,241 INFO werkzeug:  * Restarting with stat
+2026-01-05 19:58:17,842 INFO app: Attempting to configure AI...
+2026-01-05 19:58:17,846 INFO app: AI configured successfully using service account credentials.
+2026-01-05 19:58:17,855 INFO app: Talisman enabled.
+2026-01-05 19:58:17,858 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 19:58:17,859 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 19:58:17,885 WARNING werkzeug:  * Debugger is active!
+2026-01-05 19:58:17,893 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 19:58:24,297 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:58:24] "GET / HTTP/1.1" 200 -
+2026-01-05 19:58:33,781 INFO app: Application starting - Log file initialized
+2026-01-05 19:58:33,785 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:58:33] "POST / HTTP/1.1" 302 -
+2026-01-05 19:58:38,160 INFO app: Static forecast_plots count: 0
+2026-01-05 19:58:38,192 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=4.03s cols=7
+2026-01-05 19:58:38,240 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:58:38] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 19:58:43,742 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 19:59:13,841 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 19:59:13] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 19:59:51,372 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 19:59:51,448 INFO app: Loaded Arial font successfully
+2026-01-05 19:59:51,449 INFO app: Adding page...
+2026-01-05 19:59:51,451 INFO app: Page added. Page No: 1
+2026-01-05 19:59:51,556 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 19:59:52,175 WARNING app: No page open in fallback, adding one.
+2026-01-05 20:00:29,564 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:00:29] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 20:06:23,207 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:06:31,260 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:06:44,214 INFO app: Attempting to configure AI...
+2026-01-05 20:06:44,218 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:06:44,230 INFO app: Talisman enabled.
+2026-01-05 20:06:44,235 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:06:44,236 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:06:44,272 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:06:44,281 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:07:01,069 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:07:01,938 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:07:11,423 INFO app: Attempting to configure AI...
+2026-01-05 20:07:11,427 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:07:11,437 INFO app: Talisman enabled.
+2026-01-05 20:07:11,444 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:07:11,445 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:07:11,477 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:07:11,485 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:07:25,306 INFO app: Attempting to configure AI...
+2026-01-05 20:07:25,309 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:07:25,320 INFO app: Talisman enabled.
+2026-01-05 20:07:25,323 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:07:25,325 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:07:25,384 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 20:07:25,385 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 20:07:25,388 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:07:32,939 INFO app: Attempting to configure AI...
+2026-01-05 20:07:32,943 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:07:32,953 INFO app: Talisman enabled.
+2026-01-05 20:07:32,956 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:07:32,957 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:07:32,985 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:07:32,990 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:07:42,734 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:07:42] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 20:07:52,725 INFO app: Application starting - Log file initialized
+2026-01-05 20:07:52,729 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:07:52] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 20:07:56,594 INFO app: Static forecast_plots count: 0
+2026-01-05 20:07:56,632 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.59s cols=7
+2026-01-05 20:07:56,682 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:07:56] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:08:01,365 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 20:08:23,113 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:08:23] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 20:09:19,978 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:09:20,065 INFO app: Loaded Arial font successfully
+2026-01-05 20:09:20,067 INFO app: Adding page...
+2026-01-05 20:09:20,071 INFO app: Page added. Page No: 1
+2026-01-05 20:09:20,187 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:09:55,985 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:09:55] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 20:13:35,667 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:13:38,665 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:13:47,718 INFO app: Attempting to configure AI...
+2026-01-05 20:13:47,722 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:13:47,733 INFO app: Talisman enabled.
+2026-01-05 20:13:47,737 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:13:47,738 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:13:47,766 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:13:47,770 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:14:19,992 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:14:20,686 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:14:39,999 INFO app: Attempting to configure AI...
+2026-01-05 20:14:40,002 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:14:40,011 INFO app: Talisman enabled.
+2026-01-05 20:14:40,014 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:14:40,015 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:14:40,068 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-05 20:14:40,069 INFO werkzeug: Press CTRL+C to quit
+2026-01-05 20:14:40,073 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:14:47,431 INFO app: Attempting to configure AI...
+2026-01-05 20:14:47,435 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:14:47,447 INFO app: Talisman enabled.
+2026-01-05 20:14:47,451 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:14:47,452 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:14:47,483 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:14:47,489 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:15:10,315 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:15:10] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 20:15:18,829 INFO app: Application starting - Log file initialized
+2026-01-05 20:15:18,834 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:15:18] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 20:15:22,545 INFO app: Static forecast_plots count: 0
+2026-01-05 20:15:22,587 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.47s cols=7
+2026-01-05 20:15:22,627 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:15:22] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:15:27,930 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 20:15:53,251 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:15:53] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 20:16:14,804 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:16:14,888 INFO app: Loaded Arial font successfully
+2026-01-05 20:16:14,889 INFO app: Adding page...
+2026-01-05 20:16:14,891 INFO app: Page added. Page No: 1
+2026-01-05 20:16:14,993 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:16:15,083 WARNING app: Styled HTML rendering failed, falling back: Not enough horizontal space to render a single character
+2026-01-05 20:16:15,091 ERROR app: Error generating PDF: Not enough horizontal space to render a single character
+2026-01-05 20:16:15,174 ERROR app: Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 4012, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3909, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\fpdf.py", line 242, in wrapper
+    return fn(self, *args, **kwargs)
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\deprecation.py", line 32, in wrapper
+    return fn(self, *args, **kwargs)
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\fpdf.py", line 4550, in multi_cell
+    text_line = multi_line_break.get_line()
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\line_break.py", line 792, in get_line
+    raise FPDFException(
+        "Not enough horizontal space to render a single character"
+    )
+fpdf.errors.FPDFException: Not enough horizontal space to render a single character
+
+2026-01-05 20:16:15,181 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:16:15] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 20:17:10,429 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:17:13,582 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:17:23,064 INFO app: Attempting to configure AI...
+2026-01-05 20:17:23,068 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:17:23,078 INFO app: Talisman enabled.
+2026-01-05 20:17:23,082 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:17:23,083 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:17:23,112 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:17:23,117 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:17:45,128 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:17:45] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 20:17:56,002 INFO app: Application starting - Log file initialized
+2026-01-05 20:17:56,007 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:17:56] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 20:17:59,621 INFO app: Static forecast_plots count: 0
+2026-01-05 20:17:59,662 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.36s cols=7
+2026-01-05 20:17:59,712 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:17:59] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:18:05,066 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:18:05,129 INFO app: Loaded Arial font successfully
+2026-01-05 20:18:05,130 INFO app: Adding page...
+2026-01-05 20:18:05,132 INFO app: Page added. Page No: 1
+2026-01-05 20:18:05,201 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:18:36,537 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:18:36] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 20:20:26,467 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:20:27,348 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:20:36,222 INFO app: Attempting to configure AI...
+2026-01-05 20:20:36,227 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:20:36,243 INFO app: Talisman enabled.
+2026-01-05 20:20:36,247 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:20:36,249 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:20:36,281 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:20:36,286 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:21:17,087 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:21:17] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 20:21:25,195 INFO app: Application starting - Log file initialized
+2026-01-05 20:21:25,198 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:21:25] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 20:21:28,630 INFO app: Static forecast_plots count: 0
+2026-01-05 20:21:28,663 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.27s cols=7
+2026-01-05 20:21:28,709 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:21:28] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:21:30,936 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 20:21:52,655 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:21:52] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 20:21:55,767 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:21:55,832 INFO app: Loaded Arial font successfully
+2026-01-05 20:21:55,833 INFO app: Adding page...
+2026-01-05 20:21:55,835 INFO app: Page added. Page No: 1
+2026-01-05 20:21:55,921 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:21:56,005 WARNING app: Styled HTML rendering failed, falling back: Not enough horizontal space to render a single character
+2026-01-05 20:21:56,011 ERROR app: Error generating PDF: Not enough horizontal space to render a single character
+2026-01-05 20:21:56,030 ERROR app: Traceback (most recent call last):
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 4033, in download_full_report_pdf
+    add_text_block(ai_html, is_html=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\OneDrive - Gheorghe Asachi Technical University of Iasi\Desktop\repos\Data-analysis\app.py", line 3930, in add_text_block
+    pdf.multi_cell(0, 5, safe_text)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\fpdf.py", line 242, in wrapper
+    return fn(self, *args, **kwargs)
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\deprecation.py", line 32, in wrapper
+    return fn(self, *args, **kwargs)
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\fpdf.py", line 4550, in multi_cell
+    text_line = multi_line_break.get_line()
+  File "C:\Users\Quetzal\AppData\Local\Programs\Python\Python313\Lib\site-packages\fpdf\line_break.py", line 792, in get_line
+    raise FPDFException(
+        "Not enough horizontal space to render a single character"
+    )
+fpdf.errors.FPDFException: Not enough horizontal space to render a single character
+
+2026-01-05 20:21:56,033 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:21:56] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 500 -
+2026-01-05 20:22:38,389 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:22:41,166 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:22:48,954 INFO app: Attempting to configure AI...
+2026-01-05 20:22:48,958 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:22:48,968 INFO app: Talisman enabled.
+2026-01-05 20:22:48,971 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:22:48,972 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:22:48,998 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:22:49,002 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:23:11,956 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:23:12,924 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:23:21,699 INFO app: Attempting to configure AI...
+2026-01-05 20:23:21,703 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:23:21,713 INFO app: Talisman enabled.
+2026-01-05 20:23:21,716 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:23:21,717 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:23:21,741 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:23:21,746 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:23:29,028 INFO app: get_dataframe_for: file not found on disk: datasets\uploaded\664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv
+2026-01-05 20:23:29,030 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:23:29] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 404 -
+2026-01-05 20:23:32,694 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:23:32] "GET / HTTP/1.1" 200 -
+2026-01-05 20:23:40,403 INFO app: Application starting - Log file initialized
+2026-01-05 20:23:40,406 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:23:40] "POST / HTTP/1.1" 302 -
+2026-01-05 20:23:44,141 INFO app: Static forecast_plots count: 0
+2026-01-05 20:23:44,176 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.54s cols=7
+2026-01-05 20:23:44,220 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:23:44] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:23:51,285 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:23:51,339 INFO app: Loaded Arial font successfully
+2026-01-05 20:23:51,339 INFO app: Adding page...
+2026-01-05 20:23:51,341 INFO app: Page added. Page No: 1
+2026-01-05 20:23:51,403 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:24:21,819 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:24:21] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 20:27:01,257 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:27:02,218 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:27:10,405 INFO app: Attempting to configure AI...
+2026-01-05 20:27:10,409 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:27:10,418 INFO app: Talisman enabled.
+2026-01-05 20:27:10,421 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:27:10,422 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:27:10,447 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:27:10,452 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:28:51,521 INFO app: get_dataframe_for: file not found on disk: datasets\uploaded\664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv
+2026-01-05 20:28:51,528 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:28:51] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 404 -
+2026-01-05 20:28:57,646 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:28:57] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 20:29:05,068 INFO app: Application starting - Log file initialized
+2026-01-05 20:29:05,071 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:29:05] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 20:29:09,476 INFO app: Static forecast_plots count: 0
+2026-01-05 20:29:09,517 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=3.96s cols=7
+2026-01-05 20:29:09,563 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:29:09] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:29:15,971 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 20:29:33,545 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:29:33] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 20:29:36,649 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:29:36,732 INFO app: Loaded Arial font successfully
+2026-01-05 20:29:36,733 INFO app: Adding page...
+2026-01-05 20:29:36,739 INFO app: Page added. Page No: 1
+2026-01-05 20:29:36,824 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:30:11,457 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:30:11] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 20:40:26,468 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:40:33,960 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:40:49,383 INFO app: Attempting to configure AI...
+2026-01-05 20:40:49,389 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:40:49,406 INFO app: Talisman enabled.
+2026-01-05 20:40:49,412 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:40:49,413 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:40:49,455 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:40:49,478 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:41:21,597 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:41:21] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 20:41:31,874 INFO app: Application starting - Log file initialized
+2026-01-05 20:41:31,881 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:41:31] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 20:41:36,343 INFO app: Static forecast_plots count: 0
+2026-01-05 20:41:36,392 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=4.21s cols=7
+2026-01-05 20:41:36,439 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:41:36] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:41:41,789 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 20:42:30,274 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:42:30] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 20:42:33,747 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:42:33,835 INFO app: Loaded Arial font successfully
+2026-01-05 20:42:33,837 INFO app: Adding page...
+2026-01-05 20:42:33,839 INFO app: Page added. Page No: 1
+2026-01-05 20:42:33,944 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:43:14,791 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:43:14] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 20:48:44,954 INFO werkzeug:  * Detected change in 'C:\\Users\\Quetzal\\OneDrive - Gheorghe Asachi Technical University of Iasi\\Desktop\\repos\\Data-analysis\\app.py', reloading
+2026-01-05 20:48:51,501 INFO werkzeug:  * Restarting with stat
+2026-01-05 20:49:05,834 INFO app: Attempting to configure AI...
+2026-01-05 20:49:05,840 INFO app: AI configured successfully using service account credentials.
+2026-01-05 20:49:05,855 INFO app: Talisman enabled.
+2026-01-05 20:49:05,861 INFO app: Rate limiting enabled: 120/hour
+2026-01-05 20:49:05,862 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-05 20:49:05,902 WARNING werkzeug:  * Debugger is active!
+2026-01-05 20:49:05,912 INFO werkzeug:  * Debugger PIN: 883-125-801
+2026-01-05 20:50:21,529 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:50:21] "GET /?auto=1 HTTP/1.1" 200 -
+2026-01-05 20:50:32,716 INFO app: Application starting - Log file initialized
+2026-01-05 20:50:32,720 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:50:32] "POST /?auto=1 HTTP/1.1" 302 -
+2026-01-05 20:50:36,979 INFO app: Static forecast_plots count: 0
+2026-01-05 20:50:37,023 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=4.00s cols=7
+2026-01-05 20:50:37,070 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:50:37] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-05 20:50:41,391 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-05 20:51:05,298 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:51:05] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-05 20:51:10,217 INFO app: Starting PDF generation for 664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv, display=Project_1_-_Weather_Dataset.csv
+2026-01-05 20:51:10,306 INFO app: Loaded Arial font successfully
+2026-01-05 20:51:10,308 INFO app: Adding page...
+2026-01-05 20:51:10,311 INFO app: Page added. Page No: 1
+2026-01-05 20:51:10,427 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-05 20:51:45,474 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 20:51:45] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-05 20:54:03,327 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 20:54:03,952 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2026-01-05 20:54:03,953 INFO app: Forecast done col=Temp_C took=0.63s steps=879 points=8784
+2026-01-05 20:54:08,157 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2026-01-05 20:54:08,908 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2026-01-05 20:54:08,910 INFO app: Forecast done col=Dew Point Temp_C took=0.75s steps=879 points=8784
+2026-01-05 20:54:13,142 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2026-01-05 20:54:13,798 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2026-01-05 20:54:13,799 INFO app: Forecast done col=Rel Hum_% took=0.66s steps=879 points=8784
+2026-01-05 20:54:17,870 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2026-01-05 20:54:18,507 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2026-01-05 20:54:18,508 INFO app: Forecast done col=Wind Speed_km/h took=0.64s steps=879 points=8784

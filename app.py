@@ -24,6 +24,14 @@ import matplotlib.pyplot as plt
 
 
 import google.generativeai as genai
+
+# For service account authentication via Vertex AI
+try:
+    import google.auth
+    from google.oauth2 import service_account
+    GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    GOOGLE_AUTH_AVAILABLE = False
 from sklearn.ensemble import IsolationForest
 from statsmodels.tsa.arima.model import ARIMA
 import warnings
@@ -265,16 +273,57 @@ def get_or_create_model(preferred: str | None = None):
 def configure_ai():
     global model, AI_ENABLED
     try:
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        AI_ENABLED = True
-        # Defer any actual model creation until first real request to avoid
-        # spending free-tier quota during app startup and to reduce 429s.
-        model = None
-        app.logger.info("AI configured successfully.")
-        try:
-            _set_ai_status("OK", ready=False, configured=True, model_name=None)
-        except Exception:
-            pass
+        # Try service account JSON authentication first (Vertex AI)
+        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        
+        # If no env var set, look for a JSON credentials file in the app directory
+        if not credentials_path:
+            # Search for service account JSON files in the app directory
+            for f in os.listdir(os.path.dirname(os.path.abspath(__file__)) or '.'):
+                if f.endswith('.json') and 'service_account' not in f.lower():
+                    try:
+                        with open(f, 'r') as jf:
+                            content = json.load(jf)
+                            if content.get('type') == 'service_account':
+                                credentials_path = os.path.abspath(f)
+                                app.logger.info("Found service account JSON: %s", f)
+                                break
+                    except (json.JSONDecodeError, KeyError, IOError):
+                        continue
+        
+        if credentials_path and os.path.exists(credentials_path) and GOOGLE_AUTH_AVAILABLE:
+            # Use service account JSON for authentication
+            try:
+                scopes = ['https://www.googleapis.com/auth/generative-language', 
+                          'https://www.googleapis.com/auth/cloud-platform']
+                credentials = service_account.Credentials.from_service_account_file(
+                    credentials_path, scopes=scopes
+                )
+                genai.configure(credentials=credentials)
+                AI_ENABLED = True
+                model = None
+                app.logger.info("AI configured successfully using service account credentials.")
+                try:
+                    _set_ai_status("OK (Service Account)", ready=False, configured=True, model_name=None)
+                except Exception:
+                    pass
+                return
+            except Exception as e:
+                app.logger.warning("Service account auth failed, falling back to API key: %s", e)
+        
+        # Fall back to API key authentication
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            genai.configure(api_key=api_key)
+            AI_ENABLED = True
+            model = None
+            app.logger.info("AI configured successfully using API key.")
+            try:
+                _set_ai_status("OK", ready=False, configured=True, model_name=None)
+            except Exception:
+                pass
+        else:
+            raise ValueError("No valid authentication method found. Set GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS.")
     except Exception:
         app.logger.exception("AI configuration failed")
         model = None
@@ -545,6 +594,308 @@ def sanitize_ai_html(raw: str) -> str:
         lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
         s = "<p>" + "</p><p>".join(lines) + "</p>" if lines else "<p></p>"
     return s
+
+def html_to_plain_text(html: str) -> str:
+    """Convert HTML to plain text for PDF output (simple fallback version)."""
+    if not html:
+        return ""
+    s = str(html)
+    # Strip all tags
+    s = re.sub(r'<[^>]+>', ' ', s)
+    s = re.sub(r'\s+', ' ', s)
+    return s.strip()
+
+def convert_html_to_formatted_text(html: str) -> str:
+    """Convert HTML to well-formatted plain text for PDF output.
+    Preserves structure: headers become UPPERCASE with separators,
+    lists become bullet points, paragraphs are separated by blank lines.
+    """
+    if not html:
+        return ""
+    
+    s = str(html)
+    
+    # Handle HTML entities first
+    s = s.replace('&nbsp;', ' ')
+    s = s.replace('&amp;', '&')
+    s = s.replace('&lt;', '<')
+    s = s.replace('&gt;', '>')
+    s = s.replace('&quot;', '"')
+    s = s.replace('&#39;', "'")
+    
+    # Convert headers to UPPERCASE with separators
+    def header_replace(m):
+        text = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+        separator = '=' * min(len(text), 50)
+        return f"\n\n{separator}\n{text.upper()}\n{separator}\n"
+    s = re.sub(r'<h([1-6])[^>]*>(.*?)</h\1>', header_replace, s, flags=re.I | re.S)
+    
+    # Convert <br> to newlines
+    s = re.sub(r'<br\s*/?>', '\n', s, flags=re.I)
+    
+    # Convert </p> to double newline (paragraph break)
+    s = re.sub(r'</p>', '\n\n', s, flags=re.I)
+    
+    # Convert list items to bullet points
+    s = re.sub(r'<li[^>]*>(.*?)</li>', lambda m: '  - ' + re.sub(r'<[^>]+>', '', m.group(1)).strip() + '\n', s, flags=re.I | re.S)
+    
+    # Convert <strong> and <b> content - preserve the text with ** markers
+    s = re.sub(r'<(strong|b)[^>]*>(.*?)</\1>', lambda m: '**' + re.sub(r'<[^>]+>', '', m.group(2)).strip() + '**', s, flags=re.I | re.S)
+    
+    # Convert <em> and <i> content - preserve the text with * markers
+    s = re.sub(r'<(em|i)[^>]*>(.*?)</\1>', lambda m: '*' + re.sub(r'<[^>]+>', '', m.group(2)).strip() + '*', s, flags=re.I | re.S)
+    
+    # Handle tables - simple text representation
+    s = re.sub(r'<table[^>]*>', '\n', s, flags=re.I)
+    s = re.sub(r'</table>', '\n', s, flags=re.I)
+    s = re.sub(r'<tr[^>]*>', '', s, flags=re.I)
+    s = re.sub(r'</tr>', '\n', s, flags=re.I)
+    s = re.sub(r'<t[hd][^>]*>(.*?)</t[hd]>', lambda m: re.sub(r'<[^>]+>', '', m.group(1)).strip() + '  |  ', s, flags=re.I | re.S)
+    
+    # Remove all remaining HTML tags
+    s = re.sub(r'<[^>]+>', '', s)
+    
+    # Clean up whitespace
+    s = re.sub(r'[ \t]+', ' ', s)  # Multiple spaces to single
+    s = re.sub(r'\n[ \t]+', '\n', s)  # Remove leading whitespace on lines
+    s = re.sub(r'[ \t]+\n', '\n', s)  # Remove trailing whitespace on lines
+    s = re.sub(r'\n{4,}', '\n\n\n', s)  # Max 3 consecutive newlines
+    
+    return s.strip()
+
+# Emoji to text replacements for PDF (since most PDF fonts don't support emojis)
+EMOJI_REPLACEMENTS = {
+    '📊': '[CHART]',
+    '🔍': '[SEARCH]',
+    '📈': '[TREND UP]',
+    '⏱️': '[TIME]',
+    '🔗': '[LINK]',
+    '⚠️': '[WARNING]',
+    '🔮': '[PREDICTION]',
+    '💡': '[TIP]',
+    '✅': '[OK]',
+    '❌': '[X]',
+    '📉': '[TREND DOWN]',
+    '🎯': '[TARGET]',
+    '📋': '[LIST]',
+    '🔢': '[NUM]',
+    '📝': '[NOTE]',
+    '🚀': '[ROCKET]',
+    '⭐': '[STAR]',
+    '🔥': '[HOT]',
+    '💰': '[MONEY]',
+    '📅': '[DATE]',
+    '🕐': '[CLOCK]',
+    '➡️': '->',
+    '⬆️': '^',
+    '⬇️': 'v',
+    '✓': '[OK]',
+    '•': '-',
+}
+
+def replace_emojis_for_pdf(text: str) -> str:
+    """Remove emojis from text for PDF compatibility."""
+    if not text:
+        return ""
+    result = text
+    # Remove all known emojis
+    for emoji in EMOJI_REPLACEMENTS.keys():
+        result = result.replace(emoji, '')
+    # Remove any remaining emojis (Unicode ranges for emojis)
+    result = re.sub(r'[\U0001F300-\U0001F9FF]', '', result)
+    result = re.sub(r'[\u2600-\u26FF]', '', result)
+    result = re.sub(r'[\u2700-\u27BF]', '', result)
+    # Clean up any double spaces left behind
+    result = re.sub(r'  +', ' ', result)
+    return result
+
+class PDFStyledText:
+    """Helper class to render styled HTML content to PDF with bold/italic support."""
+    
+    def __init__(self, pdf, font_family="helvetica", base_size=10):
+        self.pdf = pdf
+        self.font_family = font_family
+        self.base_size = base_size
+    
+    def render_html(self, html: str):
+        """Parse HTML and render with proper formatting to PDF."""
+        if not html:
+            return
+        
+        # Replace emojis first
+        html = replace_emojis_for_pdf(html)
+        
+        # Handle HTML entities
+        html = html.replace('&nbsp;', ' ')
+        html = html.replace('&amp;', '&')
+        html = html.replace('&lt;', '<')
+        html = html.replace('&gt;', '>')
+        html = html.replace('&quot;', '"')
+        html = html.replace('&#39;', "'")
+        
+        # Process content by sections
+        # Split by headers first
+        sections = re.split(r'(<h[1-6][^>]*>.*?</h[1-6]>)', html, flags=re.I | re.S)
+        
+        for section in sections:
+            if not section.strip():
+                continue
+            
+            # Check if this is a header
+            header_match = re.match(r'<h([1-6])[^>]*>(.*?)</h\1>', section, re.I | re.S)
+            if header_match:
+                level = int(header_match.group(1))
+                header_text = self._strip_tags(header_match.group(2))
+                self._render_header(header_text, level)
+            else:
+                # Process regular content
+                self._render_content(section)
+    
+    def _strip_tags(self, text: str) -> str:
+        """Remove all HTML tags from text."""
+        return re.sub(r'<[^>]+>', '', text).strip()
+    
+    def _render_header(self, text: str, level: int):
+        """Render a header with appropriate styling."""
+        # Font sizes based on header level
+        sizes = {1: 16, 2: 14, 3: 13, 4: 12, 5: 11, 6: 10}
+        size = sizes.get(level, 12)
+        
+        self.pdf.ln(4)
+        self.pdf.set_font(self.font_family, 'B', size)
+        self.pdf.set_fill_color(240, 240, 240)
+        
+        # Encode for latin-1 if needed
+        safe_text = self._safe_encode(text)
+        self.pdf.multi_cell(0, 6, safe_text, fill=True)
+        self.pdf.ln(2)
+        self.pdf.set_font(self.font_family, '', self.base_size)
+    
+    def _render_content(self, content: str):
+        """Render content with inline styling (bold, italic, lists)."""
+        if not content or not content.strip():
+            return
+            
+        # Handle lists
+        if '<ul' in content.lower() or '<ol' in content.lower():
+            self._render_list(content)
+            # Also render any content outside the list
+            outside_list = re.sub(r'<[uo]l[^>]*>.*?</[uo]l>', '', content, flags=re.I | re.S)
+            if outside_list.strip():
+                self._render_content(outside_list)
+            return
+        
+        # Handle paragraphs and inline content
+        # Split by closing tags and line breaks
+        paragraphs = re.split(r'</p>|<br\s*/?>|\n', content, flags=re.I)
+        
+        rendered_anything = False
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            
+            # Remove opening <p> tags and any other block-level opening tags
+            para = re.sub(r'<p[^>]*>', '', para, flags=re.I)
+            para = re.sub(r'<div[^>]*>', '', para, flags=re.I)
+            para = re.sub(r'</div>', '', para, flags=re.I)
+            
+            para = para.strip()
+            if not para:
+                continue
+            
+            self._render_styled_paragraph(para)
+            self.pdf.ln(3)
+            rendered_anything = True
+        
+        # Fallback: if nothing was rendered, render the whole content as plain text
+        if not rendered_anything:
+            plain_text = self._strip_tags(content)
+            if plain_text:
+                self.pdf.set_font(self.font_family, '', self.base_size)
+                safe_text = self._safe_encode(plain_text)
+                self.pdf.multi_cell(0, 5, safe_text)
+                self.pdf.ln(3)
+    
+    def _render_list(self, content: str):
+        """Render a list with bullet points."""
+        items = re.findall(r'<li[^>]*>(.*?)</li>', content, re.I | re.S)
+        
+        for item in items:
+            item_text = self._strip_tags(item).strip()
+            if not item_text:
+                continue
+            
+            self.pdf.set_font(self.font_family, '', self.base_size)
+            safe_text = self._safe_encode(f"  - {item_text}")
+            self.pdf.multi_cell(0, 5, safe_text)
+        
+        self.pdf.ln(2)
+    
+    def _render_styled_paragraph(self, para: str):
+        """Render a paragraph with bold/italic inline styling."""
+        # Parse inline styles and render them
+        # We'll use a simple approach: find styled segments and render them
+        
+        # Pattern to find bold/italic segments
+        segments = []
+        pos = 0
+        
+        # Combined pattern for bold and italic
+        pattern = re.compile(r'<(strong|b|em|i)[^>]*>(.*?)</\1>', re.I | re.S)
+        
+        for match in pattern.finditer(para):
+            # Add text before the match as normal
+            if match.start() > pos:
+                before_text = self._strip_tags(para[pos:match.start()])
+                if before_text:
+                    segments.append(('', before_text))
+            
+            # Add the styled segment
+            tag = match.group(1).lower()
+            style = 'B' if tag in ('strong', 'b') else 'I'
+            styled_text = self._strip_tags(match.group(2))
+            if styled_text:
+                segments.append((style, styled_text))
+            
+            pos = match.end()
+        
+        # Add remaining text
+        if pos < len(para):
+            remaining = self._strip_tags(para[pos:])
+            if remaining:
+                segments.append(('', remaining))
+        
+        # If no segments found, just render plain text
+        if not segments:
+            plain = self._strip_tags(para)
+            if plain:
+                self.pdf.set_font(self.font_family, '', self.base_size)
+                safe_text = self._safe_encode(plain)
+                self.pdf.multi_cell(0, 5, safe_text)
+            return
+        
+        # Render segments - combine into single text and use multi_cell
+        # Since fpdf2's write() has issues, we'll render each styled segment separately
+        for style, text in segments:
+            if not text:
+                continue
+            self.pdf.set_font(self.font_family, style, self.base_size)
+            safe_text = self._safe_encode(text)
+            # Use multi_cell with no width limit for safety
+            self.pdf.multi_cell(0, 5, safe_text, new_x="LMARGIN", new_y="NEXT")
+    
+    def _safe_encode(self, text: str) -> str:
+        """Safely encode text for PDF output."""
+        if not text:
+            return ""
+        # Replace emojis again just in case
+        text = replace_emojis_for_pdf(text)
+        # Encode to latin-1, replacing unsupported chars
+        try:
+            return text.encode('latin-1', 'replace').decode('latin-1')
+        except Exception:
+            return text
 
 def _is_offline_html(s: str) -> bool:
     try:
@@ -3182,12 +3533,11 @@ def analyze_file(filename):
 
     ai_summary = AI_SUMMARY_CACHE.get(filename)
     if ai_summary is None:
-        # Optionally defer AI summary on overview to keep first load snappy
-        elapsed = time.perf_counter() - request_start
-        defer_ai_on_overview = False # Always try to load AI summary if possible
-        can_do_ai_now = True # not (active_view == 'overview' and (defer_ai_on_overview or elapsed > budget_s))
-        # Allow AI summary on both GET and POST (POST needed for Q&A to work alongside summary)
-        if can_do_ai_now and ensure_ai_ready():
+        # Defer AI summary on overview GET requests - will load via AJAX for faster initial page render
+        # Only block on AI summary for POST requests (Q&A needs it) or non-overview views
+        defer_ai_on_overview = (active_view == 'overview' and request.method == 'GET')
+        
+        if not defer_ai_on_overview and ensure_ai_ready():
             try:
                 generated = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
                 ai_summary = generated
@@ -3200,9 +3550,11 @@ def analyze_file(filename):
                     reason = ''
                 detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
                 ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
+        elif defer_ai_on_overview:
+            # Leave ai_summary empty/None - frontend will load it async via AJAX
+            ai_summary = ""
         else:
-            # If we are here, it means ensure_ai_ready() failed (since we forced can_do_ai_now=True).
-            # Report the actual reason (e.g. No API key) instead of saying "deferred".
+            # ensure_ai_ready() failed - report the actual reason
             reason = AI_STATUS.get('message') or ("AI disabled or not configured." if not AI_ENABLED else "")
             detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
             ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
@@ -3266,6 +3618,39 @@ def analyze_file(filename):
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok"}), 200
+
+@app.route('/api/ai-summary/<filename>', methods=['GET'])
+def api_ai_summary(filename):
+    """Async endpoint for fetching AI summary via AJAX for faster page loads."""
+    if not HASHED_UPLOAD_RE.match(filename):
+        return jsonify({"ok": False, "html": "<p>Invalid file.</p>"}), 400
+    
+    # Check cache first for instant response
+    cached = AI_SUMMARY_CACHE.get(filename)
+    if cached:
+        return jsonify({"ok": True, "html": cached, "cached": True})
+    
+    # Generate new summary
+    df = get_dataframe_for(filename)
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        return jsonify({"ok": False, "html": "<p>Dataset not found.</p>"}), 404
+    
+    file_asset = AI_FILE_MAP.get(filename) if 'AI_FILE_MAP' in globals() else None
+    ai_context = describe_for_ai(df)
+    
+    try:
+        if ensure_ai_ready():
+            summary = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
+            if isinstance(summary, str) and not _is_offline_html(summary):
+                AI_SUMMARY_CACHE[filename] = summary
+            return jsonify({"ok": True, "html": summary, "cached": False})
+        else:
+            fallback = offline_answer(df, "summary", error="AI not ready")
+            return jsonify({"ok": True, "html": fallback, "cached": False})
+    except Exception as e:
+        app.logger.warning("API AI summary failed: %s", e)
+        fallback = offline_answer(df, "summary", error=e)
+        return jsonify({"ok": True, "html": fallback, "cached": False})
 
 @app.route('/download/<filename>/cleaned.csv', methods=['GET'])
 def download_cleaned_csv(filename):
@@ -3461,6 +3846,9 @@ class PDFReport(FPDF):
         self.display_name = display_name
     
     def header(self):
+        # Only show header on first page
+        if self.page_no() != 1:
+            return
         try:
             # Determine strictness based on available fonts
             font_family = "Arial" if "Arial" in self.fonts else "helvetica"
@@ -3520,6 +3908,27 @@ def download_full_report_pdf(filename):
 
     display = request.args.get('display') or filename
     
+    # Ensure AI summary is generated if not already cached
+    if AI_SUMMARY_CACHE.get(filename) is None:
+        try:
+            if ensure_ai_ready():
+                # Build context for AI
+                try:
+                    ai_context = describe_for_ai(df)
+                except Exception:
+                    ai_context = ""
+                
+                # Get file asset if available
+                file_asset = AI_FILE_MAP.get(filename)
+                
+                # Generate AI summary
+                generated = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
+                if isinstance(generated, str) and not _is_offline_html(generated):
+                    AI_SUMMARY_CACHE[filename] = generated
+                    app.logger.info(f"Generated AI summary for PDF: {filename}")
+        except Exception as e:
+            app.logger.warning(f"Could not generate AI summary for PDF: {e}")
+    
     try:
         app.logger.info(f"Starting PDF generation for {filename}, display={display}")
         pdf = PDFReport("Data Analysis Report", display)
@@ -3566,6 +3975,46 @@ def download_full_report_pdf(filename):
             pdf.set_font(font_family, size=10)
 
         def add_text_block(text, courier=False, is_html=False):
+            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+            
+            # Ensure we have a page
+            if pdf.page_no() == 0:
+                app.logger.warning("No page open, adding one.")
+                pdf.add_page()
+            
+            # Use fpdf2's write_html for HTML content with actual formatting
+            if is_html:
+                try:
+                    # Replace emojis with text equivalents (PDF fonts don't support most emojis)
+                    html_text = replace_emojis_for_pdf(text)
+                    
+                    # Sanitize HTML for fpdf2 compatibility
+                    # fpdf2 write_html supports: b, i, u, h1-h6, p, br, ul, ol, li, font, a, img, table
+                    html_text = re.sub(r'<strong([^>]*)>', r'<b\1>', html_text, flags=re.I)
+                    html_text = re.sub(r'</strong>', '</b>', html_text, flags=re.I)
+                    html_text = re.sub(r'<em([^>]*)>', r'<i\1>', html_text, flags=re.I)
+                    html_text = re.sub(r'</em>', '</i>', html_text, flags=re.I)
+                    
+                    # Remove problematic tags but keep their content
+                    html_text = re.sub(r'</?div[^>]*>', '', html_text, flags=re.I)
+                    html_text = re.sub(r'</?span[^>]*>', '', html_text, flags=re.I)
+                    html_text = re.sub(r'</?section[^>]*>', '', html_text, flags=re.I)
+                    
+                    # Set base font before rendering HTML
+                    pdf.set_font(font_family, size=10)
+                    
+                    # Use write_html for rich formatting (bold, italic, headers, lists)
+                    pdf.write_html(html_text)
+                    pdf.ln(5)
+                    pdf.set_font(font_family, size=10)
+                    return
+                except Exception as e:
+                    app.logger.warning(f"write_html failed: {e}, falling back to plain text")
+                    # Fall back to plain text conversion
+                    text = convert_html_to_formatted_text(text)
+                    text = replace_emojis_for_pdf(text)
+            
+            # Standard text rendering
             if courier:
                 pdf.set_font("Courier", size=9)
             elif "Arial" in pdf.fonts:
@@ -3573,32 +4022,18 @@ def download_full_report_pdf(filename):
             else:
                 pdf.set_font("helvetica", size=10)
             
-            # Use write_html if requested (for AI summary)
-            if is_html:
-                try:
-                    pdf.write_html(text)
-                    pdf.ln(5)
-                    # Reset font
-                    font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
-                    pdf.set_font(font_family, size=10)
-                    return
-                except Exception as e:
-                    app.logger.error(f"HTML rendering failed: {e}")
-                    # Fallthrough
+            # Replace emojis for plain text too
+            text = replace_emojis_for_pdf(text)
             
-            # Fallback or standard text
-            if pdf.page_no() == 0:
-                app.logger.warning("No page open in fallback, adding one.")
-                pdf.add_page()
-                
+            # Render text
             if "Arial" in pdf.fonts:
                 pdf.multi_cell(0, 5, text)
             else:
-                 safe_text = text.encode('latin-1', 'replace').decode('latin-1')
-                 pdf.multi_cell(0, 5, safe_text)
+                safe_text = text.encode('latin-1', 'replace').decode('latin-1')
+                pdf.multi_cell(0, 5, safe_text)
             pdf.ln(5)
-            # Reset
-            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+            
+            # Reset font
             pdf.set_font(font_family, size=10)
 
         def add_df_table(df_table, title=None):
@@ -4229,20 +4664,33 @@ def full_history_json():
         return jsonify({"ok": False, "message": f"Internal error: {e}"}), 500
 
 @app.after_request
-def _sanitize_permissions_policy(resp):
+def _add_cache_and_security_headers(resp):
+    """Add caching headers for performance and sanitize security policies."""
     try:
+        # Cache headers for API endpoints
+        if request.path.startswith('/api/ai-summary/'):
+            # Cache AI summary responses for 5 minutes if successful
+            if resp.status_code == 200:
+                resp.headers['Cache-Control'] = 'private, max-age=300'
+            else:
+                resp.headers['Cache-Control'] = 'no-cache'
+        elif request.path.startswith('/api/') or request.path == '/full_history_json':
+            # JSON API responses should be cached briefly
+            resp.headers['Cache-Control'] = 'private, max-age=60'
+        elif request.path.startswith('/static/'):
+            # Static files can be cached for 1 week
+            resp.headers['Cache-Control'] = 'public, max-age=604800'
+        
+        # Sanitize Permissions-Policy header
         if 'Permissions-Policy' in resp.headers:
             pol = str(resp.headers.get('Permissions-Policy', ''))
-            
             bad_bits = ['interest-cohort', 'browsing-topics', 'join-ad-interest-group', 'run-ad-auction']
             cleaned = "; ".join(seg for seg in pol.split(';') if seg and not any(b in seg for b in bad_bits)).strip()
             if cleaned:
                 resp.headers['Permissions-Policy'] = cleaned
             else:
-                
                 del resp.headers['Permissions-Policy']
     except Exception:
-        
         pass
     return resp
 

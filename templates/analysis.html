@@ -307,7 +307,48 @@
       </div>
 
       <h3 style="margin-top:10px;">AI summary</h3>
-      <div>{{ analysis.ai_summary | safe }}</div>
+      <div id="ai-summary-container">
+        <!-- Loading spinner shown while AI summary loads async -->
+        <div id="ai-summary-loading"
+          style="text-align:center; padding:20px;{% if analysis.ai_summary %} display:none;{% endif %}">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="display:inline-block;">
+            <circle cx="12" cy="12" r="10" stroke="var(--border)" stroke-width="3" fill="none" />
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"
+              fill="none">
+              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s"
+                repeatCount="indefinite" />
+            </path>
+          </svg>
+          <p style="margin-top:8px;color:var(--muted)">Loading AI analysis...</p>
+        </div>
+        <!-- AI summary content (pre-rendered or loaded via AJAX) -->
+        <div id="ai-summary-content" {% if not analysis.ai_summary %} style="display:none;" {% endif %}>{{
+          analysis.ai_summary | safe }}</div>
+      </div>
+      <script>
+        (function () {
+          const contentEl = document.getElementById('ai-summary-content');
+          const loadingEl = document.getElementById('ai-summary-loading');
+          // If content is already pre-rendered and not empty, skip AJAX loading
+          if (contentEl && contentEl.innerHTML.trim() && contentEl.innerHTML.trim() !== '') {
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
+            return;
+          }
+          // Otherwise, fetch async
+          const summaryUrl = '/api/ai-summary/{{ filename }}';
+          fetch(summaryUrl, { cache: 'default' })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              loadingEl.style.display = 'none';
+              contentEl.innerHTML = data.html || '<p class="muted">AI summary unavailable.</p>';
+              contentEl.style.display = 'block';
+            })
+            .catch(function () {
+              loadingEl.innerHTML = '<p class="muted">AI summary could not be loaded.</p>';
+            });
+        })();
+      </script>
 
       <h3 style="margin-top:16px;">Ask the AI about this dataset</h3>
       <form id="qaForm" method="POST"
