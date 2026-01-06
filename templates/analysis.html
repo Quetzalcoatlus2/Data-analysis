@@ -842,11 +842,18 @@
     </script>
 
     {% elif active_view == 'correlation' %}
-    <section class="panel">
+    <section class="panel" style="width: 100%;">
       <h3>Correlation</h3>
       {% if analysis.corr and analysis.corr.z %}
-      <div id="corr" class="panel" style="min-height:520px">
-        <div class="skeleton" style="min-height:480px"></div>
+      <!-- Side-by-side layout for Spearman and Pearson -->
+      <div
+        style="display: flex; gap: 16px; align-items: stretch; height: calc(100vh - 200px); min-height: 300px; overflow: hidden;">
+        <div id="corr" class="panel" style="flex: 1 1 50%; height: 100%; overflow: hidden;">
+          <div class="skeleton" style="height: 100%"></div>
+        </div>
+        <div id="pearson" class="panel" style="flex: 1 1 50%; height: 100%; overflow: hidden;">
+          <div class="skeleton" style="height: 100%"></div>
+        </div>
       </div>
       <script id="corrPayload" type="application/json">{{ analysis.corr | tojson }}</script>
       <script>
@@ -866,46 +873,42 @@
 
             // Spearman correlation
             if (corrData && corrData.z) {
-              // Clear skeleton and ensure proper height before rendering
               const corrDiv = document.getElementById('corr');
               if (corrDiv) {
-                corrDiv.innerHTML = ''; // Remove skeleton loader
-                corrDiv.style.minHeight = '520px'; // Ensure proper height
+                corrDiv.innerHTML = ''; // Clear skeleton
+                const corrHeight = (corrDiv.clientHeight - 20) || 400;
+                const spearmanData = [{
+                  z: corrData.z,
+                  x: corrData.x,
+                  y: corrData.y,
+                  type: 'heatmap',
+                  colorscale: [
+                    [0, '#0b1327'],
+                    [0.5, t.accent],
+                    [1, t.accent2]
+                  ],
+                  zmin: -1, zmax: 1
+                }];
+                const spearmanLayout = {
+                  title: { text: 'Spearman correlation', x: 0.02 },
+                  height: corrHeight,
+                  xaxis: { side: 'top', automargin: true },
+                  yaxis: { autorange: 'reversed', automargin: true },
+                  paper_bgcolor: t.panel,
+                  plot_bgcolor: t.panel,
+                  font: { color: t.text },
+                  margin: { l: 80, r: 10, t: 50, b: 40 }
+                };
+                Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
               }
-              const spearmanData = [{
-                z: corrData.z,
-                x: corrData.x,
-                y: corrData.y,
-                type: 'heatmap',
-                colorscale: [
-                  [0, '#0b1327'],
-                  [0.5, t.accent],
-                  [1, t.accent2]
-                ],
-                zmin: -1, zmax: 1
-              }];
-              const spearmanLayout = {
-                title: { text: 'Spearman correlation', x: 0.02 },
-                xaxis: { side: 'top', automargin: true },
-                yaxis: { autorange: 'reversed', automargin: true },
-                paper_bgcolor: t.panel,
-                plot_bgcolor: t.panel,
-                font: { color: t.text },
-                margin: { l: 120, r: 10, t: 60, b: 60 }
-              };
-              Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
             }
 
             // Pearson correlation (if provided)
             if (corrData && corrData.pearson && corrData.pearson.z) {
-              const corrSection = document.getElementById('corr');
-              const parentEl = corrSection ? corrSection.parentElement : null;
-              if (parentEl) {
-                const pearDiv = document.createElement('div');
-                pearDiv.id = 'pearson';
-                pearDiv.className = 'panel';
-                pearDiv.style.minHeight = '520px';
-                parentEl.appendChild(pearDiv);
+              const pearDiv = document.getElementById('pearson');
+              if (pearDiv) {
+                pearDiv.innerHTML = ''; // Clear skeleton
+                const pearHeight = (pearDiv.clientHeight - 20) || 400;
                 const pearData = [{
                   z: corrData.pearson.z,
                   x: corrData.pearson.x,
@@ -920,15 +923,20 @@
                 }];
                 const pearLayout = {
                   title: { text: 'Pearson correlation', x: 0.02 },
+                  height: pearHeight,
                   xaxis: { side: 'top', automargin: true },
                   yaxis: { autorange: 'reversed', automargin: true },
                   paper_bgcolor: t.panel,
                   plot_bgcolor: t.panel,
                   font: { color: t.text },
-                  margin: { l: 120, r: 10, t: 60, b: 60 }
+                  margin: { l: 80, r: 10, t: 50, b: 40 }
                 };
                 Plotly.newPlot('pearson', pearData, pearLayout, { responsive: true });
               }
+            } else {
+              // Hide Pearson div if no data
+              const pearDiv = document.getElementById('pearson');
+              if (pearDiv) pearDiv.style.display = 'none';
             }
           }
 
