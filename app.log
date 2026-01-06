@@ -32877,3 +32877,127 @@ fpdf.errors.FPDFException: Not enough horizontal space to render a single charac
 2026-01-05 21:17:47,021 INFO app: Page added. Page No: 1
 2026-01-05 21:17:48,552 INFO app: Table won't fit (needed 80, left 66.26674999999994), adding page
 2026-01-05 21:19:14,663 INFO werkzeug: 127.0.0.1 - - [05/Jan/2026 21:19:14] "GET /download/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv/report.pdf?display=Project_1_-_Weather_Dataset.csv HTTP/1.1" 200 -
+2026-01-06 12:58:47,265 INFO app: Attempting to configure AI...
+2026-01-06 12:58:47,741 INFO app: AI configured successfully using service account credentials.
+2026-01-06 15:35:13,639 INFO app: Attempting to configure AI...
+2026-01-06 15:35:13,717 INFO app: AI configured successfully using service account credentials.
+2026-01-06 15:39:25,755 INFO app: Attempting to configure AI...
+2026-01-06 15:39:25,765 INFO app: AI configured successfully using service account credentials.
+2026-01-06 15:39:25,792 INFO app: Talisman enabled.
+2026-01-06 15:39:26,224 INFO app: Rate limiting enabled: 120/hour
+2026-01-06 15:39:26,246 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-06 15:39:26,873 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-06 15:39:26,875 INFO werkzeug: Press CTRL+C to quit
+2026-01-06 15:39:26,880 INFO werkzeug:  * Restarting with stat
+2026-01-06 15:40:11,425 INFO app: Attempting to configure AI...
+2026-01-06 15:40:11,437 INFO app: AI configured successfully using service account credentials.
+2026-01-06 15:40:11,493 INFO app: Talisman enabled.
+2026-01-06 15:40:11,521 INFO app: Rate limiting enabled: 120/hour
+2026-01-06 15:40:11,527 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-06 15:40:11,627 WARNING werkzeug:  * Debugger is active!
+2026-01-06 15:40:11,696 INFO werkzeug:  * Debugger PIN: 135-213-712
+2026-01-06 15:40:13,408 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:40:13] "GET / HTTP/1.1" 200 -
+2026-01-06 15:40:13,424 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:40:13] "GET / HTTP/1.1" 200 -
+2026-01-06 15:40:13,443 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:40:13] "GET / HTTP/1.1" 200 -
+2026-01-06 15:40:13,454 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:40:13] "GET / HTTP/1.1" 200 -
+2026-01-06 15:40:37,703 INFO app: Application starting - Log file initialized
+2026-01-06 15:40:37,708 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:40:37] "POST / HTTP/1.1" 302 -
+2026-01-06 15:40:45,915 INFO app: Static forecast_plots count: 0
+2026-01-06 15:40:45,920 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=7.53s cols=7
+2026-01-06 15:40:47,949 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:40:47] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-06 15:40:52,743 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-06 15:41:22,081 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:41:22] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-06 15:43:36,463 INFO app: Static forecast_plots count: 6
+2026-01-06 15:43:36,508 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-06 15:43:36,517 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 15:43:36,526 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 15:43:36,540 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 15:43:36,546 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-06 15:43:36,557 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-06 15:43:36,565 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=71.55s cols=7
+2026-01-06 15:43:36,866 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 15:43:36] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-06 17:42:37,712 INFO app: Attempting to configure AI...
+2026-01-06 17:42:37,744 INFO app: AI configured successfully using service account credentials.
+2026-01-06 17:42:37,778 INFO app: Talisman enabled.
+2026-01-06 17:42:37,805 INFO app: Rate limiting enabled: 120/hour
+2026-01-06 17:42:37,816 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-06 17:42:38,117 INFO werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-01-06 17:42:38,120 INFO werkzeug: Press CTRL+C to quit
+2026-01-06 17:42:38,129 INFO werkzeug:  * Restarting with stat
+2026-01-06 17:43:00,664 INFO app: Attempting to configure AI...
+2026-01-06 17:43:00,670 INFO app: AI configured successfully using service account credentials.
+2026-01-06 17:43:00,685 INFO app: Talisman enabled.
+2026-01-06 17:43:00,690 INFO app: Rate limiting enabled: 120/hour
+2026-01-06 17:43:00,691 INFO app: Starting Flask server on 127.0.0.1:5000 (debug=True)
+2026-01-06 17:43:00,726 WARNING werkzeug:  * Debugger is active!
+2026-01-06 17:43:00,737 INFO werkzeug:  * Debugger PIN: 135-213-712
+2026-01-06 17:43:37,868 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:43:37] "GET / HTTP/1.1" 200 -
+2026-01-06 17:43:51,641 INFO app: Application starting - Log file initialized
+2026-01-06 17:43:51,910 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:43:51] "POST / HTTP/1.1" 302 -
+2026-01-06 17:44:05,171 INFO app: Static forecast_plots count: 0
+2026-01-06 17:44:05,173 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=5.91s cols=7
+2026-01-06 17:44:05,382 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:44:05] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&forecast_pct=0.10&contamination=0.02&view=overview HTTP/1.1" 200 -
+2026-01-06 17:44:09,282 INFO app: Using Gemini model: models/gemini-2.5-flash
+2026-01-06 17:44:39,604 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:44:39] "GET /api/ai-summary/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv HTTP/1.1" 200 -
+2026-01-06 17:45:41,318 INFO app: Static forecast_plots count: 6
+2026-01-06 17:45:41,327 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-06 17:45:41,328 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 17:45:41,330 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 17:45:41,331 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 17:45:41,335 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-06 17:45:41,336 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-06 17:45:41,338 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=43.18s cols=7
+2026-01-06 17:45:41,520 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:45:41] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-06 17:46:21,429 INFO app: Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:22,300 INFO app: Forecast plot ready col=Temp_C forecast_points=879
+2026-01-06 17:46:22,303 INFO app: Forecast done col=Temp_C took=0.87s steps=879 points=8784
+2026-01-06 17:46:28,203 INFO app: Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:28,646 INFO app: Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2026-01-06 17:46:28,647 INFO app: Forecast done col=Dew Point Temp_C took=0.45s steps=879 points=8784
+2026-01-06 17:46:34,158 INFO app: Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:34,796 INFO app: Forecast plot ready col=Rel Hum_% forecast_points=879
+2026-01-06 17:46:34,798 INFO app: Forecast done col=Rel Hum_% took=0.64s steps=879 points=8784
+2026-01-06 17:46:40,450 INFO app: Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:41,210 INFO app: Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2026-01-06 17:46:41,212 INFO app: Forecast done col=Wind Speed_km/h took=0.76s steps=879 points=8784
+2026-01-06 17:46:46,939 INFO app: Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:47,586 INFO app: Forecast plot ready col=Visibility_km forecast_points=879
+2026-01-06 17:46:47,590 INFO app: Forecast done col=Visibility_km took=0.65s steps=879 points=8784
+2026-01-06 17:46:53,773 INFO app: Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:54,663 INFO app: Forecast plot ready col=Press_kPa forecast_points=879
+2026-01-06 17:46:54,664 INFO app: Forecast done col=Press_kPa took=0.89s steps=879 points=8784
+2026-01-06 17:47:11,153 INFO app: Static forecast_plots count: 12
+2026-01-06 17:47:11,161 INFO app: Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-06 17:47:11,163 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-06 17:47:11,168 INFO app: Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-06 17:47:11,171 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 17:47:11,172 INFO app: Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-06 17:47:11,174 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 17:47:11,176 INFO app: Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-06 17:47:11,177 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 17:47:11,177 INFO app: Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-06 17:47:11,178 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-06 17:47:11,179 INFO app: Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-06 17:47:11,180 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-06 17:47:11,192 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=50.91s cols=7
+2026-01-06 17:47:11,212 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:47:11] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=forecast&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-06 17:47:27,294 INFO app: Static forecast_plots count: 0
+2026-01-06 17:47:27,296 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=correlation elapsed=5.58s cols=7
+2026-01-06 17:47:27,302 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:47:27] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-06 17:48:18,498 INFO app: Static forecast_plots count: 0
+2026-01-06 17:48:18,508 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=correlation elapsed=5.04s cols=7
+2026-01-06 17:48:18,513 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:48:18] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-06 17:48:28,367 INFO app: Static forecast_plots count: 0
+2026-01-06 17:48:28,370 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=correlation elapsed=4.92s cols=7
+2026-01-06 17:48:28,373 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:48:28] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=correlation&forecast_pct=0.10 HTTP/1.1" 200 -
+2026-01-06 17:49:09,837 INFO app: Static forecast_plots count: 6
+2026-01-06 17:49:09,838 INFO app: Forecast plot: STL decomposition for Temp_C
+2026-01-06 17:49:09,840 INFO app: Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 17:49:09,841 INFO app: Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 17:49:09,844 INFO app: Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 17:49:09,846 INFO app: Forecast plot: STL decomposition for Visibility_km
+2026-01-06 17:49:09,848 INFO app: Forecast plot: STL decomposition for Press_kPa
+2026-01-06 17:49:09,852 INFO app: Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=37.65s cols=7
+2026-01-06 17:49:10,039 INFO werkzeug: 127.0.0.1 - - [06/Jan/2026 17:49:10] "GET /analyze/664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv?display=Project_1_-_Weather_Dataset.csv&view=interactive&forecast_pct=0.10 HTTP/1.1" 200 -

@@ -6,6 +6,61 @@
   <title>Analysis - {{ display_name }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark">
+  <!-- Preconnect to CDN for faster Plotly loading -->
+  <link rel="preconnect" href="https://cdn.plot.ly" crossorigin>
+  <link rel="dns-prefetch" href="https://cdn.plot.ly">
+  <style>
+    /* Smooth page transitions */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes skeletonPulse {
+
+      0%,
+      100% {
+        opacity: 0.4;
+      }
+
+      50% {
+        opacity: 0.7;
+      }
+    }
+
+    .panel,
+    .content {
+      animation: fadeIn 0.28s ease-out forwards;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--border) 25%, var(--panel) 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: skeletonPulse 1.5s ease-in-out infinite;
+      border-radius: 8px;
+      min-height: 200px;
+    }
+
+    /* Prevent layout shifts by setting minimum heights */
+    #chart,
+    #dist,
+    #corr,
+    #pearson {
+      min-height: 280px;
+      contain: layout style;
+    }
+
+    .grid .panel {
+      contain: layout style;
+    }
+  </style>
   <style>
     :root[data-theme="light"] {
       --bg: #ffffff;
@@ -309,8 +364,8 @@
       <h3 style="margin-top:10px;">AI summary</h3>
       <div id="ai-summary-container">
         <!-- Loading spinner shown while AI summary loads async -->
-        <div id="ai-summary-loading"
-          style="text-align:center; padding:20px;{% if analysis.ai_summary %} display:none;{% endif %}">
+        <div id="ai-summary-loading" style="text-align:center; padding:20px;" {% if analysis.ai_summary %} hidden{%
+          endif %}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="display:inline-block;">
             <circle cx="12" cy="12" r="10" stroke="var(--border)" stroke-width="3" fill="none" />
             <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"
@@ -322,7 +377,7 @@
           <p style="margin-top:8px;color:var(--muted)">Loading AI analysis...</p>
         </div>
         <!-- AI summary content (pre-rendered or loaded via AJAX) -->
-        <div id="ai-summary-content" {% if not analysis.ai_summary %} style="display:none;" {% endif %}>{{
+        <div id="ai-summary-content" {% if not analysis.ai_summary %} hidden{% endif %}>{{
           analysis.ai_summary | safe }}</div>
       </div>
       <script>
@@ -488,8 +543,12 @@
         </select>
         <span class="muted">Only the selected column is rendered to keep things fast.</span>
       </div>
-      <div id="chart" class="panel" style="min-height:420px"></div>
-      <div id="dist" class="panel" style="min-height:220px"></div>
+      <div id="chart" class="panel" style="min-height:420px">
+        <div class="skeleton" style="min-height:380px"></div>
+      </div>
+      <div id="dist" class="panel" style="min-height:220px">
+        <div class="skeleton" style="min-height:180px"></div>
+      </div>
     </section>
 
     <script id="interactivePayload" type="application/json">{{ (analysis.interactive or []) | tojson }}</script>
@@ -740,7 +799,9 @@
     <section class="panel">
       <h3>Correlation</h3>
       {% if analysis.corr and analysis.corr.z %}
-      <div id="corr" class="panel" style="min-height:520px"></div>
+      <div id="corr" class="panel" style="min-height:520px">
+        <div class="skeleton" style="min-height:480px"></div>
+      </div>
       <script id="corrPayload" type="application/json">{{ analysis.corr | tojson }}</script>
       <script>
         const corrPayloadEl = document.getElementById('corrPayload');

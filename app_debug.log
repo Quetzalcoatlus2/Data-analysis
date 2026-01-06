@@ -4262,3 +4262,73 @@ fpdf.errors.FPDFException: Not enough horizontal space to render a single charac
 2026-01-05 21:17:46,753 - app - INFO - Adding page...
 2026-01-05 21:17:47,021 - app - INFO - Page added. Page No: 1
 2026-01-05 21:17:48,552 - app - INFO - Table won't fit (needed 80, left 66.26674999999994), adding page
+2026-01-06 15:40:37,703 - app - INFO - Application starting - Log file initialized
+2026-01-06 15:40:45,915 - app - INFO - Static forecast_plots count: 0
+2026-01-06 15:40:45,920 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=7.53s cols=7
+2026-01-06 15:40:52,743 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-06 15:43:36,463 - app - INFO - Static forecast_plots count: 6
+2026-01-06 15:43:36,508 - app - INFO - Forecast plot: STL decomposition for Temp_C
+2026-01-06 15:43:36,517 - app - INFO - Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 15:43:36,526 - app - INFO - Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 15:43:36,540 - app - INFO - Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 15:43:36,546 - app - INFO - Forecast plot: STL decomposition for Visibility_km
+2026-01-06 15:43:36,557 - app - INFO - Forecast plot: STL decomposition for Press_kPa
+2026-01-06 15:43:36,565 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=71.55s cols=7
+2026-01-06 17:43:51,641 - app - INFO - Application starting - Log file initialized
+2026-01-06 17:44:05,171 - app - INFO - Static forecast_plots count: 0
+2026-01-06 17:44:05,173 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=overview elapsed=5.91s cols=7
+2026-01-06 17:44:09,282 - app - INFO - Using Gemini model: models/gemini-2.5-flash
+2026-01-06 17:45:41,318 - app - INFO - Static forecast_plots count: 6
+2026-01-06 17:45:41,327 - app - INFO - Forecast plot: STL decomposition for Temp_C
+2026-01-06 17:45:41,328 - app - INFO - Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 17:45:41,330 - app - INFO - Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 17:45:41,331 - app - INFO - Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 17:45:41,335 - app - INFO - Forecast plot: STL decomposition for Visibility_km
+2026-01-06 17:45:41,336 - app - INFO - Forecast plot: STL decomposition for Press_kPa
+2026-01-06 17:45:41,338 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=43.18s cols=7
+2026-01-06 17:46:21,429 - app - INFO - Forecast start col=Temp_C steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:22,300 - app - INFO - Forecast plot ready col=Temp_C forecast_points=879
+2026-01-06 17:46:22,303 - app - INFO - Forecast done col=Temp_C took=0.87s steps=879 points=8784
+2026-01-06 17:46:28,203 - app - INFO - Forecast start col=Dew Point Temp_C steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:28,646 - app - INFO - Forecast plot ready col=Dew Point Temp_C forecast_points=879
+2026-01-06 17:46:28,647 - app - INFO - Forecast done col=Dew Point Temp_C took=0.45s steps=879 points=8784
+2026-01-06 17:46:34,158 - app - INFO - Forecast start col=Rel Hum_% steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:34,796 - app - INFO - Forecast plot ready col=Rel Hum_% forecast_points=879
+2026-01-06 17:46:34,798 - app - INFO - Forecast done col=Rel Hum_% took=0.64s steps=879 points=8784
+2026-01-06 17:46:40,450 - app - INFO - Forecast start col=Wind Speed_km/h steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:41,210 - app - INFO - Forecast plot ready col=Wind Speed_km/h forecast_points=879
+2026-01-06 17:46:41,212 - app - INFO - Forecast done col=Wind Speed_km/h took=0.76s steps=879 points=8784
+2026-01-06 17:46:46,939 - app - INFO - Forecast start col=Visibility_km steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:47,586 - app - INFO - Forecast plot ready col=Visibility_km forecast_points=879
+2026-01-06 17:46:47,590 - app - INFO - Forecast done col=Visibility_km took=0.65s steps=879 points=8784
+2026-01-06 17:46:53,773 - app - INFO - Forecast start col=Press_kPa steps=879 rows=8784 pct=0.1
+2026-01-06 17:46:54,663 - app - INFO - Forecast plot ready col=Press_kPa forecast_points=879
+2026-01-06 17:46:54,664 - app - INFO - Forecast done col=Press_kPa took=0.89s steps=879 points=8784
+2026-01-06 17:47:11,153 - app - INFO - Static forecast_plots count: 12
+2026-01-06 17:47:11,161 - app - INFO - Forecast plot: Forecast for Temp_C (with anomalies)
+2026-01-06 17:47:11,163 - app - INFO - Forecast plot: STL decomposition for Temp_C
+2026-01-06 17:47:11,168 - app - INFO - Forecast plot: Forecast for Dew Point Temp_C (with anomalies)
+2026-01-06 17:47:11,171 - app - INFO - Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 17:47:11,172 - app - INFO - Forecast plot: Forecast for Rel Hum_% (with anomalies)
+2026-01-06 17:47:11,174 - app - INFO - Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 17:47:11,176 - app - INFO - Forecast plot: Forecast for Wind Speed_km/h (with anomalies)
+2026-01-06 17:47:11,177 - app - INFO - Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 17:47:11,177 - app - INFO - Forecast plot: Forecast for Visibility_km (with anomalies)
+2026-01-06 17:47:11,178 - app - INFO - Forecast plot: STL decomposition for Visibility_km
+2026-01-06 17:47:11,179 - app - INFO - Forecast plot: Forecast for Press_kPa (with anomalies)
+2026-01-06 17:47:11,180 - app - INFO - Forecast plot: STL decomposition for Press_kPa
+2026-01-06 17:47:11,192 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=forecast elapsed=50.91s cols=7
+2026-01-06 17:47:27,294 - app - INFO - Static forecast_plots count: 0
+2026-01-06 17:47:27,296 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=correlation elapsed=5.58s cols=7
+2026-01-06 17:48:18,498 - app - INFO - Static forecast_plots count: 0
+2026-01-06 17:48:18,508 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=correlation elapsed=5.04s cols=7
+2026-01-06 17:48:28,367 - app - INFO - Static forecast_plots count: 0
+2026-01-06 17:48:28,370 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=correlation elapsed=4.92s cols=7
+2026-01-06 17:49:09,837 - app - INFO - Static forecast_plots count: 6
+2026-01-06 17:49:09,838 - app - INFO - Forecast plot: STL decomposition for Temp_C
+2026-01-06 17:49:09,840 - app - INFO - Forecast plot: STL decomposition for Dew Point Temp_C
+2026-01-06 17:49:09,841 - app - INFO - Forecast plot: STL decomposition for Rel Hum_%
+2026-01-06 17:49:09,844 - app - INFO - Forecast plot: STL decomposition for Wind Speed_km/h
+2026-01-06 17:49:09,846 - app - INFO - Forecast plot: STL decomposition for Visibility_km
+2026-01-06 17:49:09,848 - app - INFO - Forecast plot: STL decomposition for Press_kPa
+2026-01-06 17:49:09,852 - app - INFO - Analyze done file=664b17c75cc3a95d4ae881e36cdffd161f2ec453.csv view=interactive elapsed=37.65s cols=7

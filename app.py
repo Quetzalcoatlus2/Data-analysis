@@ -507,6 +507,9 @@ ORIGINAL_NAME_MAP = {}
 AI_SUMMARY_CACHE = {}
 QNA_CACHE = TinyLRU(max_items=50)
 FORECAST_CACHE = TinyLRU(max_items=32)
+# Performance optimization caches - avoid recomputing expensive operations
+CORRELATION_CACHE = TinyLRU(max_items=20)  # Cache correlation matrices per dataset
+DESCRIPTION_CACHE = TinyLRU(max_items=20)  # Cache describe() and info() per dataset
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -2925,6 +2928,38 @@ def safe_df_description_html(df: pd.DataFrame) -> str:
         except Exception:
             return "<p>Could not build description.</p>"
 
+def get_cached_df_info(filename: str, df: pd.DataFrame) -> dict:
+    """Get cached head/description/info for a DataFrame to avoid recomputation on view switches."""
+    cached = DESCRIPTION_CACHE.get(filename)
+    if cached is not None:
+        return cached
+    
+    # Compute all description info at once
+    result = {
+        'head': safe_df_head_html(df),
+        'description': safe_df_description_html(df),
+        'info': None,
+        'missing_values': None
+    }
+    
+    try:
+        import io as _io
+        buf = _io.StringIO()
+        df.info(buf=buf)
+        result['info'] = buf.getvalue()
+    except Exception:
+        result['info'] = "Unable to render DataFrame info()."
+    
+    try:
+        mv = df.isnull().sum()
+        mvf = mv[mv > 0]
+        result['missing_values'] = mvf.to_frame('missing_count').to_html() if not mvf.empty else None
+    except Exception:
+        result['missing_values'] = None
+    
+    DESCRIPTION_CACHE.set(filename, result)
+    return result
+
 def describe_for_ai(df: pd.DataFrame) -> str:
     """Plain-text summary for AI prompts; never raises."""
     try:
@@ -3153,49 +3188,53 @@ def analyze_file(filename):
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
     used_cols = []
 
-    # Correlation/precompute metrics for heatmap
-    corr_payload = None
-    try:
-        num_df = coerce_numeric_df(df).select_dtypes(include='number')
-        if num_df is not None and not num_df.empty:
-            valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
-            num_df = num_df[valid]
-            keep = []
-            for c in num_df.columns:
-                s = pd.to_numeric(num_df[c], errors='coerce').dropna()
-                if s.empty:
-                    continue
-                if float(s.max()) == float(s.min()):
-                    continue
-                keep.append(c)
-            num_df = num_df[keep] if keep else num_df
-        if num_df is not None and not num_df.empty and len(num_df.columns) >= 2:
-            cols = list(num_df.columns)
-            payload = {}
-            try:
-                spearman = num_df.corr(method='spearman')
-            except Exception:
-                spearman = None
-            try:
-                pearson = num_df.corr(method='pearson')
-            except Exception:
-                pearson = None
-            if spearman is not None:
-                payload["x"] = cols
-                payload["y"] = cols
-                payload["z"] = [[float(v) if pd.notna(v) else None for v in spearman.loc[r, cols].tolist()] for r in cols]
-            if pearson is not None:
-                payload["pearson"] = {
-                    "x": cols,
-                    "y": cols,
-                    "z": [[float(v) if pd.notna(v) else None for v in pearson.loc[r, cols].tolist()] for r in cols]
-                }
-            corr_payload = payload if ("z" in payload or "pearson" in payload) else None
-        else:
+    # Correlation/precompute metrics for heatmap - use cache for performance
+    corr_payload = CORRELATION_CACHE.get(filename)
+    if corr_payload is None:
+        try:
+            num_df = coerce_numeric_df(df).select_dtypes(include='number')
+            if num_df is not None and not num_df.empty:
+                valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
+                num_df = num_df[valid]
+                keep = []
+                for c in num_df.columns:
+                    s = pd.to_numeric(num_df[c], errors='coerce').dropna()
+                    if s.empty:
+                        continue
+                    if float(s.max()) == float(s.min()):
+                        continue
+                    keep.append(c)
+                num_df = num_df[keep] if keep else num_df
+            if num_df is not None and not num_df.empty and len(num_df.columns) >= 2:
+                cols = list(num_df.columns)
+                payload = {}
+                try:
+                    spearman = num_df.corr(method='spearman')
+                except Exception:
+                    spearman = None
+                try:
+                    pearson = num_df.corr(method='pearson')
+                except Exception:
+                    pearson = None
+                if spearman is not None:
+                    payload["x"] = cols
+                    payload["y"] = cols
+                    payload["z"] = [[float(v) if pd.notna(v) else None for v in spearman.loc[r, cols].tolist()] for r in cols]
+                if pearson is not None:
+                    payload["pearson"] = {
+                        "x": cols,
+                        "y": cols,
+                        "z": [[float(v) if pd.notna(v) else None for v in pearson.loc[r, cols].tolist()] for r in cols]
+                    }
+                corr_payload = payload if ("z" in payload or "pearson" in payload) else None
+                # Cache the computed correlation for faster subsequent view loads
+                if corr_payload:
+                    CORRELATION_CACHE.set(filename, corr_payload)
+            else:
+                corr_payload = None
+        except Exception as e:
+            app.logger.warning("Correlation computation failed: %s", e)
             corr_payload = None
-    except Exception as e:
-        app.logger.warning("Correlation computation failed: %s", e)
-        corr_payload = None
 
     interactive = []
 
@@ -3505,19 +3544,10 @@ def analyze_file(filename):
     except Exception as e:
         app.logger.warning("Fallback static forecast failed: %s", e)
 
-    buf = io.StringIO()
-    try:
-        df.info(buf=buf)
-        info_string = buf.getvalue()
-    except Exception:
-        info_string = "Unable to render DataFrame info()."
-
-    try:
-        mv = df.isnull().sum()
-        mvf = mv[mv > 0]
-        missing_values_html = mvf.to_frame('missing_count').to_html() if not mvf.empty else None
-    except Exception:
-        missing_values_html = None
+    # Use cached DataFrame info to avoid recomputation on view switches
+    cached_info = get_cached_df_info(filename, df)
+    info_string = cached_info['info']
+    missing_values_html = cached_info['missing_values']
 
 
     used_cols = used_cols or list(df.columns)
@@ -3570,8 +3600,8 @@ def analyze_file(filename):
         pass
 
     analysis.update({
-        'head': safe_df_head_html(df),
-        'description': safe_df_description_html(df),
+        'head': cached_info['head'],
+        'description': cached_info['description'],
         'info': info_string,
         'missing_values': missing_values_html,
         'plots': _ensure_plot_dicts(plots) if build_static else [],
