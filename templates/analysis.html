@@ -804,62 +804,84 @@
       </div>
       <script id="corrPayload" type="application/json">{{ analysis.corr | tojson }}</script>
       <script>
-        const corrPayloadEl = document.getElementById('corrPayload');
-        const corrData = JSON.parse((corrPayloadEl && corrPayloadEl.textContent) || '{}');
-        const t = getThemeVars();
-        const spearmanData = [{
-          z: corrData.z,
-          x: corrData.x,
-          y: corrData.y,
-          type: 'heatmap',
-          colorscale: [
-            [0, '#0b1327'],
-            [0.5, t.accent],
-            [1, t.accent2]
-          ],
-          zmin: -1, zmax: 1
-        }];
-        const spearmanLayout = {
-          title: { text: 'Spearman correlation', x: 0.02 },
-          xaxis: { side: 'top', automargin: true },
-          yaxis: { autorange: 'reversed', automargin: true },
-          paper_bgcolor: t.panel,
-          plot_bgcolor: t.panel,
-          font: { color: t.text },
-          margin: { l: 120, r: 10, t: 60, b: 60 }
-        };
-        Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
+        // Wrap in DOMContentLoaded to ensure Plotly is loaded before rendering
+        window.addEventListener('DOMContentLoaded', function () {
+          // Wait for Plotly to be available (with retry mechanism)
+          function initCorrelationPlots() {
+            if (typeof Plotly === 'undefined') {
+              // Plotly not yet loaded, retry after a short delay
+              setTimeout(initCorrelationPlots, 100);
+              return;
+            }
 
-        // Pearson correlation (if provided)
-        if (corrData && corrData.pearson && corrData.pearson.z) {
-          const pearDiv = document.createElement('div');
-          pearDiv.id = 'pearson';
-          pearDiv.className = 'panel';
-          pearDiv.style.minHeight = '520px';
-          document.currentScript.parentElement.appendChild(pearDiv);
-          const pearData = [{
-            z: corrData.pearson.z,
-            x: corrData.pearson.x,
-            y: corrData.pearson.y,
-            type: 'heatmap',
-            colorscale: [
-              [0, '#0b1327'],
-              [0.5, t.accent],
-              [1, t.accent2]
-            ],
-            zmin: -1, zmax: 1
-          }];
-          const pearLayout = {
-            title: { text: 'Pearson correlation', x: 0.02 },
-            xaxis: { side: 'top', automargin: true },
-            yaxis: { autorange: 'reversed', automargin: true },
-            paper_bgcolor: t.panel,
-            plot_bgcolor: t.panel,
-            font: { color: t.text },
-            margin: { l: 120, r: 10, t: 60, b: 60 }
-          };
-          Plotly.newPlot('pearson', pearData, pearLayout, { responsive: true });
-        }
+            const corrPayloadEl = document.getElementById('corrPayload');
+            const corrData = JSON.parse((corrPayloadEl && corrPayloadEl.textContent) || '{}');
+            const t = getThemeVars();
+
+            // Spearman correlation
+            if (corrData && corrData.z) {
+              const spearmanData = [{
+                z: corrData.z,
+                x: corrData.x,
+                y: corrData.y,
+                type: 'heatmap',
+                colorscale: [
+                  [0, '#0b1327'],
+                  [0.5, t.accent],
+                  [1, t.accent2]
+                ],
+                zmin: -1, zmax: 1
+              }];
+              const spearmanLayout = {
+                title: { text: 'Spearman correlation', x: 0.02 },
+                xaxis: { side: 'top', automargin: true },
+                yaxis: { autorange: 'reversed', automargin: true },
+                paper_bgcolor: t.panel,
+                plot_bgcolor: t.panel,
+                font: { color: t.text },
+                margin: { l: 120, r: 10, t: 60, b: 60 }
+              };
+              Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
+            }
+
+            // Pearson correlation (if provided)
+            if (corrData && corrData.pearson && corrData.pearson.z) {
+              const corrSection = document.getElementById('corr');
+              const parentEl = corrSection ? corrSection.parentElement : null;
+              if (parentEl) {
+                const pearDiv = document.createElement('div');
+                pearDiv.id = 'pearson';
+                pearDiv.className = 'panel';
+                pearDiv.style.minHeight = '520px';
+                parentEl.appendChild(pearDiv);
+                const pearData = [{
+                  z: corrData.pearson.z,
+                  x: corrData.pearson.x,
+                  y: corrData.pearson.y,
+                  type: 'heatmap',
+                  colorscale: [
+                    [0, '#0b1327'],
+                    [0.5, t.accent],
+                    [1, t.accent2]
+                  ],
+                  zmin: -1, zmax: 1
+                }];
+                const pearLayout = {
+                  title: { text: 'Pearson correlation', x: 0.02 },
+                  xaxis: { side: 'top', automargin: true },
+                  yaxis: { autorange: 'reversed', automargin: true },
+                  paper_bgcolor: t.panel,
+                  plot_bgcolor: t.panel,
+                  font: { color: t.text },
+                  margin: { l: 120, r: 10, t: 60, b: 60 }
+                };
+                Plotly.newPlot('pearson', pearData, pearLayout, { responsive: true });
+              }
+            }
+          }
+
+          initCorrelationPlots();
+        });
       </script>
       {% else %}
       <div class="muted">Not enough numeric columns to compute correlation.</div>

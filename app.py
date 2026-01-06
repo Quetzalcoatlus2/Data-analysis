@@ -3481,6 +3481,9 @@ def analyze_file(filename):
                 except Exception as e:
                     app.logger.warning("Interactive forecast build failed for %s: %s", column, e)
 
+            # Build layout and append to interactive list (moved outside the forecast condition)
+            # This ensures interactive charts work even for non-timeseries or short series
+            if build_interactive:
                 xaxis = {"title": ("Timestamp" if is_timeseries else "Index"), "showgrid": True}
                 layout = {
                     "title": {"text": f"{column} (interactive)", "x": 0.02},
