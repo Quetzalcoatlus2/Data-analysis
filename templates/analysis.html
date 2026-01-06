@@ -662,6 +662,11 @@
         });
         const layout = Object.assign({}, item.layout || {});
         applyThemeLayoutDefaults(layout);
+        // Clear skeleton loaders before rendering
+        const chartContainer = document.getElementById('chart');
+        const distContainer = document.getElementById('dist');
+        if (chartContainer) chartContainer.innerHTML = '';
+        if (distContainer) distContainer.innerHTML = '';
         Plotly.newPlot('chart', traces, layout, { displayModeBar: true, responsive: true });
 
         // Attach legend toggle handler once to control all CI traces together
@@ -820,6 +825,12 @@
 
             // Spearman correlation
             if (corrData && corrData.z) {
+              // Clear skeleton and ensure proper height before rendering
+              const corrDiv = document.getElementById('corr');
+              if (corrDiv) {
+                corrDiv.innerHTML = ''; // Remove skeleton loader
+                corrDiv.style.minHeight = '520px'; // Ensure proper height
+              }
               const spearmanData = [{
                 z: corrData.z,
                 x: corrData.x,
