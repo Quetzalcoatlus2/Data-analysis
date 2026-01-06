@@ -48,13 +48,14 @@
       min-height: 200px;
     }
 
-    /* Prevent layout shifts by setting minimum heights */
+    /* Prevent layout shifts */
     #chart,
     #dist,
     #corr,
     #pearson {
-      min-height: 280px;
       contain: layout style;
+      overflow: hidden;
+      /* Prevent internal scrollbars */
     }
 
     .grid .panel {
@@ -543,11 +544,15 @@
         </select>
         <span class="muted">Only the selected column is rendered to keep things fast.</span>
       </div>
-      <div id="chart" class="panel" style="min-height:420px">
-        <div class="skeleton" style="min-height:380px"></div>
-      </div>
-      <div id="dist" class="panel" style="min-height:220px">
-        <div class="skeleton" style="min-height:180px"></div>
+      <!-- Side-by-side layout for chart and distribution - fills available space -->
+      <div
+        style="display: flex; gap: 16px; align-items: stretch; height: calc(100vh - 290px); min-height: 250px; overflow: hidden;">
+        <div id="chart" class="panel" style="flex: 2 1 60%; height: 100%; overflow: hidden;">
+          <div class="skeleton" style="height: 100%"></div>
+        </div>
+        <div id="dist" class="panel" style="flex: 1 1 35%; height: 100%; overflow: hidden;">
+          <div class="skeleton" style="height: 100%"></div>
+        </div>
       </div>
     </section>
 
@@ -572,7 +577,8 @@
         layout.paper_bgcolor = t.panel;
         layout.plot_bgcolor = t.panel;
         layout.font = { color: t.text };
-        layout.margin = layout.margin || { l: 50, r: 20, t: 28, b: 48 };
+        layout.margin = layout.margin || { l: 50, r: 20, t: 28, b: 60 }; // Increased bottom margin
+        layout.height = layout.height || 500; // Explicit height for better aspect ratio
         layout.legend = Object.assign({ orientation: 'h' }, layout.legend || {});
         layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
         layout.title = null;
@@ -582,7 +588,8 @@
           gridcolor: gridColor,
           gridwidth: 1,
           automargin: true,
-          nticks: 10
+          nticks: 10,
+          rangeslider: { visible: false } // Disable rangeslider to save space
         });
         if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
         Object.assign(layout.xaxis.rangeselector, {
@@ -667,6 +674,30 @@
         const distContainer = document.getElementById('dist');
         if (chartContainer) chartContainer.innerHTML = '';
         if (distContainer) distContainer.innerHTML = '';
+        // Use container height minus padding for axis labels
+        if (chartContainer) {
+          layout.height = (chartContainer.clientHeight - 30) || 400;
+        }
+
+        // Calculate Y-axis range from History and Forecast only (exclude CI bands)
+        // This prevents CI bands from compressing the main data
+        let yMin = Infinity, yMax = -Infinity;
+        traces.forEach((tr, idx) => {
+          // Skip CI traces for Y-axis calculation
+          if (ciIdx.includes(idx)) return;
+          const yVals = (tr.y || []).filter(v => Number.isFinite(v));
+          if (yVals.length > 0) {
+            yMin = Math.min(yMin, ...yVals);
+            yMax = Math.max(yMax, ...yVals);
+          }
+        });
+        // Apply a 10% padding to the range for visual breathing room
+        if (Number.isFinite(yMin) && Number.isFinite(yMax) && yMax > yMin) {
+          const padding = (yMax - yMin) * 0.1;
+          layout.yaxis = layout.yaxis || {};
+          layout.yaxis.range = [yMin - padding, yMax + padding];
+        }
+
         Plotly.newPlot('chart', traces, layout, { displayModeBar: true, responsive: true });
 
         // Attach legend toggle handler once to control all CI traces together
@@ -691,12 +722,22 @@
         const dist = item.distribution || null;
         if (dist && Array.isArray(dist.values)) {
           const t = getThemeVars();
+          const distEl = document.getElementById('dist');
+          const distHeight = distEl ? (distEl.clientHeight || 400) : 400;
           Plotly.newPlot('dist', [{
-            type: 'histogram', name: dist.name, x: dist.values, marker: { color: t.accent }
+            type: 'histogram',
+            name: dist.name,
+            x: dist.values,
+            marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
+            texttemplate: '%{y}',
+            textposition: 'outside',
+            textfont: { size: 9, color: t.muted || t.text }
           }], {
-            title: null,
+            title: { text: dist.name + ' Distribution', font: { size: 14 }, x: 0.02 },
+            height: distHeight,
             paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-            margin: { l: 40, r: 10, t: 20, b: 40 },
+            margin: { l: 35, r: 10, t: 40, b: 50 },
+            bargap: 0.1,
             hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
           }, { responsive: true });
         } else {
