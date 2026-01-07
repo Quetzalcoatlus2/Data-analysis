@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>Data Analysis – Upload</title>
@@ -7,43 +8,218 @@
   <meta name="color-scheme" content="light dark">
   <style>
     :root {
-      --bg: #ffffff; --text: #0f172a; --muted: #475569; --surface: #f8fafc; --border: #e2e8f0; --accent: #0ea5e9; --accent-fg: #ffffff;
-      --focus: #0ea5e9; --danger: #ef4444; --radius: 10px; --radius-sm:6px; --shadow: 0 2px 4px -2px rgba(0,0,0,.08), 0 4px 10px -2px rgba(0,0,0,.06);
+      --bg: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --surface: #f8fafc;
+      --border: #e2e8f0;
+      --accent: #0ea5e9;
+      --accent-fg: #ffffff;
+      --focus: #0ea5e9;
+      --danger: #ef4444;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 2px 4px -2px rgba(0, 0, 0, .08), 0 4px 10px -2px rgba(0, 0, 0, .06);
     }
+
     :root[data-theme="dark"] {
-      --bg: #0b1220; --text: #e5e7eb; --muted: #9ca3af; --surface: #111827; --border: #1f2937; --accent: #38bdf8; --accent-fg: #0b1220;
-      --shadow: 0 2px 4px -2px rgba(0,0,0,.6), 0 4px 12px -2px rgba(0,0,0,.4);
+      --bg: #0b1220;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --surface: #111827;
+      --border: #1f2937;
+      --accent: #38bdf8;
+      --accent-fg: #0b1220;
+      --shadow: 0 2px 4px -2px rgba(0, 0, 0, .6), 0 4px 12px -2px rgba(0, 0, 0, .4);
     }
-    * { box-sizing: border-box; }
-  html, body { background: var(--bg); color: var(--text); margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; min-height:100dvh; overflow-x:hidden; }
-    body { display:flex; flex-direction:column; }
-  header { padding: 12px clamp(14px,2vw,28px); display:flex; flex-wrap:wrap; align-items:center; gap:16px; border-bottom:1px solid var(--border); background: linear-gradient(to bottom, color-mix(in oklab, var(--bg) 96%, transparent), var(--bg)); position:sticky; top:0; z-index:20; }
-    h1 { font-size: clamp(1.4rem, 2.4vw, 2rem); margin:0; font-weight:600; letter-spacing:-0.5px; }
-    .spacer { flex:1; }
-    .btn { display:inline-flex; gap:6px; align-items:center; padding:10px 16px; font-size:.9rem; border:1px solid var(--border); background: var(--accent); color: var(--accent-fg); border-radius: var(--radius-sm); text-decoration:none; cursor:pointer; line-height:1.2; font-weight:500; transition:.15s background, .15s color, .15s border-color; }
-    .btn.secondary { background: var(--surface); color: var(--text); }
-    .btn:hover { filter: brightness(1.05); }
-    main { flex:1; width:100%; padding: 28px clamp(12px,2vw,32px) 60px; display:grid; gap:32px; }
-    .layout { display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:32px; width:100%; }
-    .panel { background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding: 20px 22px 26px; box-shadow: var(--shadow); display:flex; flex-direction:column; gap:18px; }
-    .panel h2 { margin:0 0 4px 0; font-size:1.05rem; letter-spacing:.5px; text-transform:uppercase; font-weight:600; color: var(--muted); }
-    form.upload { display:grid; gap:18px; }
-    fieldset { border:1px solid var(--border); border-radius: var(--radius-sm); padding:14px 16px 18px; display:grid; gap:14px; background: color-mix(in oklab, var(--surface) 94%, transparent); }
-    legend { padding:0 8px; font-size:.8rem; letter-spacing:.5px; text-transform:uppercase; color: var(--muted); }
-    label { display:grid; gap:6px; font-size:.85rem; color: var(--muted); }
-    input[type="file"], input[type="number"], select { padding:10px 12px; background: var(--bg); color: var(--text); border:1px solid var(--border); border-radius: var(--radius-sm); font: inherit; }
-    input:focus, select:focus { outline:2px solid var(--focus); outline-offset:2px; }
-    button[type=submit] { justify-self:start; }
-    ul.flash { list-style:none; margin: 8px 0 0; padding:0; display:grid; gap:8px; }
-    ul.flash li { background: var(--surface); border:1px solid var(--border); padding:10px 14px; border-radius: var(--radius-sm); }
-    footer { padding:24px 28px 40px; font-size:.75rem; color: var(--muted); text-align:center; }
-    @media (max-width: 680px) { main { padding-bottom:80px; } }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 12px clamp(14px, 2vw, 28px);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(to bottom, color-mix(in oklab, var(--bg) 96%, transparent), var(--bg));
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    h1 {
+      font-size: clamp(1.4rem, 2.4vw, 2rem);
+      margin: 0;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .btn {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 10px 16px;
+      font-size: .9rem;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: var(--accent-fg);
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      cursor: pointer;
+      line-height: 1.2;
+      font-weight: 500;
+      transition: .15s background, .15s color, .15s border-color;
+    }
+
+    .btn.secondary {
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .btn:hover {
+      filter: brightness(1.05);
+    }
+
+    main {
+      flex: 1;
+      width: 100%;
+      padding: 28px clamp(12px, 2vw, 32px) 60px;
+      display: grid;
+      gap: 32px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 32px;
+      width: 100%;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px 26px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .panel h2 {
+      margin: 0 0 4px 0;
+      font-size: 1.05rem;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    form.upload {
+      display: grid;
+      gap: 18px;
+    }
+
+    fieldset {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px 18px;
+      display: grid;
+      gap: 14px;
+      background: color-mix(in oklab, var(--surface) 94%, transparent);
+    }
+
+    legend {
+      padding: 0 8px;
+      font-size: .8rem;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: .85rem;
+      color: var(--muted);
+    }
+
+    input[type="file"],
+    input[type="number"],
+    select {
+      padding: 10px 12px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font: inherit;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    button[type=submit] {
+      justify-self: start;
+    }
+
+    ul.flash {
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    ul.flash li {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+    }
+
+    footer {
+      padding: 24px 28px 40px;
+      font-size: .75rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 680px) {
+      main {
+        padding-bottom: 80px;
+      }
+    }
   </style>
   <script>
-    (function() {
+    (function () {
       const saved = localStorage.getItem('theme') || 'light';
       document.documentElement.setAttribute('data-theme', saved);
-      window.toggleTheme = function() {
+      window.toggleTheme = function () {
         const cur = document.documentElement.getAttribute('data-theme') || 'light';
         const next = cur === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', next);
@@ -51,31 +227,34 @@
         const btn = document.getElementById('themeToggle');
         if (btn) btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
       };
-      window.addEventListener('DOMContentLoaded', function() {
+      window.addEventListener('DOMContentLoaded', function () {
         const btn = document.getElementById('themeToggle');
         if (btn) btn.textContent = (localStorage.getItem('theme') || 'light') === 'light' ? 'Dark mode' : 'Light mode';
       });
     })();
   </script>
 </head>
+
 <body>
   <header>
     <h1>Data Analysis – Upload</h1>
     <div class="spacer"></div>
-  <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()" title="Toggle light / dark mode">Dark mode</button>
+    <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()"
+      title="Toggle light / dark mode">Dark mode</button>
   </header>
 
   <!-- Flash messages -->
   {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <ul class="flash" style="list-style:none; padding:0; margin:0 0 1rem 0;">
-        {% for msg in messages %}
-          <li style="background: var(--card); border:1px solid var(--border); padding:.5rem .75rem; border-radius:6px; margin-bottom:.5rem;">
-            {{ msg }}
-          </li>
-        {% endfor %}
-      </ul>
-    {% endif %}
+  {% if messages %}
+  <ul class="flash" style="list-style:none; padding:0; margin:0 0 1rem 0;">
+    {% for msg in messages %}
+    <li
+      style="background: var(--card); border:1px solid var(--border); padding:.5rem .75rem; border-radius:6px; margin-bottom:.5rem;">
+      {{ msg }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
   {% endwith %}
 
   <main>
@@ -90,9 +269,10 @@
             <legend>Options</legend>
             <label>Forecast horizon (% of dataset)
               <select name="forecast_pct" title="Future forecast length as a percent of total rows (approximate)">
+                <option value="0.00">0% (no forecast)</option>
                 <option value="0.03">3%</option>
-                <option value="0.05">5%</option>
-                <option value="0.10" selected>10%</option>
+                <option value="0.05" selected>5%</option>
+                <option value="0.10">10%</option>
                 <option value="0.15">15%</option>
                 <option value="0.20">20%</option>
               </select>
@@ -115,28 +295,34 @@
       </section>
       <section class="panel" style="min-height:100%;">
         <h2>How it works</h2>
-        <p style="margin:0; line-height:1.5; font-size:.9rem;">Upload structured data (CSV, Excel, TXT, JSON). The app profiles columns, detects anomalies, renders plots and can produce AI summaries plus Q&A if a free‑tier Gemini model is available. Large time series are downsampled for speed.</p>
-        <p style="margin:0; line-height:1.5; font-size:.9rem;">You can switch views after processing: overview, static plots, interactive exploration, forecast or correlation maps.</p>
-        <p style="margin:0; line-height:1.5; font-size:.9rem;">If AI quota is exhausted you still get an offline heuristic summary with a visible reason tag so you know what happened.</p>
+        <p style="margin:0; line-height:1.5; font-size:.9rem;">Upload structured data (CSV, Excel, TXT, JSON). The app
+          profiles columns, detects anomalies, renders plots and can produce AI summaries plus Q&A if a free‑tier Gemini
+          model is available. Large time series are downsampled for speed.</p>
+        <p style="margin:0; line-height:1.5; font-size:.9rem;">You can switch views after processing: overview, static
+          plots, interactive exploration, forecast or correlation maps.</p>
+        <p style="margin:0; line-height:1.5; font-size:.9rem;">If AI quota is exhausted you still get an offline
+          heuristic summary with a visible reason tag so you know what happened.</p>
       </section>
     </div>
   </main>
   <script>
-    (function(){
+    (function () {
       try {
         const params = new URLSearchParams(location.search);
         if (params.get('auto') === '1') {
           const el = document.getElementById('fileInputMain') || document.querySelector('input[type=file][name=file]');
           if (el) {
             // Delay slightly to ensure layout settled
-            setTimeout(()=>{ try { el.click(); } catch(e) {} }, 120);
+            setTimeout(() => { try { el.click(); } catch (e) { } }, 120);
           }
         }
-      } catch(e) {}
+      } catch (e) { }
     })();
   </script>
   <footer>
-    <p>Experimental data insight tool – adaptive to free-tier constraints. Refresh or re‑analyze to attempt a new AI summary if capacity frees up.</p>
+    <p>Experimental data insight tool – adaptive to free-tier constraints. Refresh or re‑analyze to attempt a new AI
+      summary if capacity frees up.</p>
   </footer>
 </body>
+
 </html>

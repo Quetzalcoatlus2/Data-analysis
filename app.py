@@ -8,6 +8,12 @@ from fpdf import FPDF
 
 from datetime import datetime, timedelta
 import pandas as pd
+
+# Globally disable pandas column truncation so ALL columns are always shown
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', None)
+pd.set_option('display.max_colwidth', None)
+
 from werkzeug.utils import secure_filename
 
 
@@ -122,12 +128,17 @@ for h in (file_handler, console_handler):
 DEFAULT_AI_MODEL = (
     os.getenv("GENAI_MODEL")
     or os.getenv("GOOGLE_MODEL")
-    # Prefer a free-tier-friendly default when no env override is provided
-    or "models/gemini-3.0-flash"
+    # Prefer gemini-3.0-flash as default (strongest Flash model)
+    or "gemini-3.0-flash"
 )
 MODEL_CACHE = {}
 CURRENT_MODEL_NAME = None
 AI_STATUS = {"configured": False, "ready": False, "message": "", "model": None}
+
+# Track rate-limited models with cooldown timestamps
+# Format: {"model_name": timestamp_when_limit_expires}
+RATE_LIMITED_MODELS = {}
+RATE_LIMIT_COOLDOWN_SECONDS = 60  # Skip rate-limited models for 60 seconds
 
 def _sanitize_error_message(msg: str) -> str:
     try:
@@ -168,7 +179,8 @@ def _normalize_model_aliases(name: str) -> list[str]:
     Produce a robust list of candidate identifiers for a requested model name:
     - fix common 'odels/' typo to 'models/'
     - try both with and without 'models/' prefix
-    - include a couple stable fallbacks at the end
+    - include Flash model fallbacks ordered by capability (strong → weak)
+    - different model variants often have separate quota pools
     """
     if not name:
         return []
@@ -185,17 +197,32 @@ def _normalize_model_aliases(name: str) -> list[str]:
     else:
         candidates.append("models/" + n)
     
-    # Prioritize free-tier models early in the fallback chain
+    # Flash-only fallback chain ordered by capability (strong → weak)
+    # Different model variants typically have SEPARATE quota pools
+    # Priority: 3.0-flash first, then descending versions
     preferred_fallbacks = [
-        "gemini-3.0-flash", "models/gemini-3.0-flash",
-        "gemini-2.5-flash", "models/gemini-2.5-flash",
-        "gemini-1.5-flash", "models/gemini-1.5-flash",
-        "gemini-2.5-pro", "models/gemini-2.5-pro",
-        "gemini-1.5-pro", "models/gemini-1.5-pro",
+        # === Priority 1: Latest Flash (strongest) ===
+        "gemini-3.0-flash",                  # Best Flash model, try first
+        
+        # === Priority 2: 2.x Flash variants ===
+        "gemini-2.5-flash",                  # Fast + good quality
+        "gemini-2.5-flash-lite",             # Lighter variant, may have separate quota
+        "gemini-2.0-flash-exp",              # Experimental, often has separate quota
+        "gemini-2.0-flash",                  # Stable 2.0 flash
+        
+        # === Priority 3: 1.x Flash variants (most generous quotas) ===
+        "gemini-1.5-flash",                  # Very stable, good quota
+        "gemini-1.5-flash-8b",               # Smaller/faster variant
+        "gemini-1.5-flash-latest",           # Latest stable 1.5 flash
     ]
+    
     for fb in preferred_fallbacks:
         if fb not in candidates:
             candidates.append(fb)
+        # Also add with models/ prefix
+        prefixed = "models/" + fb
+        if prefixed not in candidates:
+            candidates.append(prefixed)
     
     seen = set(); out = []
     for c in candidates:
@@ -250,11 +277,44 @@ def get_or_create_model(preferred: str | None = None):
     """
     Return a working GenerativeModel instance for the preferred name, trying
     normalized aliases and a few stable fallbacks. Caches instances.
+    
+    Features:
+    - Skips models that are currently rate-limited (in cooldown)
+    - Tracks 429 errors and applies cooldown to avoid repeated failures
+    - Falls back through the entire model list before giving up
     """
-    global CURRENT_MODEL_NAME
+    global CURRENT_MODEL_NAME, RATE_LIMITED_MODELS
     if not AI_ENABLED:
         raise RuntimeError("AI is disabled or not configured.")
-    for nm in _normalize_model_aliases(preferred or DEFAULT_AI_MODEL):
+    
+    now = time.time()
+    
+    # Clean up expired cooldowns
+    expired = [m for m, t in RATE_LIMITED_MODELS.items() if t <= now]
+    for m in expired:
+        del RATE_LIMITED_MODELS[m]
+        app.logger.debug("Rate limit cooldown expired for model: %s", m)
+    
+    candidates = _normalize_model_aliases(preferred or DEFAULT_AI_MODEL)
+    last_error = None
+    models_tried = 0
+    
+    for nm in candidates:
+        # Skip if model is in rate-limit cooldown
+        if nm in RATE_LIMITED_MODELS:
+            cooldown_remaining = int(RATE_LIMITED_MODELS[nm] - now)
+            app.logger.debug("Skipping rate-limited model %s (cooldown: %ds)", nm, cooldown_remaining)
+            continue
+        
+        # Also check the base name (without models/ prefix)
+        base_nm = nm.replace("models/", "", 1) if nm.startswith("models/") else nm
+        prefixed_nm = "models/" + base_nm
+        if base_nm in RATE_LIMITED_MODELS or prefixed_nm in RATE_LIMITED_MODELS:
+            app.logger.debug("Skipping rate-limited model variant: %s", nm)
+            continue
+        
+        models_tried += 1
+        
         try:
             if nm in MODEL_CACHE:
                 CURRENT_MODEL_NAME = nm
@@ -265,9 +325,29 @@ def get_or_create_model(preferred: str | None = None):
             app.logger.info("Using Gemini model: %s", nm)
             return m
         except Exception as e:
-            app.logger.warning("Model candidate failed (%s): %s", nm, e)
+            last_error = e
+            err_str = str(e).lower()
+            
+            # Check for rate limit / quota errors (429)
+            if '429' in str(e) or 'quota' in err_str or 'rate limit' in err_str:
+                # Apply cooldown to both name variants
+                cooldown_until = now + RATE_LIMIT_COOLDOWN_SECONDS
+                RATE_LIMITED_MODELS[nm] = cooldown_until
+                RATE_LIMITED_MODELS[base_nm] = cooldown_until
+                RATE_LIMITED_MODELS[prefixed_nm] = cooldown_until
+                app.logger.warning("Model %s rate-limited, cooldown %ds: %s", 
+                                  nm, RATE_LIMIT_COOLDOWN_SECONDS, str(e)[:100])
+            elif '404' in str(e) or 'not found' in err_str:
+                # Model doesn't exist - log briefly and move on
+                app.logger.debug("Model %s not found (404), trying next", nm)
+            else:
+                app.logger.warning("Model candidate failed (%s): %s", nm, str(e)[:150])
             continue
-    raise RuntimeError("No working Gemini model available. Check API key/network or try a different model.")
+    
+    # All models exhausted
+    if models_tried == 0:
+        raise RuntimeError("All models are rate-limited. Please wait ~60 seconds and try again.")
+    raise RuntimeError(f"No working Gemini model available after trying {models_tried} candidates. Last error: {last_error}")
 
 
 def configure_ai():
@@ -510,6 +590,10 @@ FORECAST_CACHE = TinyLRU(max_items=32)
 # Performance optimization caches - avoid recomputing expensive operations
 CORRELATION_CACHE = TinyLRU(max_items=20)  # Cache correlation matrices per dataset
 DESCRIPTION_CACHE = TinyLRU(max_items=20)  # Cache describe() and info() per dataset
+# NEW: Complete analysis cache - stores all computed data per dataset for instant view switching
+ANALYSIS_CACHE = TinyLRU(max_items=10)  # Cache full analysis results (plots, forecasts, interactive data)
+INTERACTIVE_DATA_CACHE = TinyLRU(max_items=10)  # Cache interactive chart JSON data for AJAX loading
+ANOMALY_CACHE = TinyLRU(max_items=20)  # Cache anomaly detection results per column
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -1367,12 +1451,17 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
         
         # Compute correlation
         corr = sel.corr(method=method)
+        n_cols = len(corr.columns)
+        
+        # Dynamic sizing
+        figsize_dim = max(10, n_cols * 0.6)
+        fontsize = max(6, min(10, 150 / n_cols))
         
         # Create heatmap
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(figsize_dim, figsize_dim * 0.8))
         sns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', center=0,
                     square=True, linewidths=0.5, cbar_kws={"shrink": 0.8},
-                    vmin=-1, vmax=1, ax=ax)
+                    vmin=-1, vmax=1, ax=ax, annot_kws={"size": fontsize})
         ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
         plt.tight_layout()
         
@@ -1782,97 +1871,142 @@ def _seasonality_strength(series: pd.Series, seasonal_period: int | None) -> flo
     except Exception:
         return 0.0
 def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None, anomalies_idx=None):
-    """Generate a plot showing historical data and forecast with confidence intervals and anomaly markers."""
-    # Debug info removed for performance
-    # app.logger.debug(f"[PLOT] generate_forecast_plot history={len(history)} forecast={len(forecast_series)}")
+    """Generate a plot showing historical data and forecast with confidence intervals and anomaly markers.
+       If forecast_series is None or empty, only history is shown (0% forecast mode).
+    """
     
     fig, ax = plt.subplots(figsize=(10, 4))
 
     history_tail_series = history if not history_tail or history_tail <= 0 else history.tail(history_tail)
     
-    # Use matplotlib ax.plot() for BOTH history and forecast to avoid converter conflicts
-    ax.plot(
-        history_tail_series.index,
-        history_tail_series.values,
-        linestyle='-',
-        color='tab:blue',
-        linewidth=1.2,
-        label='History',
-        zorder=2
-    )
-
-    # Forecast: solid line (no point markers) for clarity on dense plots
-    # Prepend the last history point to ensure visual continuity
-    try:
-        last_x = history_tail_series.index[-1]
-        last_y = float(history_tail_series.iloc[-1])
-        x_plot = [last_x] + list(forecast_series.index)
-        y_plot = [last_y] + list(forecast_series.values.astype(float))
-    except Exception:
-        x_plot = list(forecast_series.index)
-        y_plot = list(forecast_series.values)
-
-    ax.plot(
-        x_plot,
-        y_plot,
-        linestyle='-',
-        color='orangered',
-        linewidth=1.2,
-        alpha=0.9,
-        label='Forecast',
-        zorder=3
-    )
-
-    # Add anomaly markers if provided
-    if anomalies_idx is not None and len(anomalies_idx):
+    # Check if we have a valid forecast
+    has_forecast = forecast_series is not None and len(forecast_series) > 0
+    
+    # For non-datetime indices, use numeric positions to ensure proper alignment
+    use_numeric_x = not isinstance(history_tail_series.index, pd.DatetimeIndex)
+    
+    if use_numeric_x:
+        # Use numeric x positions (0, 1, 2...) for plotting
+        n_hist = len(history_tail_series)
+        hist_x = list(range(n_hist))
+        hist_y = history_tail_series.values.astype(float)
+        
+        # Plot history
+        ax.plot(hist_x, hist_y, linestyle='-', color='tab:blue', linewidth=1.2, label='History', zorder=2)
+        
+        # Only plot forecast elements if we have a forecast
+        if has_forecast:
+            n_fc = len(forecast_series)
+            fc_x = list(range(n_hist, n_hist + n_fc))  # Continue from where history ends
+            fc_y = forecast_series.values.astype(float)
+            
+            # Plot forecast - prepend last history point for continuity
+            ax.plot([n_hist - 1] + fc_x, [float(hist_y[-1])] + list(fc_y),
+                    linestyle='-', color='orangered', linewidth=1.2, alpha=0.9, label='Forecast', zorder=3)
+            
+            # Confidence interval
+            if conf_int is not None:
+                try:
+                    lower = conf_int.iloc[:, 0].values.astype(float)
+                    upper = conf_int.iloc[:, 1].values.astype(float)
+                    ax.fill_between(fc_x, lower, upper, color='orangered', alpha=0.22, label='95% CI', zorder=2)
+                except Exception:
+                    pass
+            
+            # Forecast start line
+            ax.axvline(n_hist - 0.5, color='gray', linestyle=':', linewidth=1.5, label='Forecast start', zorder=1)
+            ax.axvspan(n_hist - 0.5, n_hist + n_fc - 0.5, color='orange', alpha=0.08, zorder=0)
+        
+        # Anomaly markers (shown regardless of forecast)
+        if anomalies_idx is not None and len(anomalies_idx):
+            try:
+                # Find numeric positions for anomalies in the history tail
+                an_positions = []
+                an_values = []
+                for idx in anomalies_idx:
+                    if idx in history_tail_series.index:
+                        pos = list(history_tail_series.index).index(idx)
+                        val = history_tail_series.loc[idx]
+                        if isinstance(val, pd.Series):
+                            val = val.iloc[0]
+                        an_positions.append(pos)
+                        an_values.append(float(val))
+                
+                if an_positions:
+                    ax.scatter(an_positions, an_values, color='red', s=40, zorder=5,
+                              label='Anomaly', marker='o', edgecolors='darkred', linewidths=1.5)
+            except Exception as e:
+                app.logger.warning(f"Could not plot anomalies: {e}")
+        
+        # Set Y limits based on data
         try:
-            # Filter anomalies that are within the history_tail_series index
-            aligned_anomalies = history_tail_series.loc[history_tail_series.index.intersection(anomalies_idx)]
-            if len(aligned_anomalies) > 0:
-                ax.scatter(
-                    aligned_anomalies.index,
-                    aligned_anomalies.values,
-                    color='red',
-                    s=40,
-                    zorder=5,
-                    label='Anomaly',
-                    marker='o',
-                    edgecolors='darkred',
-                    linewidths=1.5
-                )
-        except Exception as e:
-            app.logger.warning(f"Could not plot anomalies: {e}")
-
-    if conf_int is not None:
-        try:
-            lower = conf_int.iloc[:, 0]
-            upper = conf_int.iloc[:, 1]
-            # Keep CI bounds aligned with forecast only (do not prepend history point)
-            lower.index = forecast_series.index
-            upper.index = forecast_series.index
-            ax.fill_between(
-                forecast_series.index, lower, upper,
-                color='orangered', alpha=0.22, label='95% CI', zorder=2
-            )
-        except Exception:
-            pass
-
-    try:
-        split_x = history.index[-1]
-        ax.axvline(split_x, color='gray', linestyle=':', linewidth=1.5, label='Forecast start', zorder=1)
-        ax.axvspan(split_x, forecast_series.index[-1], color='orange', alpha=0.08, zorder=0)
-    except Exception:
-        pass
-
-    try:
-        y_stack = pd.concat([history_tail_series, forecast_series]).astype(float)
-        y_min = float(np.nanmin(y_stack.values))
-        y_max = float(np.nanmax(y_stack.values))
-        if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
+            all_y = list(hist_y)
+            if has_forecast:
+                all_y += list(fc_y)
+            y_min, y_max = min(all_y), max(all_y)
             pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
             ax.set_ylim(y_min - pad, y_max + pad)
-    except Exception:
-        pass
+        except Exception:
+            pass
+        
+    else:
+        # Original datetime-based plotting
+        ax.plot(history_tail_series.index, history_tail_series.values,
+                linestyle='-', color='tab:blue', linewidth=1.2, label='History', zorder=2)
+        
+        # Only plot forecast elements if we have a forecast
+        if has_forecast:
+            # Forecast with continuity
+            try:
+                last_x = history_tail_series.index[-1]
+                last_y = float(history_tail_series.iloc[-1])
+                x_plot = [last_x] + list(forecast_series.index)
+                y_plot = [last_y] + list(forecast_series.values.astype(float))
+            except Exception:
+                x_plot = list(forecast_series.index)
+                y_plot = list(forecast_series.values)
+            
+            ax.plot(x_plot, y_plot, linestyle='-', color='orangered', linewidth=1.2, alpha=0.9, label='Forecast', zorder=3)
+            
+            if conf_int is not None:
+                try:
+                    lower = conf_int.iloc[:, 0]
+                    upper = conf_int.iloc[:, 1]
+                    lower.index = forecast_series.index
+                    upper.index = forecast_series.index
+                    ax.fill_between(forecast_series.index, lower, upper, color='orangered', alpha=0.22, label='95% CI', zorder=2)
+                except Exception:
+                    pass
+            
+            try:
+                split_x = history.index[-1]
+                ax.axvline(split_x, color='gray', linestyle=':', linewidth=1.5, label='Forecast start', zorder=1)
+                ax.axvspan(split_x, forecast_series.index[-1], color='orange', alpha=0.08, zorder=0)
+            except Exception:
+                pass
+        
+        # Add anomaly markers if provided (shown regardless of forecast)
+        if anomalies_idx is not None and len(anomalies_idx):
+            try:
+                aligned_anomalies = history_tail_series.loc[history_tail_series.index.intersection(anomalies_idx)]
+                if len(aligned_anomalies) > 0:
+                    ax.scatter(aligned_anomalies.index, aligned_anomalies.values, color='red', s=40, zorder=5,
+                              label='Anomaly', marker='o', edgecolors='darkred', linewidths=1.5)
+            except Exception as e:
+                app.logger.warning(f"Could not plot anomalies: {e}")
+        
+        try:
+            if has_forecast:
+                y_stack = pd.concat([history_tail_series, forecast_series]).astype(float)
+            else:
+                y_stack = history_tail_series.astype(float)
+            y_min = float(np.nanmin(y_stack.values))
+            y_max = float(np.nanmax(y_stack.values))
+            if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
+                pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
+                ax.set_ylim(y_min - pad, y_max + pad)
+        except Exception:
+            pass
 
     ax.set_title(title)
     # Use a sensible x-axis label depending on index type
@@ -1886,6 +2020,32 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
     ax.set_ylabel(ylabel)
     ax.legend()
     ax.grid(True)
+    
+    # Improve X-axis readability - handle both numeric and categorical indices
+    try:
+        n_points = len(history_tail_series)
+        
+        # For large datasets, manually hide most tick labels to prevent overlap
+        if n_points > 20:
+            # Show only a subset of labels
+            n_labels_to_show = 8  # Max labels to display
+            step = max(1, n_points // n_labels_to_show)
+            
+            # Get all tick labels and hide most of them
+            xticks = ax.get_xticks()
+            xticklabels = ax.get_xticklabels()
+            
+            for i, label in enumerate(xticklabels):
+                if i % step != 0:
+                    label.set_visible(False)
+        
+        # Always rotate visible labels for better readability
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
+        
+        # Apply tight layout to prevent cutoff
+        fig.tight_layout()
+    except Exception:
+        pass
 
     buf = io.BytesIO()
     fig.savefig(buf, format='png', bbox_inches='tight')
@@ -2908,23 +3068,33 @@ def safe_df_head_html(df: pd.DataFrame) -> str:
     try:
         if df is None or df.shape[1] == 0:
             return "<p>No columns detected in the uploaded file.</p>"
-        return df.head().to_html()
-    except Exception:
+        # Force ALL columns to display with no truncation whatsoever
+        with pd.option_context('display.max_columns', None, 'display.width', None, 'display.max_colwidth', None):
+            html = df.head(10).to_html(classes=['dataframe'], max_cols=None, col_space=50, justify='center')
+            # Wrap in scrollable container to ensure horizontal scroll works
+            return f'<div style="overflow-x: auto; max-width: 100%;">{html}</div>'
+    except Exception as e:
+        app.logger.warning(f"safe_df_head_html failed: {e}")
         return "<p>Could not render head()</p>"
 
 def safe_df_description_html(df: pd.DataFrame) -> str:
     try:
         if df is None or df.shape[1] == 0:
-            return (df.dtypes.to_frame('dtype').to_html()
+            return (df.dtypes.to_frame('dtype').to_html(classes=['dataframe'])
                     if df is not None and isinstance(df, pd.DataFrame) else "<p>No data.</p>")
         try:
             desc = df.describe(include='all')
         except Exception:
             desc = df.select_dtypes(include='number').describe()
-        return desc.to_html()
-    except Exception:
+        # Force ALL columns to display with no truncation whatsoever
+        with pd.option_context('display.max_columns', None, 'display.width', None, 'display.max_colwidth', None):
+            html = desc.to_html(classes=['dataframe'], max_cols=None, col_space=50, justify='center')
+            # Wrap in scrollable container
+            return f'<div style="overflow-x: auto; max-width: 100%;">{html}</div>'
+    except Exception as e:
+        app.logger.warning(f"safe_df_description_html failed: {e}")
         try:
-            return df.dtypes.to_frame('dtype').to_html()
+            return df.dtypes.to_frame('dtype').to_html(classes=['dataframe'])
         except Exception:
             return "<p>Could not build description.</p>"
 
@@ -2953,7 +3123,11 @@ def get_cached_df_info(filename: str, df: pd.DataFrame) -> dict:
     try:
         mv = df.isnull().sum()
         mvf = mv[mv > 0]
-        result['missing_values'] = mvf.to_frame('missing_count').to_html() if not mvf.empty else None
+        if not mvf.empty:
+            html = mvf.to_frame('missing_count').to_html()
+            result['missing_values'] = f'<div style="overflow-x: auto; max-width: 100%;">{html}</div>'
+        else:
+            result['missing_values'] = None
     except Exception:
         result['missing_values'] = None
     
@@ -3114,12 +3288,17 @@ def analyze_file(filename):
     try:
         if raw_pct not in (None, ""):
             pct = float(raw_pct)
-            # Validate percentage is in reasonable range
-            if pct < 0.01 or pct > 0.5:
-                app.logger.warning("forecast_pct out of range (%.4f), clamping to [0.01, 0.5]", pct)
-                pct = max(0.01, min(0.5, pct))
+            # Validate percentage - allow 0 for no-forecast mode, max 0.5
+            if pct < 0:
+                pct = 0
+            elif pct > 0.5:
+                app.logger.warning("forecast_pct out of range (%.4f), clamping to 0.5", pct)
+                pct = 0.5
+        else:
+            # Default to 5% if not specified
+            pct = 0.05
     except Exception:
-        pct = None
+        pct = 0.05  # Default to 5%
     user_steps = _get_arg_int("forecast_horizon", default_steps)  # legacy param support
     user_contam = _get_arg_float("contamination", default_contam)
     # Validate contamination is in valid range for IsolationForest
@@ -3242,33 +3421,80 @@ def analyze_file(filename):
 
     # Apply percentage-based forecast horizon early (if provided) so all downstream forecast logic uses updated user_steps.
     total_rows = int(getattr(df, 'shape', (0,))[0]) if hasattr(df, 'shape') else 0
-    try:
-        if 'pct' in locals() and pct and pct > 0 and total_rows > 0:
-            user_steps = max(2, int(math.ceil(total_rows * float(pct))))
-    except Exception:
-        pass
-    # Compute an effective steps value (even for legacy numeric) without upper clamping.
-    try:
-        effective_steps = max(2, int(user_steps))
-    except Exception:
-        effective_steps = 2
+    
+    # pct is always defined now (defaulting to 0.05)
+    if pct == 0:
+        user_steps = 0  # 0% means no forecast
+        effective_steps = 0
+    elif pct > 0 and total_rows > 0:
+        user_steps = max(2, int(math.ceil(total_rows * pct)))
+        effective_steps = user_steps
+    else:
+        effective_steps = max(2, int(user_steps)) if user_steps else 2
 
     # Determine whether to build static/forecast/interactive content based on active_view.
     # IMPORTANT: To keep upload/overview fast, run heavy forecasting only in the explicit Forecast view.
     build_static = False  # Static view removed from application
     build_forecast = active_view == "forecast"
     build_interactive = active_view == "interactive"
+    
+    # Initialize timing early (used by both fast path and full path)
+    request_start = time.perf_counter()
+
+    # PERFORMANCE OPTIMIZATION: For overview and correlation views, skip expensive column iteration
+    # These views don't need plots, forecasts, or interactive traces
+    if active_view in ("overview", "correlation"):
+        # Use cached info for fast response
+        cached_info = get_cached_df_info(filename, df)
+        
+        used_cols = [c for c in df.columns if not pd.to_numeric(df[c], errors='coerce').dropna().empty][:20]
+        
+        # Build minimal AI context without expensive operations
+        ai_context = describe_for_ai(df)
+        
+        ai_summary = AI_SUMMARY_CACHE.get(filename)
+        if ai_summary is None and active_view == 'overview':
+            # Defer AI summary - will load via AJAX
+            ai_summary = ""
+        elif ai_summary is None:
+            ai_summary = ""
+        
+        analysis.update({
+            'head': cached_info['head'],
+            'description': cached_info['description'],
+            'info': cached_info['info'],
+            'missing_values': cached_info['missing_values'],
+            'plots': [],
+            'forecast_plots': [],
+            'anomalies': {},
+            'ai_summary': ai_summary,
+            'user_question': user_question,
+            'ai_answer': ai_answer,
+            'interactive': [],  # Will be loaded via AJAX if needed
+            'columns': used_cols,
+            'corr': corr_payload,
+            'controls': {
+                'forecast_horizon': user_steps,
+                'effective_steps': effective_steps,
+                'forecast_pct': pct if pct is not None else None,
+                'total_rows': total_rows,
+                'contamination': user_contam
+            }
+        })
+        
+        total_dt = time.perf_counter() - request_start
+        app.logger.info("Analyze FAST PATH done file=%s view=%s elapsed=%.2fs", filename, active_view, total_dt)
+        return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
 
     # Per-request timing and budgets to prevent long hangs
-    request_start = time.perf_counter()
     overview_budget_s = float(os.getenv("OVERVIEW_TIME_BUDGET_SEC", "6.0"))
     # Slightly higher default budget for forecast view to avoid missing plots under normal loads
-    forecast_budget_s = float(os.getenv("FORECAST_TIME_BUDGET_SEC", "36.0"))
+    forecast_budget_s = float(os.getenv("FORECAST_TIME_BUDGET_SEC", "60.0"))
     budget_s = forecast_budget_s if build_forecast or build_interactive else overview_budget_s
-    # Column limits for forecasting to avoid O(N cols) explosion
-    overview_cols_max = int(os.getenv("OVERVIEW_FORECAST_COLS_MAX", "2"))
-    # Allow more columns by default on Forecast view
-    forecast_cols_max = int(os.getenv("FORECAST_COLS_MAX", "20"))
+    # Column limits for forecasting - increased to show ALL columns
+    overview_cols_max = int(os.getenv("OVERVIEW_FORECAST_COLS_MAX", "100"))
+    # No practical limit on forecast columns
+    forecast_cols_max = int(os.getenv("FORECAST_COLS_MAX", "100"))
     cols_limit = forecast_cols_max if build_forecast else overview_cols_max
     forecast_done = 0
     skip_forecasts = False
@@ -3411,19 +3637,28 @@ def analyze_file(filename):
             if build_interactive and len(an_idx):
                 an_tail_idx = [i for i in an_idx if i in s_tail.index]
                 if an_tail_idx:
+                    # Safely extract y-values handling potential duplicate indices
+                    an_y_values = []
+                    for i in an_tail_idx:
+                        val = s_tail.loc[i]
+                        # If loc returns a Series (duplicate index), take first value
+                        if isinstance(val, pd.Series):
+                            val = val.iloc[0]
+                        an_y_values.append(float(val))
+                    
                     traces.append({
                         "type": "scatter",
                         "mode": "markers",
                         "name": "Anomaly",
                         "x": [str(i) for i in an_tail_idx],
-                        "y": [float(s_tail.loc[i]) for i in an_tail_idx],
+                        "y": an_y_values,
                         "marker": {"color": "#ef4444", "size": 7, "opacity": 0.9},
                         "hovertemplate": "Anomaly<br>%{x}<br>%{y}<extra></extra>"
                     })
-
             
             fc_x = fc_y = ci_lower = ci_upper = split_x = None
-            if build_interactive and not skip_forecasts and is_timeseries and len(series) >= 5:
+            # Generate forecasts and CI for interactive plots (removed is_timeseries requirement)
+            if build_interactive and not skip_forecasts and len(series) >= 5:
                 try:
                     steps = effective_steps
                     fc_mean, conf_df = _compute_forecast(series, steps)
@@ -3645,7 +3880,29 @@ def analyze_file(filename):
 
     total_dt = time.perf_counter() - request_start
     app.logger.info("Analyze done file=%s view=%s elapsed=%.2fs cols=%d", filename, active_view, total_dt, len(df.columns))
-    return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
+    
+    # Get current AI model name for attribution display
+    # Priority: actual model used > configured default > generic fallback
+    ai_model_name = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+    # Clean up model name for display (remove 'models/' prefix if present)
+    if isinstance(ai_model_name, str) and ai_model_name.startswith('models/'):
+        ai_model_display = ai_model_name[7:]  # Remove 'models/' prefix
+    else:
+        ai_model_display = str(ai_model_name) if ai_model_name else 'gemini-3.0-flash'
+    
+    # Check if AI summary is a valid AI response (not offline/error)
+    ai_summary = analysis.get('ai_summary', '')
+    ai_answer = analysis.get('ai_answer', '')
+    ai_is_valid = (
+        (isinstance(ai_summary, str) and ai_summary and not _is_offline_html(ai_summary)) or
+        (isinstance(ai_answer, str) and ai_answer and not _is_offline_html(ai_answer))
+    )
+    
+    app.logger.debug("AI model attribution: CURRENT_MODEL_NAME=%s, AI_STATUS.model=%s, DEFAULT=%s, display=%s, valid=%s",
+                     CURRENT_MODEL_NAME, AI_STATUS.get('model'), DEFAULT_AI_MODEL, ai_model_display, ai_is_valid)
+    
+    return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name, 
+                           ai_model_name=ai_model_display, ai_is_valid=ai_is_valid)
 
     # If an unexpected error occurs, Flask's error handler will handle it.
 @app.route('/health', methods=['GET'])
@@ -3684,6 +3941,187 @@ def api_ai_summary(filename):
         app.logger.warning("API AI summary failed: %s", e)
         fallback = offline_answer(df, "summary", error=e)
         return jsonify({"ok": True, "html": fallback, "cached": False})
+
+@app.route('/api/interactive/<filename>', methods=['GET'])
+def api_interactive_data(filename):
+    """Return interactive chart data via AJAX for faster page load.
+    
+    This endpoint returns pre-computed or freshly computed interactive chart traces
+    as JSON, allowing the page to load quickly and fetch chart data asynchronously.
+    """
+    if not HASHED_UPLOAD_RE.match(filename):
+        return jsonify({"ok": False, "error": "Invalid filename"}), 400
+    
+    # Check cache first for instant response
+    cache_key = filename
+    cached = INTERACTIVE_DATA_CACHE.get(cache_key)
+    if cached is not None:
+        return jsonify({"ok": True, "data": cached, "cached": True})
+    
+    # Load DataFrame
+    df = get_dataframe_for(filename)
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        return jsonify({"ok": False, "error": "Dataset not found"}), 404
+    
+    # Get parameters - default to 5%
+    raw_pct = request.args.get('forecast_pct', '0.05')
+    user_contam = float(request.args.get('contamination', '0.02'))
+    
+    try:
+        pct = float(raw_pct) if raw_pct else 0.05
+        # Allow 0 for no-forecast mode, clamp max to 0.5
+        pct = max(0, min(0.5, pct))
+    except:
+        pct = 0.05
+    
+    total_rows = len(df)
+    # 0% means no forecast
+    effective_steps = 0 if pct == 0 else max(2, int(math.ceil(total_rows * pct)))
+    is_timeseries = isinstance(df.index, pd.DatetimeIndex)
+    
+    interactive = []
+    cols_processed = 0
+    max_cols = 8  # Limit columns for performance
+    
+    for column in df.columns:
+        if cols_processed >= max_cols:
+            break
+            
+        try:
+            series = pd.to_numeric(df[column], errors='coerce').dropna()
+        except Exception:
+            continue
+        if series.empty or len(series) < 5:
+            continue
+        
+        cols_processed += 1
+        
+        # Check anomaly cache
+        anomaly_key = (filename, str(column), user_contam)
+        cached_anomalies = ANOMALY_CACHE.get(anomaly_key)
+        if cached_anomalies is not None:
+            an_idx = cached_anomalies
+        else:
+            an_idx, _ = detect_anomalies(series, contamination=user_contam)
+            ANOMALY_CACHE.set(anomaly_key, an_idx)
+        
+        # Build traces using NUMERIC indices for proportional X-axis display
+        # This ensures forecast (e.g. 20%) takes proportionally 20% of chart width
+        s_tail = series
+        n_hist = len(s_tail)
+        
+        # Use numeric indices 0, 1, 2... for history
+        x_hist_numeric = list(range(n_hist))
+        y_hist = [float(v) for v in s_tail.values]
+        
+        # Store original labels for hover text
+        original_labels = [str(i) for i in s_tail.index]
+        
+        traces = [{
+            "type": "scatter",
+            "mode": "lines+markers",
+            "name": "History",
+            "x": x_hist_numeric,
+            "y": y_hist,
+            "text": original_labels,  # Show original labels on hover
+            "hovertemplate": "%{text}<br>%{y}<extra></extra>",
+            "line": {"color": "rgb(31,119,180)", "width": 2},
+            "marker": {"size": 4, "opacity": 0.6}
+        }]
+        
+        # Add anomaly markers using numeric positions
+        if len(an_idx):
+            an_positions = []
+            an_values = []
+            an_labels = []
+            for i, idx in enumerate(s_tail.index):
+                if idx in an_idx:
+                    an_positions.append(i)
+                    an_values.append(float(s_tail.iloc[i]))
+                    an_labels.append(str(idx))
+            
+            if an_positions:
+                traces.append({
+                    "type": "scatter",
+                    "mode": "markers",
+                    "name": "Anomaly",
+                    "x": an_positions,
+                    "y": an_values,
+                    "text": an_labels,
+                    "hovertemplate": "Anomaly<br>%{text}<br>%{y}<extra></extra>",
+                    "marker": {"color": "#ef4444", "size": 7, "opacity": 0.9}
+                })
+        
+        # Add forecast using numeric positions continuing from history
+        split_x = None
+        if effective_steps > 0 and len(series) >= 10:
+            try:
+                fc_mean, conf_df = _compute_forecast(series, effective_steps)
+                split_x = n_hist - 0.5  # Split line between last history and first forecast
+                
+                # Forecast uses indices n_hist, n_hist+1, n_hist+2...
+                n_fc = len(fc_mean)
+                fc_x_numeric = list(range(n_hist, n_hist + n_fc))
+                fc_y = [float(v) for v in fc_mean.values]
+                fc_labels = [str(i) for i in fc_mean.index]
+                
+                if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
+                    ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
+                    ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
+                    
+                    # Add CI traces
+                    traces.append({
+                        "type": "scatter", "mode": "lines", "name": "95% CI",
+                        "x": fc_x_numeric, "y": ci_lower, "line": {"width": 0},
+                        "hoverinfo": "skip", "showlegend": True
+                    })
+                    traces.append({
+                        "type": "scatter", "mode": "lines", "name": "95% CI",
+                        "x": fc_x_numeric, "y": ci_upper, "line": {"width": 0},
+                        "fill": "tonexty", "fillcolor": "rgba(255,69,0,0.18)",
+                        "hoverinfo": "skip", "showlegend": False
+                    })
+                
+                # Forecast line with connection to last history point
+                x_plot = [n_hist - 1] + list(fc_x_numeric)
+                y_plot = [float(series.iloc[-1])] + list(fc_y)
+                text_plot = [original_labels[-1]] + list(fc_labels)
+                    
+                traces.append({
+                    "type": "scatter", "mode": "lines+markers", "name": "Forecast",
+                    "x": x_plot, "y": y_plot,
+                    "text": text_plot,
+                    "hovertemplate": "%{text}<br>%{y}<extra></extra>",
+                    "line": {"color": "orangered", "width": 3},
+                    "marker": {"size": 3}
+                })
+            except Exception as e:
+                app.logger.debug("Forecast skipped for %s: %s", column, e)
+        
+        # Build layout
+        layout = {
+            "title": {"text": f"{column} (interactive)", "x": 0.02},
+            "xaxis": {"title": "Timestamp" if is_timeseries else "Index", "showgrid": True},
+            "yaxis": {"title": column, "showgrid": True},
+            "shapes": [] if not split_x else [{
+                "type": "line", "xref": "x", "yref": "paper",
+                "x0": split_x, "x1": split_x, "y0": 0, "y1": 1,
+                "line": {"color": "gray", "width": 1, "dash": "dot"}
+            }],
+            "legend": {"orientation": "h"},
+            "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
+        }
+        
+        if is_timeseries:
+            layout["xaxis"]["rangeslider"] = {"visible": True}
+        
+        dist = {"name": column, "values": [float(v) for v in series.dropna().values[:1000]]}  # Limit distribution points
+        interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
+    
+    # Cache the result
+    INTERACTIVE_DATA_CACHE.set(cache_key, interactive)
+    
+    return jsonify({"ok": True, "data": interactive, "cached": False})
 
 @app.route('/download/<filename>/cleaned.csv', methods=['GET'])
 def download_cleaned_csv(filename):
@@ -3958,6 +4396,12 @@ def download_full_report_pdf(filename):
 
     display = request.args.get('display') or filename
     
+    # Get forecast percentage from request (default 5%)
+    try:
+        forecast_pct = float(request.args.get('forecast_pct', 0.05))
+    except (TypeError, ValueError):
+        forecast_pct = 0.05
+    
     # Ensure AI summary is generated if not already cached
     if AI_SUMMARY_CACHE.get(filename) is None:
         try:
@@ -4086,12 +4530,18 @@ def download_full_report_pdf(filename):
             # Reset font
             pdf.set_font(font_family, size=10)
 
-        def add_df_table(df_table, title=None):
-            """Renders a pandas DataFrame as a table in the PDF."""
+        def add_df_table(df_table, title=None, new_page=True):
+            """Renders a pandas DataFrame as a table in the PDF.
+               If new_page=True (default), ALWAYS starts on a fresh page.
+            """
+            # ALWAYS start on fresh page to prevent mid-page tables
+            if new_page:
+                pdf.add_page()
+            
             # Use fpdf2's built-in table context if available, otherwise manual
             try:
                 # Basic data prep: Convert all to string, handle truncation
-                max_cols = 10
+                max_cols = 100 # Effectively no limit for typical datasets
                 if len(df_table.columns) > max_cols:
                     df_display = df_table.iloc[:, :max_cols].copy()
                     df_display["..."] = "..."
@@ -4110,26 +4560,12 @@ def download_full_report_pdf(filename):
                     data.append(row_data)
                 
                 headers = ["Index"] + headers
-                
-                # Estimate table height: Header + Rows
-                row_height_est = 8
-                # If title is present, add its height
-                title_height = 8 if title else 0
-                
-                total_height_est = (len(data) + 1) * row_height_est + title_height
-                
-                # If table won't fit on current page (with some margin), add value
-                space_left = pdf.h - pdf.b_margin - pdf.get_y()
-                
-                # Add page if needed
-                if total_height_est > space_left and total_height_est < (pdf.h - pdf.t_margin - pdf.b_margin):
-                     app.logger.info("Table won't fit (needed %s, left %s), adding page", total_height_est, space_left)
-                     pdf.add_page()
 
-                # Print Title NOW, after potential page break
+                # Print Title at top of fresh page
                 if title:
-                    pdf.set_font("Arial" if "Arial" in pdf.fonts else "helvetica", 'B', 10)
-                    pdf.cell(0, 6, title, new_x="LMARGIN", new_y="NEXT")
+                    pdf.set_font("Arial" if "Arial" in pdf.fonts else "helvetica", 'B', 11)
+                    pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
+                    pdf.ln(3)
 
                 # Print Table
                 pdf.set_font("Arial" if "Arial" in pdf.fonts else "helvetica", size=8)
@@ -4142,7 +4578,7 @@ def download_full_report_pdf(filename):
                         for item in data_row:
                             row.cell(item)
                 
-                pdf.ln(2)
+                pdf.ln(4)
             except Exception as e:
                 app.logger.warning(f"Table rendering failed, falling back to text: {e}")
                 # Fallback
@@ -4159,6 +4595,8 @@ def download_full_report_pdf(filename):
         font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
         
         add_text_block(info_str, courier=True)
+        
+
 
         
         # Use new table function for head
@@ -4167,14 +4605,14 @@ def download_full_report_pdf(filename):
         # Use new table function for describe
         add_df_table(df.describe(), title="Statistical Description:")
 
-        # Missing Values
+        # Missing Values - also on fresh page like other tables
         try:
             mv = df.isnull().sum()
             mvf = mv[mv > 0]
             if not mvf.empty:
-                pdf.set_font(font_family, 'B', 10)
-                pdf.cell(0, 6, "Missing Values:", new_x="LMARGIN", new_y="NEXT")
-                add_text_block(mvf.to_string(), courier=True)
+                # Convert to DataFrame and use add_df_table for consistent formatting
+                mv_df = mvf.to_frame('Missing Count')
+                add_df_table(mv_df, title="Missing Values:")
         except:
             pass
 
@@ -4230,18 +4668,38 @@ def download_full_report_pdf(filename):
         # Plots
         add_section_title("4. Column Analysis", new_page=True)
         
+        # Show forecast setting used (Moved here)
+        font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+        pdf.set_font(font_family, 'B', 10)
+        forecast_pct_display = int(forecast_pct * 100)
+        if forecast_pct == 0:
+            pdf.cell(0, 8, f"Forecast Setting: 0% (data and anomalies only)", new_x="LMARGIN", new_y="NEXT")
+        else:
+            total_rows = len(df)
+            forecast_steps = max(2, int(total_rows * forecast_pct))
+            pdf.cell(0, 8, f"Forecast Setting: {forecast_pct_display}% ({forecast_steps} steps of {total_rows} rows)", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(font_family, size=10)
+        pdf.ln(2)
+        
         is_ts = isinstance(df.index, pd.DatetimeIndex)
         first_col = True
         
         for col in df.columns:
-            try:
-                s = pd.to_numeric(df[col], errors='coerce').dropna()
-                if len(s) < 3:
+            is_numeric = False
+            s = pd.to_numeric(df[col], errors='coerce').dropna()
+            
+            # Check if valid numeric column (enough data)
+            if len(s) >= 3:
+                is_numeric = True
+            else:
+                # Treat as categorical
+                s = df[col].astype(str)
+                # Skip if empty
+                if s.empty:
                     continue
-            except:
-                continue
-                
-            if not isinstance(s.index, type(df.index)):
+
+            # Ensure series has proper index logic if it switched type
+            if is_numeric and not isinstance(s.index, type(df.index)):
                  try:
                      s_temp = df[col].copy()
                      s = pd.to_numeric(s_temp, errors='coerce').dropna()
@@ -4283,10 +4741,20 @@ def download_full_report_pdf(filename):
             # Distribution
             try:
                 fig, ax = plt.subplots(figsize=(7, 3.5))
-                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
-                ax.set_title(f"Distribution: {col}")
+                if is_numeric:
+                    ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
+                    ax.set_title(f"Distribution: {col}")
+                    ax.set_ylabel("Frequency")
+                else:
+                    # Categorical bar chart (top 15)
+                    top_counts = s.value_counts().head(15)
+                    top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
+                    ax.set_title(f"Top 15 Categories: {col}")
+                    ax.set_ylabel("Count")
+                    # Rotate labels
+                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+
                 ax.set_xlabel(col)
-                ax.set_ylabel("Frequency")
                 ax.grid(True, alpha=0.3)
                 
                 buf = io.BytesIO()
@@ -4299,7 +4767,7 @@ def download_full_report_pdf(filename):
                 pass
                 
             # STL
-            if is_ts and len(s) >= 28:
+            if is_numeric and is_ts and len(s) >= 28:
                 try:
                     s_norm = normalize_timeseries(s)
                     sp = _infer_seasonal_period(s_norm.index)
@@ -4311,41 +4779,50 @@ def download_full_report_pdf(filename):
                 except Exception:
                     pass
             
-            # Forecast (for timeseries)
-            if is_ts and len(s) >= 10:
+            # Forecast/Data graph (respects forecast_pct setting)
+            # If forecast_pct is 0, shows data + anomalies only (no forecast lines)
+            if is_numeric and len(s) >= 10:
                 try:
-                    # Forecast logic from download_full_report_html
                     total_rows = len(df)
-                    forecast_steps = max(10, int(total_rows * 0.1))
                     
                     fc_mean, ci = None, None
-                    try:
-                         fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
-                    except Exception as e:
-                        try:
-                            fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
-                        except Exception:
-                            fc_mean, ci = None, None
+                    forecast_steps = 0
                     
-                    if fc_mean is not None and len(fc_mean) > 0:
-                        # Find anomaly index if available
-                        an_idx, _ = detect_anomalies(s, contamination=0.02)
-                        
-                        fc_b64 = generate_forecast_plot(
-                            s, 
-                            fc_mean, 
-                            f"Forecast: {col} ({forecast_steps} steps)", 
-                            'Timestamp', 
-                            col, 
-                            conf_int=ci, 
-                            history_tail=None, 
-                            anomalies_idx=an_idx
-                        )
-                        if fc_b64:
-                            pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=140, x=35)
-                            pdf.ln(2)
+                    # Only compute forecast if pct > 0
+                    if forecast_pct > 0:
+                        forecast_steps = max(2, int(total_rows * forecast_pct))
+                        try:
+                            fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
+                        except Exception as e:
+                            try:
+                                fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
+                            except Exception:
+                                fc_mean, ci = None, None
+                    
+                    # Always detect anomalies
+                    an_idx, _ = detect_anomalies(s, contamination=0.02)
+                    
+                    # Generate plot - with or without forecast
+                    if forecast_pct > 0:
+                        title = f"Forecast: {col} ({forecast_steps} steps)"
+                    else:
+                        title = f"Data & Anomalies: {col}"
+                    
+                    fc_b64 = generate_forecast_plot(
+                        s, 
+                        fc_mean,  # None for 0% forecast
+                        title, 
+                        'Timestamp', 
+                        col, 
+                        conf_int=ci,  # None for 0% forecast
+                        history_tail=None, 
+                        anomalies_idx=an_idx
+                    )
+                    if fc_b64:
+                        pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=140, x=35)
+                        pdf.ln(2)
                 except Exception as e:
-                    app.logger.error(f"Error adding forecast to PDF for {col}: {e}")
+                    app.logger.error(f"Error adding forecast/data plot to PDF for {col}: {e}")
                     pass
     except Exception as e:
         app.logger.error(f"Error generating PDF: {e}")
@@ -4764,7 +5241,7 @@ if __name__ == "__main__":
                 "default-src": ["'self'", "https:", "http:"],
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
                 "style-src": ["'self'", "'unsafe-inline'", "https:", "http:"],
-                "img-src": ["'self'", "data:", "https:", "http:"],
+                "img-src": ["'self'", "data:", "blob:", "https:", "http:"],
                 "connect-src": ["'self'", "https:", "http:"],
             }
             Talisman(app, content_security_policy=default_csp)
