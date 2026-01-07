@@ -599,6 +599,8 @@ ANOMALY_CACHE = TinyLRU(max_items=20)  # Cache anomaly detection results per col
 COLUMN_FORECAST_CACHE = TinyLRU(max_items=200)
 # PERFORMANCE: STL decomposition cache - expensive operation, cache the base64 images
 STL_CACHE = TinyLRU(max_items=100)
+# PERFORMANCE: Correlation heatmap cache - (filename, method) -> base64_img
+HEATMAP_CACHE = TinyLRU(max_items=20)
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -1489,6 +1491,22 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
         except:
             pass
         return None
+
+def get_cached_heatmap(filename: str, df: pd.DataFrame, method: str = 'spearman'):
+    """Get correlation heatmap from cache or generate and cache it.
+    
+    Avoids regenerating identical heatmaps for PDF when already generated for web view.
+    """
+    cache_key = (filename, method)
+    cached = HEATMAP_CACHE.get(cache_key)
+    if cached is not None:
+        app.logger.debug("Heatmap cache HIT: %s/%s", filename[:8], method)
+        return cached
+    app.logger.debug("Heatmap cache MISS: %s/%s - generating", filename[:8], method)
+    img = generate_correlation_heatmap(df, method=method, title=f'{method.capitalize()} Correlation')
+    if img:
+        HEATMAP_CACHE.set(cache_key, img)
+    return img
 
 def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
     try:
@@ -2443,8 +2461,13 @@ def _compute_forecast(series: pd.Series, steps: int):
             recent_std = np.std(recent_pattern)
             
             # Search for similar segments in historical data
+            # PERFORMANCE: Limit search to last 1000 points to avoid O(n²) on large datasets
             similar_segments = []
-            for i in range(len(values) - segment_length - k):
+            search_range = len(values) - segment_length - k
+            max_search = min(search_range, 1000)  # Cap at 1000 iterations
+            # Start from end (most recent) if we have to limit
+            start_idx = max(0, search_range - max_search)
+            for i in range(start_idx, search_range):
                 segment = values[i:i+segment_length]
                 seg_mean = np.mean(segment)
                 seg_std = np.std(segment)
@@ -4714,8 +4737,8 @@ def download_full_report_pdf(filename):
                 if not corr_header_added:
                     add_section_title("3. Correlation Analysis")
                     corr_header_added = True
-
-            corr_heatmap_spearman = generate_correlation_heatmap(df, method='spearman', title='Spearman Correlation')
+            # Use cached heatmaps for performance
+            corr_heatmap_spearman = get_cached_heatmap(filename, df, method='spearman')
             if corr_heatmap_spearman:
                 ensure_corr_header()
                 # Keep-with-next logic: If near bottom, page break
@@ -4729,7 +4752,7 @@ def download_full_report_pdf(filename):
                 pdf.image(io.BytesIO(img_data), w=150, x=30)
                 pdf.ln(5)
 
-            corr_heatmap_pearson = generate_correlation_heatmap(df, method='pearson', title='Pearson Correlation')
+            corr_heatmap_pearson = get_cached_heatmap(filename, df, method='pearson')
             if corr_heatmap_pearson:
                 ensure_corr_header()
                 # Keep label and image together - add page if not enough space for both
