@@ -607,6 +607,8 @@ COLUMN_FORECAST_CACHE = TinyLRU(max_items=200)
 STL_CACHE = TinyLRU(max_items=100)
 # PERFORMANCE: Correlation heatmap cache - (filename, method) -> base64_img
 HEATMAP_CACHE = TinyLRU(max_items=20)
+# PERFORMANCE: Numeric DataFrame cache - avoids repeated coerce_numeric_df calls
+NUMERIC_DF_CACHE = TinyLRU(max_items=10)
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -2781,6 +2783,17 @@ def coerce_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
                 res[col] = coerced
     return pd.DataFrame(res, index=df.index)
 
+def get_cached_numeric_df(filename: str, df: pd.DataFrame) -> pd.DataFrame:
+    """Get coerced numeric DataFrame from cache or compute and cache it.
+    
+    PERFORMANCE: Avoids repeated coerce_numeric_df calls for the same dataset.
+    """
+    cached = NUMERIC_DF_CACHE.get(filename)
+    if cached is not None:
+        return cached
+    result = coerce_numeric_df(df)
+    NUMERIC_DF_CACHE.set(filename, result)
+    return result
 
 def detect_anomalies(series: pd.Series, contamination: float = 0.02):
     """
