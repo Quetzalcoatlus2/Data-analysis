@@ -594,6 +594,11 @@ DESCRIPTION_CACHE = TinyLRU(max_items=20)  # Cache describe() and info() per dat
 ANALYSIS_CACHE = TinyLRU(max_items=10)  # Cache full analysis results (plots, forecasts, interactive data)
 INTERACTIVE_DATA_CACHE = TinyLRU(max_items=10)  # Cache interactive chart JSON data for AJAX loading
 ANOMALY_CACHE = TinyLRU(max_items=20)  # Cache anomaly detection results per column
+# PERFORMANCE: Per-column forecast cache with (filename, column, steps) key
+# This ensures forecasts are computed once and reused across Forecast/Interactive/PDF views
+COLUMN_FORECAST_CACHE = TinyLRU(max_items=200)
+# PERFORMANCE: STL decomposition cache - expensive operation, cache the base64 images
+STL_CACHE = TinyLRU(max_items=100)
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -2556,6 +2561,47 @@ def _compute_forecast(series: pd.Series, steps: int):
             zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
             return zero, pd.DataFrame({"lower": zero, "upper": zero})
 
+def get_cached_column_forecast(filename: str, column: str, series: pd.Series, steps: int):
+    """Get forecast from cache or compute and cache it.
+    
+    This is the primary entry point for getting forecasts - ensures each
+    (filename, column, steps) combination is only computed once, then reused
+    across Forecast view, Interactive view, and PDF generation.
+    """
+    if steps <= 0:
+        return None, None
+    cache_key = (filename, str(column), int(steps))
+    cached = COLUMN_FORECAST_CACHE.get(cache_key)
+    if cached is not None:
+        app.logger.debug("Forecast cache HIT: %s/%s/%d", filename[:8], column, steps)
+        return cached
+    app.logger.debug("Forecast cache MISS: %s/%s/%d - computing", filename[:8], column, steps)
+    fc_mean, conf_df = _compute_forecast(series, steps)
+    COLUMN_FORECAST_CACHE.set(cache_key, (fc_mean, conf_df))
+    return fc_mean, conf_df
+
+def get_cached_stl_plot(filename: str, column: str, series: pd.Series, seasonal_period: int):
+    """Get STL decomposition plot from cache or generate and cache it.
+    
+    STL decomposition is computationally expensive. This ensures each unique
+    (filename, column, seasonal_period) is only computed once.
+    """
+    if seasonal_period is None or seasonal_period < 2:
+        return None
+    cache_key = (filename, str(column), int(seasonal_period))
+    cached = STL_CACHE.get(cache_key)
+    if cached is not None:
+        app.logger.debug("STL cache HIT: %s/%s", filename[:8], column)
+        return cached
+    app.logger.debug("STL cache MISS: %s/%s - generating", filename[:8], column)
+    s_norm = normalize_timeseries(series)
+    if s_norm is None or len(s_norm) < max(28, seasonal_period * 2):
+        return None
+    stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=seasonal_period)
+    if stl_img:
+        STL_CACHE.set(cache_key, stl_img)
+    return stl_img
+
 def read_csv_fallback(path, **kwargs):
     last_err = None
     for enc in SUPPORTED_ENCODINGS:
@@ -3552,8 +3598,8 @@ def analyze_file(filename):
                     steps = effective_steps
                     app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
 
-                    # Unified pipeline
-                    fc_mean, conf_df = _compute_forecast(series, steps)
+                    # Unified pipeline - use cached helper for cross-view performance
+                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
 
                     title_fc = f"Forecast for {column} (with anomalies)"
                     
@@ -3612,25 +3658,21 @@ def analyze_file(filename):
             if build_forecast and not skip_forecasts and len(series) >= 5:
                 try:
                     if isinstance(series.index, pd.DatetimeIndex):
-                        s_norm = normalize_timeseries(series)
-                        sp = _infer_seasonal_period(s_norm.index)
+                        sp = _infer_seasonal_period(series.index)
                         if sp:
-                            try:
-                                stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=sp)
-                                if stl_img:
-                                    forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
-                            except Exception as _e:
-                                app.logger.warning("STL plot failed for %s: %s", column, _e)
+                            # Use cached STL plot for performance
+                            stl_img = get_cached_stl_plot(filename, column, series, sp)
+                            if stl_img:
+                                forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
                 except Exception as e:
-                    app.logger.warning("Could not generate forecast for %s: %s", column, e)
+                    app.logger.warning("STL plot failed for %s: %s", column, e)
 
             if build_interactive and not skip_forecasts and len(series) >= 5:
                 try:
-                    s_norm = normalize_timeseries(series)
-                    sp = _infer_seasonal_period(s_norm.index) if isinstance(s_norm.index, pd.DatetimeIndex) else None
+                    sp = _infer_seasonal_period(series.index) if isinstance(series.index, pd.DatetimeIndex) else None
                     if sp:
-                        stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=sp)
-                       
+                        # Use cached STL plot - may already be computed in forecast view
+                        stl_img = get_cached_stl_plot(filename, column, series, sp)
                         if stl_img:
                             forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
                 except Exception:
@@ -3693,7 +3735,8 @@ def analyze_file(filename):
             if build_interactive and not skip_forecasts and len(series) >= 5:
                 try:
                     steps = effective_steps
-                    fc_mean, conf_df = _compute_forecast(series, steps)
+                    # Use cached forecast - may already be computed in forecast view
+                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
                     
                     # Use numeric X-axis continuing from history
                     n_fc = len(fc_mean)
@@ -4091,7 +4134,10 @@ def api_interactive_data(filename):
         split_x = None
         if effective_steps > 0 and len(series) >= 10:
             try:
-                fc_mean, conf_df = _compute_forecast(series, effective_steps)
+                # Use cached forecast - reuses computation from analyze_file if available
+                fc_mean, conf_df = get_cached_column_forecast(filename, column, series, effective_steps)
+                if fc_mean is None:
+                    raise ValueError("No forecast generated")
                 split_x = n_hist - 0.5  # Split line between last history and first forecast
                 
                 # Forecast uses indices n_hist, n_hist+1, n_hist+2...
@@ -4794,13 +4840,13 @@ def download_full_report_pdf(filename):
             except Exception:
                 pass
                 
-            # STL
+            # STL - use cached version for performance
             if is_numeric and is_ts and len(s) >= 28:
                 try:
-                    s_norm = normalize_timeseries(s)
-                    sp = _infer_seasonal_period(s_norm.index)
-                    if sp and isinstance(sp, int) and sp >= 2 and len(s_norm) >= sp * 2:
-                        stl_b64 = generate_stl_plot(s_norm, f"STL Decomposition: {col}", seasonal_period=sp)
+                    sp = _infer_seasonal_period(s.index)
+                    if sp and isinstance(sp, int) and sp >= 2:
+                        # Use cached STL plot - may already be computed from web view
+                        stl_b64 = get_cached_stl_plot(filename, col, s, sp)
                         if stl_b64:
                             pdf.image(io.BytesIO(base64.b64decode(stl_b64)), w=140, x=35)
                             pdf.ln(2)
@@ -4820,12 +4866,10 @@ def download_full_report_pdf(filename):
                     if forecast_pct > 0:
                         forecast_steps = max(2, int(total_rows * forecast_pct))
                         try:
-                            fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
+                            # Use cached forecast - reuses computation from web view if available
+                            fc_mean, ci = get_cached_column_forecast(filename, col, s, forecast_steps)
                         except Exception as e:
-                            try:
-                                fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
-                            except Exception:
-                                fc_mean, ci = None, None
+                            fc_mean, ci = None, None
                     
                     # Always detect anomalies
                     an_idx, _ = detect_anomalies(s, contamination=0.02)
