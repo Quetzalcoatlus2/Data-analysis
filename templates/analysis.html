@@ -419,11 +419,27 @@
           const contentEl = document.getElementById('ai-summary-content');
           const attributionEl = document.getElementById('ai-summary-attribution');
           const loadingEl = document.getElementById('ai-summary-loading');
+
+          // Helper to check if content contains error patterns
+          function isOfflineContent(html) {
+            if (!html) return true;
+            const lower = html.toLowerCase();
+            return lower.includes('offline analysis') ||
+              lower.includes('ai response unavailable') ||
+              lower.includes('ai not ready') ||
+              lower.includes('not ready') ||
+              lower.includes('rate limit') ||
+              lower.includes('quota');
+          }
+
           // If content is already pre-rendered and not empty, skip AJAX loading
           if (contentEl && contentEl.innerHTML.trim() && contentEl.innerHTML.trim() !== '') {
             loadingEl.style.display = 'none';
             contentEl.style.display = 'block';
-            if (attributionEl) attributionEl.style.display = 'block';
+            // Only show attribution if content is not an error message
+            if (attributionEl && !isOfflineContent(contentEl.innerHTML)) {
+              attributionEl.style.display = 'block';
+            }
             return;
           }
           // Otherwise, fetch async
@@ -434,7 +450,10 @@
               loadingEl.style.display = 'none';
               contentEl.innerHTML = data.html || '<p class="muted">AI summary unavailable.</p>';
               contentEl.style.display = 'block';
-              if (attributionEl && data.html) attributionEl.style.display = 'block';
+              // Only show attribution if content is not an error message
+              if (attributionEl && data.html && !isOfflineContent(data.html)) {
+                attributionEl.style.display = 'block';
+              }
             })
             .catch(function () {
               loadingEl.innerHTML = '<p class="muted">AI summary could not be loaded.</p>';

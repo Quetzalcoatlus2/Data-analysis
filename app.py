@@ -987,7 +987,14 @@ class PDFStyledText:
 def _is_offline_html(s: str) -> bool:
     try:
         t = (s or "").lower()
-        return ("<h3>offline analysis</h3>" in t) or ("ai response unavailable" in t)
+        return (
+            "<h3>offline analysis</h3>" in t or 
+            "ai response unavailable" in t or
+            "ai not ready" in t or
+            "not ready" in t or
+            "rate limit" in t or
+            "quota" in t
+        )
     except Exception:
         return False
 
@@ -3549,17 +3556,35 @@ def analyze_file(filename):
                     fc_mean, conf_df = _compute_forecast(series, steps)
 
                     title_fc = f"Forecast for {column} (with anomalies)"
-                    s_hist = _thin_series(series, max_points=600)
+                    
+                    # Thin history for display
+                    max_hist_points = 600
+                    s_hist = _thin_series(series, max_points=max_hist_points)
+                    
+                    # PROPORTIONAL THINNING: Thin forecast by same ratio as history
+                    # This maintains correct visual proportions
+                    if len(series) > max_hist_points and fc_mean is not None and len(fc_mean) > 0:
+                        thinning_ratio = len(s_hist) / len(series)
+                        thin_fc_points = max(2, int(len(fc_mean) * thinning_ratio))
+                        fc_mean_thin = _thin_series(fc_mean, max_points=thin_fc_points)
+                        if conf_df is not None and isinstance(conf_df, pd.DataFrame):
+                            conf_df_thin = conf_df.loc[fc_mean_thin.index] if all(idx in conf_df.index for idx in fc_mean_thin.index) else None
+                        else:
+                            conf_df_thin = None
+                    else:
+                        fc_mean_thin = fc_mean
+                        conf_df_thin = conf_df
+                    
                     xlab = 'Timestamp' if isinstance(series.index, pd.DatetimeIndex) else 'Index'
                     try:
                         # Pass anomaly indices to the forecast plot generation
                         img_fc = generate_forecast_plot(
                             s_hist,
-                            fc_mean,
+                            fc_mean_thin,
                             title_fc,
                             xlab,
                             column,
-                            conf_int=conf_df,
+                            conf_int=conf_df_thin,
                             history_tail=None,
                             anomalies_idx=an_idx  # Add anomaly markers to forecast plot
                         )
@@ -3611,7 +3636,6 @@ def analyze_file(filename):
                 except Exception:
                     pass
 
-            if build_interactive:
                 if raw_tail in ("all", "", "0", "-1", "none", "false"):
                     s_tail = series
                 else:
@@ -3621,39 +3645,47 @@ def analyze_file(filename):
                     except Exception:
                         s_tail = series
 
-                x_hist = [str(i) for i in s_tail.index]
+                # Use NUMERIC X-axis for proportional display (like in PDF)
+                n_hist = len(s_tail)
+                x_hist_numeric = list(range(n_hist))
                 y_hist = [float(v) for v in s_tail.values]
+                original_labels = [str(i) for i in s_tail.index]
+                
                 traces = [{
                     "type": "scatter",
                     "mode": "lines+markers",
                     "name": "History",
-                    "x": x_hist,
+                    "x": x_hist_numeric,
                     "y": y_hist,
+                    "text": original_labels,
+                    "hovertemplate": "%{text}<br>%{y}<extra></extra>",
                     "line": {"color": "rgb(31,119,180)", "width": 2},
                     "marker": {"size": 4, "opacity": 0.6}
                 }]
 
             
             if build_interactive and len(an_idx):
-                an_tail_idx = [i for i in an_idx if i in s_tail.index]
-                if an_tail_idx:
-                    # Safely extract y-values handling potential duplicate indices
-                    an_y_values = []
-                    for i in an_tail_idx:
-                        val = s_tail.loc[i]
-                        # If loc returns a Series (duplicate index), take first value
-                        if isinstance(val, pd.Series):
-                            val = val.iloc[0]
+                # Find numeric positions for anomaly markers
+                an_positions = []
+                an_y_values = []
+                an_labels = []
+                for i, idx in enumerate(s_tail.index):
+                    if idx in an_idx:
+                        val = s_tail.iloc[i]
+                        an_positions.append(i)
                         an_y_values.append(float(val))
+                        an_labels.append(str(idx))
                     
+                if an_positions:
                     traces.append({
                         "type": "scatter",
                         "mode": "markers",
                         "name": "Anomaly",
-                        "x": [str(i) for i in an_tail_idx],
+                        "x": an_positions,
                         "y": an_y_values,
+                        "text": an_labels,
                         "marker": {"color": "#ef4444", "size": 7, "opacity": 0.9},
-                        "hovertemplate": "Anomaly<br>%{x}<br>%{y}<extra></extra>"
+                        "hovertemplate": "Anomaly<br>%{text}<br>%{y}<extra></extra>"
                     })
             
             fc_x = fc_y = ci_lower = ci_upper = split_x = None
@@ -3662,21 +3694,26 @@ def analyze_file(filename):
                 try:
                     steps = effective_steps
                     fc_mean, conf_df = _compute_forecast(series, steps)
-                    split_x = str(series.index[-1])
-                    fc_x = [str(i) for i in fc_mean.index]
+                    
+                    # Use numeric X-axis continuing from history
+                    n_fc = len(fc_mean)
+                    fc_x_numeric = list(range(n_hist, n_hist + n_fc))
                     fc_y = [float(v) for v in fc_mean.values]
+                    fc_labels = [str(i) for i in fc_mean.index]
+                    split_x = n_hist - 0.5  # Numeric position for split line
+                    
                     if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
                         ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
                         ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
 
-                    # Add interactive traces using the forecast
-                    if fc_x and ci_lower and ci_upper:
+                    # Add interactive traces using numeric X-axis
+                    if fc_x_numeric and ci_lower and ci_upper:
                         ci_group = f"ci-{re.sub(r'[^A-Za-z0-9_-]+', '', str(column))}"
                         traces.append({
                             "type": "scatter",
                             "mode": "lines",
                             "name": "95% CI",
-                            "x": fc_x, "y": ci_lower,
+                            "x": fc_x_numeric, "y": ci_lower,
                             "line": {"width": 0},
                             "hoverinfo": "skip",
                             "showlegend": True,
@@ -3686,7 +3723,7 @@ def analyze_file(filename):
                             "type": "scatter",
                             "mode": "lines",
                             "name": "95% CI",
-                            "x": fc_x, "y": ci_upper,
+                            "x": fc_x_numeric, "y": ci_upper,
                             "line": {"width": 0},
                             "fill": "tonexty",
                             "fillcolor": "rgba(255,69,0,0.18)",
@@ -3696,20 +3733,18 @@ def analyze_file(filename):
                             "legendgrouptitle": {"text": "95% CI"}
                         })
 
-                    if fc_x and fc_y:
-                        # Prepend last history point for visual continuity
-                        try:
-                            last_x_hist = str(series.index[-1])
-                            last_y_hist = float(series.iloc[-1])
-                            x_plot = [last_x_hist] + list(fc_x)
-                            y_plot = [last_y_hist] + list(fc_y)
-                        except Exception:
-                            x_plot, y_plot = fc_x, fc_y
+                    if fc_x_numeric and fc_y:
+                        # Connect to last history point
+                        x_plot = [n_hist - 1] + list(fc_x_numeric)
+                        y_plot = [float(series.iloc[-1])] + list(fc_y)
+                        text_plot = [original_labels[-1]] + list(fc_labels)
                         traces.append({
                             "type": "scatter",
                             "mode": "lines+markers",
                             "name": "Forecast",
                             "x": x_plot, "y": y_plot,
+                            "text": text_plot,
+                            "hovertemplate": "%{text}<br>%{y}<extra></extra>",
                             "line": {"color": "orangered", "width": 3},
                             "marker": {"size": 3}
                         })
@@ -4729,13 +4764,6 @@ def download_full_report_pdf(filename):
             pdf.line(10, pdf.get_y(), 200, pdf.get_y())
             pdf.ln(2)
             
-            pdf.set_font(font_family, style="B", size=11)
-            # Safe column name
-            if "Arial" in pdf.fonts:
-                pdf.cell(0, 8, f"Column: {col}", new_x="LMARGIN", new_y="NEXT")
-            else:
-                safe_col = col.encode('latin-1', 'replace').decode('latin-1')
-                pdf.cell(0, 8, f"Column: {safe_col}", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font(font_family, size=10)
 
             # Distribution
