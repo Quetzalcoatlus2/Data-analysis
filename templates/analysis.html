@@ -984,11 +984,27 @@
             const v = this.value;
             const url = new URL(window.location.href);
             url.searchParams.set('forecast_pct', v);
+            // Persist currently selected column across page reload
+            const colPick = document.getElementById('colPick');
+            if (colPick && colPick.value) {
+              url.searchParams.set('selected_col', colPick.value);
+            }
             window.location.href = url.toString();
           });
         }
         bindPct('forecastPctSelect');
         bindPct('forecastPctSelectTop');
+
+        // Restore selected column from URL parameter (for persistence across forecast % changes)
+        const urlParams = new URLSearchParams(window.location.search);
+        const savedCol = urlParams.get('selected_col');
+        if (savedCol && sel) {
+          const opt = Array.from(sel.options).find(o => o.value === savedCol);
+          if (opt) {
+            sel.value = savedCol;
+            onPickChange();
+          }
+        }
       });
     </script>
 

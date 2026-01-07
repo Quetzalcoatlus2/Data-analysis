@@ -2448,22 +2448,33 @@ def _compute_forecast(series: pd.Series, steps: int):
             recent_mean = np.mean(recent_pattern)
             recent_std = np.std(recent_pattern)
             
-            # Search for similar segments - limited to 500 for performance
+            # Search for similar segments - use vectorized rolling stats for speed
             similar_segments = []
             search_range = len(values) - segment_length - k
-            max_search = min(search_range, 500)  # Performance limit
+            max_search = min(search_range, 300)  # Reduced limit for speed
             start_idx = max(0, search_range - max_search)
             
-            for i in range(start_idx, search_range):
-                segment = values[i:i+segment_length]
-                seg_mean = np.mean(segment)
-                seg_std = np.std(segment)
+            # PERFORMANCE: Precompute rolling mean/std once for all segments
+            if max_search > 0:
+                # Use pandas rolling for vectorized computation
+                values_series = pd.Series(values[start_idx:])
+                rolling_mean = values_series.rolling(window=segment_length).mean().values
+                rolling_std = values_series.rolling(window=segment_length).std().values
                 
-                # Check if segment has similar statistical properties
-                if abs(seg_mean - recent_mean) < data_range * 0.3 and abs(seg_std - recent_std) < hist_volatility * 2:
-                    continuation = values[i+segment_length:i+segment_length+k]
-                    if len(continuation) == k:
-                        similar_segments.append(continuation)
+                # Find matching segments using vectorized comparison
+                for i in range(segment_length - 1, len(rolling_mean)):
+                    if np.isnan(rolling_mean[i]) or np.isnan(rolling_std[i]):
+                        continue
+                    actual_idx = start_idx + i - segment_length + 1
+                    if actual_idx + segment_length + k > len(values):
+                        continue
+                    # Check if segment has similar statistical properties
+                    if abs(rolling_mean[i] - recent_mean) < data_range * 0.3 and abs(rolling_std[i] - recent_std) < hist_volatility * 2:
+                        continuation = values[actual_idx + segment_length:actual_idx + segment_length + k]
+                        if len(continuation) == k:
+                            similar_segments.append(continuation)
+                            if len(similar_segments) >= 20:  # Early exit once we have enough
+                                break
             
             # If we found similar patterns, use them
             if len(similar_segments) > 0:
