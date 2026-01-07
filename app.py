@@ -2810,6 +2810,21 @@ def detect_anomalies(series: pd.Series, contamination: float = 0.02):
     except Exception:
         return pd.Index([]), pd.Series([], dtype=float)
 
+def get_cached_anomalies(filename: str, column: str, series: pd.Series, contamination: float = 0.02):
+    """Get anomaly detection results from cache or compute and cache them.
+    
+    PERFORMANCE: Avoids recomputing IsolationForest for the same column.
+    """
+    cache_key = (filename, str(column), float(contamination))
+    cached = ANOMALY_CACHE.get(cache_key)
+    if cached is not None:
+        app.logger.debug("Anomaly cache HIT: %s/%s", filename[:8], column)
+        return cached
+    app.logger.debug("Anomaly cache MISS: %s/%s - computing", filename[:8], column)
+    an_idx, an_score = detect_anomalies(series, contamination)
+    ANOMALY_CACHE.set(cache_key, (an_idx, an_score))
+    return an_idx, an_score
+
 def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict, used_cols: list, is_timeseries: bool, forecast_horizon: int, contamination: float) -> str:
     """Assemble structured stats the AI can leverage for a deeper analysis."""
     try:
