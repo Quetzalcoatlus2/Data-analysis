@@ -26,6 +26,12 @@ except Exception:
 
 import matplotlib
 matplotlib.use('Agg')
+# PERFORMANCE: Optimize matplotlib for faster plot generation
+matplotlib.rcParams['savefig.dpi'] = 80  # Reduced from default 100 for faster saves
+matplotlib.rcParams['figure.dpi'] = 80
+matplotlib.rcParams['path.simplify'] = True
+matplotlib.rcParams['path.simplify_threshold'] = 0.5  # Simplify paths for speed
+matplotlib.rcParams['agg.path.chunksize'] = 10000  # Larger chunks for faster rendering
 import matplotlib.pyplot as plt
 
 
