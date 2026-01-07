@@ -1598,7 +1598,7 @@ def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
         s = normalize_timeseries(series)
         if s is None or len(s) < max(28, seasonal_period * 2):
             return None
-        res = STL(s.astype(float), period=int(seasonal_period), robust=True).fit()
+        res = STL(s.astype(float), period=int(seasonal_period), robust=True).fit()  # robust=True for quality
 
         fig, axes = plt.subplots(4, 1, figsize=(10, 6), sharex=True)
         axes[0].plot(s.index, s.values, color='tab:blue', lw=1.6); axes[0].set_ylabel("Observed"); axes[0].grid(True, alpha=0.3)
@@ -2378,7 +2378,7 @@ def _is_too_quiet(history: pd.Series, forecast: pd.Series, frac: float = 0.5):
 
 def _compute_forecast(series: pd.Series, steps: int):
     """Natural-looking forecast that preserves realistic patterns and variance.
-    - Uses simple trend continuation
+    - Uses historical pattern matching for realistic continuations
     - Adds realistic noise based on historical volatility
     - Respects historical min/max bounds
     Returns (fc_mean, conf_df).
@@ -2401,7 +2401,7 @@ def _compute_forecast(series: pd.Series, steps: int):
         data_range = data_max - data_min
         
         # Use recent window for calculations (adaptive size)
-        window_size = max(20, min(240, n // 2 if n >= 40 else n))
+        window_size = max(20, min(200, n // 2 if n >= 40 else n))
         recent_data = values[-window_size:]
         
         # Calculate simple trend from recent data
@@ -2424,25 +2424,14 @@ def _compute_forecast(series: pd.Series, steps: int):
             hist_volatility = float(np.std(values, ddof=1)) if len(values) > 1 else data_range * 0.1
         
         # Create unique seed based on series data for true uniqueness per column
-        # Use multiple aggregates to ensure different columns have different seeds
-        # Avoid np.prod to prevent overflow
         series_sum = float(np.sum(values))
         series_mean = float(np.mean(values))
         series_std = float(np.std(values))
-        # Use first, middle, and last values for uniqueness
         first_val = float(values[0])
         mid_val = float(values[len(values)//2])
         series_hash = hash((
-            series_sum,
-            series_mean,
-            series_std,
-            first_val,
-            mid_val,
-            last,
-            trend,
-            len(s),
-            data_min,
-            data_max
+            series_sum, series_mean, series_std, first_val, mid_val,
+            last, trend, len(s), data_min, data_max
         ))
         seed_val = int(abs(series_hash) % (2**31))
         np.random.seed(seed_val)
@@ -2451,7 +2440,6 @@ def _compute_forecast(series: pd.Series, steps: int):
         forecast_vals = np.zeros(k, dtype=float)
         
         # Find similar historical patterns to the recent end
-        # Use a moving window approach to extract realistic segments
         segment_length = min(k, max(5, len(recent_data) // 10))
         
         if len(values) > segment_length * 2:
@@ -2460,59 +2448,46 @@ def _compute_forecast(series: pd.Series, steps: int):
             recent_mean = np.mean(recent_pattern)
             recent_std = np.std(recent_pattern)
             
-            # Search for similar segments in historical data
-            # PERFORMANCE: Limit search to last 1000 points to avoid O(n²) on large datasets
+            # Search for similar segments - limited to 500 for performance
             similar_segments = []
             search_range = len(values) - segment_length - k
-            max_search = min(search_range, 1000)  # Cap at 1000 iterations
-            # Start from end (most recent) if we have to limit
+            max_search = min(search_range, 500)  # Performance limit
             start_idx = max(0, search_range - max_search)
+            
             for i in range(start_idx, search_range):
                 segment = values[i:i+segment_length]
                 seg_mean = np.mean(segment)
                 seg_std = np.std(segment)
                 
-                # Check if this segment has similar statistical properties
+                # Check if segment has similar statistical properties
                 if abs(seg_mean - recent_mean) < data_range * 0.3 and abs(seg_std - recent_std) < hist_volatility * 2:
-                    # Get what happened after this segment
                     continuation = values[i+segment_length:i+segment_length+k]
                     if len(continuation) == k:
                         similar_segments.append(continuation)
             
             # If we found similar patterns, use them
             if len(similar_segments) > 0:
-                # Randomly pick one similar segment's continuation
                 chosen_continuation = similar_segments[np.random.randint(0, len(similar_segments))]
-                
-                # Adjust the continuation to start from our last value
                 offset = last - chosen_continuation[0]
                 forecast_vals = chosen_continuation + offset
             else:
-                # Fallback: use change sampling (no trend addition)
+                # Fallback: use change sampling with vectorized cumsum
                 historical_changes = np.diff(recent_data)
-                current_value = last
-                for i in range(k):
-                    sampled_change = np.random.choice(historical_changes)
-                    current_value = current_value + sampled_change
-                    forecast_vals[i] = current_value
+                random_changes = np.random.choice(historical_changes, size=k, replace=True)
+                forecast_vals = last + np.cumsum(random_changes)
         else:
-            # Not enough data, use simple change sampling (no trend addition)
+            # Not enough data, use change sampling with vectorized cumsum
             historical_changes = np.diff(recent_data)
-            current_value = last
-            for i in range(k):
-                sampled_change = np.random.choice(historical_changes)
-                current_value = current_value + sampled_change
-                forecast_vals[i] = current_value
+            random_changes = np.random.choice(historical_changes, size=k, replace=True)
+            forecast_vals = last + np.cumsum(random_changes)
         
-        # Scale forecast to fit within bounds (no clipping)
+        # Scale forecast to fit within bounds
         fc_min = float(np.min(forecast_vals))
         fc_max = float(np.max(forecast_vals))
         fc_range = fc_max - fc_min
         
-        # Only scale if forecast exceeds bounds
         if fc_min < data_min or fc_max > data_max:
             if fc_range > 1e-9:
-                # Scale to fit within data_min and data_max
                 scaled_vals = data_min + (forecast_vals - fc_min) * (data_range / fc_range)
                 forecast_vals = scaled_vals
         
@@ -2525,6 +2500,7 @@ def _compute_forecast(series: pd.Series, steps: int):
         ci = pd.DataFrame({"lower": lower, "upper": upper}, index=idx)
         
         return fc, ci
+
 
     try:
         s = pd.to_numeric(series, errors='coerce').dropna()
@@ -2549,7 +2525,7 @@ def _compute_forecast(series: pd.Series, steps: int):
         except Exception:
             cache_key = None
         
-        max_in = int(app.config.get('FORECAST_MAX_INPUT_POINTS', 4000))
+        max_in = int(app.config.get('FORECAST_MAX_INPUT_POINTS', 2000))  # Balance speed and quality
         if max_in and len(s) > max_in:
             s = _thin_series(s, max_points=max_in)
         fc, ci = _natural_forecast(s, steps)
