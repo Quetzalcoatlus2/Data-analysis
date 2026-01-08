@@ -625,7 +625,18 @@
           <option value="{{ col }}">{{ col }}</option>
           {% endfor %}
         </select>
-        <span class="muted">Only the selected column is rendered to keep things fast.</span>
+        <label for="dataRangePick" style="margin-left:16px;">Data Range</label>
+        <select id="dataRangePick" title="Show only the latest X% of data points">
+          <option value="1.0" selected>All data (100%)</option>
+          <option value="0.5">Latest 50%</option>
+          <option value="0.3">Latest 30%</option>
+          <option value="0.15">Latest 15%</option>
+          <option value="0.1">Latest 10%</option>
+          <option value="0.05">Latest 5%</option>
+          <option value="0.03">Latest 3%</option>
+          <option value="0.01">Latest 1%</option>
+        </select>
+        <span class="muted">Filter to show recent data points only.</span>
       </div>
       <!-- Side-by-side layout for chart and distribution - fills available space -->
       <div
@@ -682,6 +693,13 @@
                 opt.value = item.column;
                 opt.textContent = item.column;
                 colPick.appendChild(opt);
+              }
+              // Bind column picker change event
+              colPick.addEventListener('change', onPickChange);
+              // Bind data range selector to re-render on change
+              const dataRangeSel = document.getElementById('dataRangePick');
+              if (dataRangeSel) {
+                dataRangeSel.addEventListener('change', onPickChange);
               }
               // Render the first column
               onPickChange();
@@ -752,8 +770,92 @@
         }
         return `rgba(90,90,160,${alpha || 1})`;
       }
+      // Helper function to get the selected data range percentage
+      function getDataRangePct() {
+        const el = document.getElementById('dataRangePick');
+        return el ? parseFloat(el.value) || 1.0 : 1.0;
+      }
+
+      // Helper to filter traces to only show the latest X% of data
+      // Also filters anomaly points to only show those within the visible range
+      function filterTracesToRange(traces, rangePct) {
+        if (rangePct >= 1.0) return traces; // No filtering needed
+
+        // Find the maximum length among all traces (looking for history trace)
+        let maxLen = 0;
+        let historyTrace = null;
+        traces.forEach(t => {
+          const xLen = (t.x || []).length;
+          const yLen = (t.y || []).length;
+          const len = Math.max(xLen, yLen);
+          if (len > maxLen) {
+            maxLen = len;
+            historyTrace = t;
+          }
+        });
+
+        if (maxLen === 0) return traces;
+
+        // Calculate the starting index for the latest X%
+        const keepCount = Math.max(1, Math.ceil(maxLen * rangePct));
+        const startIdx = Math.max(0, maxLen - keepCount);
+
+        // Determine the cutoff X value for filtering anomaly points
+        let cutoffX = null;
+        if (historyTrace && historyTrace.x && historyTrace.x.length > startIdx) {
+          cutoffX = historyTrace.x[startIdx];
+        }
+
+        return traces.map(t => {
+          const newTrace = { ...t };
+          const nm = (t.name || '').toLowerCase();
+          const traceLen = (t.x || t.y || []).length;
+
+          // Handle anomaly/outlier traces - filter points by X value
+          if (nm.includes('anomal') || nm.includes('outlier')) {
+            if (cutoffX !== null && t.x && t.y) {
+              // Filter anomaly points to only include those >= cutoffX
+              const filteredX = [];
+              const filteredY = [];
+              for (let i = 0; i < t.x.length; i++) {
+                if (t.x[i] >= cutoffX) {
+                  filteredX.push(t.x[i]);
+                  filteredY.push(t.y[i]);
+                }
+              }
+              newTrace.x = filteredX;
+              newTrace.y = filteredY;
+            }
+            return newTrace;
+          }
+
+          // For traces with data matching the max length, slice them
+          // For shorter traces (like forecast), keep them as-is if they're at the end
+          if (traceLen >= maxLen * 0.8) {
+            // This is likely a full-length trace (history), slice it
+            const traceStartIdx = Math.max(0, traceLen - keepCount);
+            if (t.x) newTrace.x = t.x.slice(traceStartIdx);
+            if (t.y) newTrace.y = t.y.slice(traceStartIdx);
+          } else {
+            // Shorter trace (forecast/CI) - keep as-is
+          }
+          return newTrace;
+        });
+      }
+
+      // Track legend visibility states per column to preserve across data range changes
+      let legendVisibilityState = {};
+
       function renderFromPayload(item) {
-        const traces = (item.traces || []).map(t => ({ ...t }));
+        const rangePct = getDataRangePct();
+        let traces = (item.traces || []).map(t => ({ ...t }));
+        traces = filterTracesToRange(traces, rangePct);
+
+        // Key for storing visibility state per column
+        const colKey = item.column || 'default';
+        // Note: visibility is restored AFTER styling to ensure trace names match
+
+
         const tvars = getThemeVars();
         const accent = tvars.accent || '#0ea5e9';
         const accentBand = tvars.accent2 || '#f97316';
@@ -761,11 +863,24 @@
         const ciLine = hexToRgba(accentBand, 0.95);
         const forecastIdx = [];
         const ciIdx = [];
+        const anomalyIdx = [];
+        const historyIdx = [];
         for (let i = 0; i < traces.length; i++) {
           const nm = (traces[i].name || '').toLowerCase();
           if (nm.includes('forecast')) forecastIdx.push(i);
-          if (/\bci\b|conf|interval/.test(nm)) ciIdx.push(i);
+          else if (/\bci\b|conf|interval/.test(nm)) ciIdx.push(i);
+          else if (nm.includes('anomal') || nm.includes('outlier')) anomalyIdx.push(i);
+          else if (nm.includes('histor') || nm.includes('actual') || !nm) historyIdx.push(i);
         }
+
+        // Set legend ranks: History (1), Anomaly (2), Forecast (3), CI (100)
+        historyIdx.forEach(idx => {
+          traces[idx].legendrank = 1;
+        });
+        anomalyIdx.forEach(idx => {
+          traces[idx].legendrank = 2;
+        });
+
         // Style forecast main line
         forecastIdx.forEach((idx, rel) => {
           const tr = traces[idx];
@@ -775,23 +890,79 @@
             tr.showlegend = true;
             tr.mode = tr.mode || 'lines';
             tr.line = Object.assign({ width: 2, color: accent }, tr.line || {});
-            tr.legendrank = 10; // ensure appears early
+            tr.legendrank = 3; // After History and Anomaly
           }
         });
-        // Style CI traces: first acts as controller in legend, others hidden but toggle together
-        ciIdx.forEach((idx, rel) => {
-          const tr = traces[idx];
-          tr.name = '95% CI';
-          tr.mode = 'lines';
-          tr.line = Object.assign({ width: 0.8, dash: 'dot', color: ciLine }, tr.line || {});
-          if (!tr.fill) tr.fill = 'tonexty';
-          if (!tr.fillcolor) tr.fillcolor = ciFill;
-          if (tr.marker) delete tr.marker;
-          if (!tr.hovertemplate) tr.hovertemplate = '%{y}<extra>95% CI</extra>';
-          tr.meta = (rel === 0) ? 'ci-controller' : 'ci-member';
-          tr.showlegend = rel === 0; // only first one appears in legend
-          if (rel === 0) tr.legendrank = 9999; // push to end
+
+        // Style CI traces: use fill between upper and lower bounds
+        // IMPORTANT: Reorder traces so CI lower comes immediately before CI upper
+        // This ensures tonexty fill works correctly regardless of History visibility
+        if (ciIdx.length >= 2) {
+          // We have upper and lower CI - create a filled area between them
+          const lowerCIIdx = ciIdx[0];
+          const upperCIIdx = ciIdx[1];
+          const lowerCI = traces[lowerCIIdx];
+          const upperCI = traces[upperCIIdx];
+
+          // Style lower CI line - thin line, mainly for the fill effect
+          lowerCI.name = '95% CI';
+          lowerCI.mode = 'lines';
+          lowerCI.line = { width: 0.5, color: hexToRgba(accentBand, 0.5) };
+          lowerCI.showlegend = true;
+          lowerCI.legendrank = 100; // Last in legend
+          lowerCI.meta = 'ci-controller';
+          lowerCI.hoverinfo = 'skip';
+
+          // Style upper CI with fill to lower CI
+          upperCI.name = '95% CI Upper';
+          upperCI.mode = 'lines';
+          upperCI.line = { width: 0.5, color: hexToRgba(accentBand, 0.5) };
+          upperCI.fill = 'tonexty';
+          upperCI.fillcolor = ciFill;
+          upperCI.showlegend = false;
+          upperCI.meta = 'ci-member';
+          upperCI.hoverinfo = 'skip';
+
+          // CRITICAL: Reorder traces array so lower CI is immediately followed by upper CI
+          // This ensures tonexty fill works correctly
+          const reorderedTraces = [];
+          const ciSet = new Set(ciIdx);
+          for (let i = 0; i < traces.length; i++) {
+            if (!ciSet.has(i)) {
+              reorderedTraces.push(traces[i]);
+            }
+          }
+          // Add CI traces at the end, in order (lower then upper)
+          reorderedTraces.push(lowerCI);
+          reorderedTraces.push(upperCI);
+          traces = reorderedTraces;
+        } else {
+          // Single CI trace - just show as line
+          ciIdx.forEach((idx, rel) => {
+            const tr = traces[idx];
+            tr.name = '95% CI';
+            tr.mode = 'lines';
+            tr.line = Object.assign({ width: 0.5, color: hexToRgba(accentBand, 0.5) }, tr.line || {});
+            if (tr.marker) delete tr.marker;
+            tr.meta = (rel === 0) ? 'ci-controller' : 'ci-member';
+            tr.showlegend = rel === 0;
+            if (rel === 0) tr.legendrank = 100;
+          });
+        }
+
+        // NOW restore visibility states after styling (so names match)
+        const savedState = legendVisibilityState[colKey] || {};
+        traces.forEach((tr, idx) => {
+          const traceKey = tr.name || `trace_${idx}`;
+          if (savedState[traceKey] !== undefined) {
+            tr.visible = savedState[traceKey];
+          }
+          // Also handle CI member visibility based on controller
+          if (tr.meta === 'ci-member' && savedState['95% CI'] !== undefined) {
+            tr.visible = savedState['95% CI'];
+          }
         });
+
         const layout = Object.assign({}, item.layout || {});
         applyThemeLayoutDefaults(layout);
         // Clear skeleton loaders before rendering
@@ -804,16 +975,28 @@
           layout.height = (chartContainer.clientHeight - 30) || 400;
         }
 
-        // Calculate Y-axis range from History and Forecast only (exclude CI bands)
+        // Calculate Y-axis range from History and Forecast only (exclude CI bands and anomalies)
         // This prevents CI bands from compressing the main data
         let yMin = Infinity, yMax = -Infinity;
+        let xMin = null, xMax = null;
         traces.forEach((tr, idx) => {
-          // Skip CI traces for Y-axis calculation
+          // Skip CI traces and anomaly traces for Y-axis calculation
           if (ciIdx.includes(idx)) return;
+          const nm = (tr.name || '').toLowerCase();
+          if (nm.includes('anomal') || nm.includes('outlier')) return;
+          // Only consider VISIBLE traces for autoscale
+          if (tr.visible === 'legendonly' || tr.visible === false) return;
+
           const yVals = (tr.y || []).filter(v => Number.isFinite(v));
           if (yVals.length > 0) {
             yMin = Math.min(yMin, ...yVals);
             yMax = Math.max(yMax, ...yVals);
+          }
+          // Track X range for auto-fit when filtering
+          const xVals = tr.x || [];
+          if (xVals.length > 0) {
+            if (xMin === null || xVals[0] < xMin) xMin = xVals[0];
+            if (xMax === null || xVals[xVals.length - 1] > xMax) xMax = xVals[xVals.length - 1];
           }
         });
         // Apply a 10% padding to the range for visual breathing room
@@ -821,6 +1004,13 @@
           const padding = (yMax - yMin) * 0.1;
           layout.yaxis = layout.yaxis || {};
           layout.yaxis.range = [yMin - padding, yMax + padding];
+        }
+
+        // Always fit X-axis to the visible data range
+        if (xMin !== null && xMax !== null) {
+          layout.xaxis = layout.xaxis || {};
+          layout.xaxis.range = [xMin, xMax];
+          layout.xaxis.autorange = false;
         }
 
         // Generate descriptive filename for downloads
@@ -836,34 +1026,91 @@
           }
         });
 
-        // Attach legend toggle handler once to control all CI traces together
+        // Attach legend toggle handler to save visibility and autoscale
         const chartEl = document.getElementById('chart');
-        if (!chartEl._ciLegendBound) {
-          chartEl._ciLegendBound = true;
-          chartEl.on('plotly_legendclick', function (evt) {
-            const d = chartEl.data[evt.curveNumber];
-            if (!d || d.meta !== 'ci-controller') return; // let default for others
-            const currentlyVisible = d.visible === undefined || d.visible === true;
-            const newVis = currentlyVisible ? 'legendonly' : true;
-            // apply to all CI traces
-            chartEl.data.forEach((t, i) => {
-              if (t.meta === 'ci-controller' || t.meta === 'ci-member') {
-                Plotly.restyle(chartEl, { visible: newVis }, [i]);
-              }
-            });
-            return false; // prevent default toggling (we handled it)
-          });
+        // Note: colKey is already defined at the start of this function
+
+        // Remove old handlers and attach new ones
+        if (chartEl._bindingsSet) {
+          chartEl.removeAllListeners('plotly_legendclick');
         }
+        chartEl._bindingsSet = true;
+
+        chartEl.on('plotly_legendclick', function (evt) {
+          const d = chartEl.data[evt.curveNumber];
+          const newVis = (d.visible === undefined || d.visible === true) ? 'legendonly' : true;
+          const nm = (d.name || '').toLowerCase();
+          const isCI = d.meta === 'ci-controller' || d.meta === 'ci-member';
+          const isAnomaly = nm.includes('anomal') || nm.includes('outlier');
+
+          // Save current range for CI/Anomaly toggles
+          const savedRange = (isCI || isAnomaly) ? {
+            x: chartEl.layout.xaxis.range ? [...chartEl.layout.xaxis.range] : null,
+            y: chartEl.layout.yaxis.range ? [...chartEl.layout.yaxis.range] : null
+          } : null;
+
+          // Toggle visibility (CI traces toggle as group)
+          if (isCI) {
+            const ciIndices = chartEl.data.map((t, i) =>
+              (t.meta === 'ci-controller' || t.meta === 'ci-member') ? i : -1
+            ).filter(i => i >= 0);
+            Plotly.restyle(chartEl, { visible: newVis }, ciIndices);
+          } else {
+            Plotly.restyle(chartEl, { visible: newVis }, [evt.curveNumber]);
+          }
+
+          setTimeout(() => {
+            // Save visibility state
+            if (!legendVisibilityState[colKey]) legendVisibilityState[colKey] = {};
+            chartEl.data.forEach((t, i) => legendVisibilityState[colKey][t.name || `trace_${i}`] = t.visible);
+
+            // Check visible state of main traces
+            const vis = name => chartEl.data.some(t =>
+              (t.name || '').toLowerCase().includes(name) && t.visible !== 'legendonly' && t.visible !== false
+            );
+            const historyVis = vis('histor') || vis('actual');
+            const anomalyVis = vis('anomal') || vis('outlier');
+            const forecastOnlyMode = !historyVis && !anomalyVis;
+
+            // CI/Anomaly toggle in normal mode: restore range; otherwise autoscale
+            if ((isCI || isAnomaly) && savedRange?.x && savedRange?.y && !forecastOnlyMode) {
+              Plotly.relayout(chartEl, { 'xaxis.range': savedRange.x, 'yaxis.range': savedRange.y, 'xaxis.autorange': false, 'yaxis.autorange': false });
+            } else {
+              // Custom autoscale ignoring CI when History/Anomaly visible
+              let yMin = Infinity, yMax = -Infinity;
+              chartEl.data.forEach(t => {
+                if ((historyVis || anomalyVis) && (t.meta === 'ci-controller' || t.meta === 'ci-member')) return;
+                if (t.visible === 'legendonly' || t.visible === false) return;
+                (t.y || []).forEach(v => { if (Number.isFinite(v)) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); } });
+              });
+              const pad = (yMax - yMin) * 0.1;
+              if (Number.isFinite(yMin) && yMax > yMin) {
+                Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.range': [yMin - pad, yMax + pad], 'yaxis.autorange': false });
+              } else {
+                Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true });
+              }
+            }
+          }, 50);
+          return false;
+        });
 
         const dist = item.distribution || null;
         if (dist && Array.isArray(dist.values)) {
           const t = getThemeVars();
           const distEl = document.getElementById('dist');
           const distHeight = distEl ? (distEl.clientHeight || 400) : 400;
+
+          // Filter distribution values based on data range
+          let distValues = dist.values;
+          if (rangePct < 1.0 && distValues.length > 0) {
+            const keepCount = Math.max(1, Math.ceil(distValues.length * rangePct));
+            distValues = distValues.slice(-keepCount);
+          }
+
           Plotly.newPlot('dist', [{
             type: 'histogram',
             name: dist.name,
-            x: dist.values,
+            x: distValues,
             marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
             texttemplate: '%{y}',
             textposition: 'outside',
@@ -904,12 +1151,23 @@
 
           const t = getThemeVars();
           const colName = (column || 'data').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+          // Apply data range filter
+          const rangePct = getDataRangePct();
+          let xData = found.x;
+          let yData = found.y;
+          if (rangePct < 1.0 && xData && xData.length > 0) {
+            const keepCount = Math.max(1, Math.ceil(xData.length * rangePct));
+            xData = xData.slice(-keepCount);
+            yData = yData.slice(-keepCount);
+          }
+
           const hist = {
             type: 'scatter',
             mode: 'lines',
             name: 'History',
-            x: found.x,
-            y: found.y,
+            x: xData,
+            y: yData,
             line: { color: 'rgb(31,119,180)', width: 2 }
           };
           const layout = {
@@ -924,7 +1182,8 @@
             toImageButtonOptions: { format: 'png', filename: 'timeseries_' + colName, scale: 2 }
           });
 
-          const vals = (found.y || []).filter(v => Number.isFinite(v));
+          // Filter vals to match data range
+          let vals = (yData || []).filter(v => Number.isFinite(v));
           if (vals.length) {
             Plotly.newPlot('dist', [{
               type: 'histogram', name: column, x: vals, marker: { color: t.accent }
@@ -983,6 +1242,11 @@
         } else if (sel && sel.options.length) {
           onPickChange();
           sel.addEventListener('change', onPickChange);
+          // Bind data range selector to re-render on change
+          const dataRangeSel = document.getElementById('dataRangePick');
+          if (dataRangeSel) {
+            dataRangeSel.addEventListener('change', onPickChange);
+          }
         } else {
           document.getElementById('chart').innerHTML = '<div class="muted">Loading chart data...</div>';
           loadInteractiveDataAsync();
