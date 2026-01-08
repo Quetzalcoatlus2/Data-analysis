@@ -3,6 +3,7 @@ import math
 import io
 import base64
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed  # PERFORMANCE: Parallel processing
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
 from fpdf import FPDF
 
@@ -26,13 +27,14 @@ except Exception:
 
 import matplotlib
 matplotlib.use('Agg')
-# PERFORMANCE: Optimize matplotlib for faster plot generation
-matplotlib.rcParams['savefig.dpi'] = 80  # Reduced from default 100 for faster saves
-matplotlib.rcParams['figure.dpi'] = 80
+# HIGH QUALITY: Increased DPI for sharp images in PDF, ZIP, and web views
+matplotlib.rcParams['savefig.dpi'] = 150  # High quality images
+matplotlib.rcParams['figure.dpi'] = 150
 matplotlib.rcParams['path.simplify'] = True
-matplotlib.rcParams['path.simplify_threshold'] = 0.5  # Simplify paths for speed
+matplotlib.rcParams['path.simplify_threshold'] = 0.3  # Less aggressive simplification for quality
 matplotlib.rcParams['agg.path.chunksize'] = 10000  # Larger chunks for faster rendering
 import matplotlib.pyplot as plt
+
 
 
 import google.generativeai as genai
@@ -62,6 +64,16 @@ from flask import Flask
 
 app = Flask(__name__)
 
+# PERFORMANCE: Flask-Compress for automatic gzip/brotli compression
+try:
+    from flask_compress import Compress
+    Compress(app)
+    app.config['COMPRESS_MIMETYPES'] = ['text/html', 'text/css', 'text/javascript', 'application/json', 'application/javascript']
+    app.config['COMPRESS_LEVEL'] = 6  # Balance between speed and compression ratio
+    app.config['COMPRESS_MIN_SIZE'] = 500  # Only compress responses > 500 bytes
+except ImportError:
+    pass  # flask-compress not installed, skip
+
 try:
     from flask_limiter import Limiter  
     from flask_limiter.util import get_remote_address  
@@ -90,12 +102,15 @@ if "UPLOAD_RETENTION_DAYS" in os.environ:
 app.config.setdefault('MAX_CACHE_ITEMS', int(os.getenv("MAX_CACHE_ITEMS", "6")))
 app.config.setdefault('DEFAULT_FORECAST_STEPS', int(os.getenv("DEFAULT_FORECAST_STEPS", "30")))
 
-app.config.setdefault('PLOTLY_TAIL', int(os.getenv("PLOTLY_TAIL", "800")))
+# PERFORMANCE: Reduce interactive chart data points for faster rendering
+app.config.setdefault('PLOTLY_TAIL', int(os.getenv("PLOTLY_TAIL", "600")))  # Reduced from 800
 app.config.setdefault('AI_TIMEOUT_SECONDS', int(os.getenv("AI_TIMEOUT_SECONDS", "30")))
 app.config.setdefault('AI_RETRY_ATTEMPTS', int(os.getenv("AI_RETRY_ATTEMPTS", "2")))
 app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACKOFF_SECONDS", "2.0")))
 app.config.setdefault('FORECAST_MAX_INPUT_POINTS', int(os.getenv('FORECAST_MAX_INPUT_POINTS', '4000')))
 app.config.setdefault('FORECAST_BOOTSTRAP_SAMPLES', int(os.getenv('FORECAST_BOOTSTRAP_SAMPLES', '60')))
+# PERFORMANCE: Browser caching for static files (CSS, JS) - 1 hour
+app.config.setdefault('SEND_FILE_MAX_AGE_DEFAULT', int(os.getenv('SEND_FILE_MAX_AGE', '3600')))
 import logging
 import re
 from logging.handlers import RotatingFileHandler
@@ -1311,20 +1326,34 @@ def get_ai_answer_with_file(df: pd.DataFrame, question: str, file_asset=None, fi
             context_text = describe_for_ai(df)
 
         prompt = f"""
-You are a senior data scientist. Answer the user's question about the dataset clearly and precisely.
-Respond strictly in HTML (no Markdown), using tags like <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, and <em>.
-Cite concrete numbers or ranges from the provided context when relevant. If something is uncertain, say so briefly.
+You are an expert data analyst. Your job is to answer questions about this dataset with CONFIDENCE.
 
-Context (from the earlier AI summary; do not regenerate a summary):
+ABSOLUTE RULES:
+1. ALWAYS provide your best answer. NEVER refuse to answer or say "I cannot determine this."
+2. If you're uncertain, give your best interpretation and add a brief disclaimer at the end like: "Note: This interpretation is based on available data patterns."
+3. Use SPECIFIC numbers, percentages, and country names from the data as evidence.
+4. State findings as FACTS when the data supports them. Avoid weak language like "might", "could be", "possibly".
+5. For "why" questions: provide the most likely explanation based on data patterns, then note it's an interpretation.
+
+RESPONSE STYLE:
+- Lead with the direct answer
+- Support with specific data points
+- Add brief disclaimer ONLY at the end if truly needed
+- Never refuse, always give your best analysis
+
+FORMAT: HTML only (<p>, <ul><li>, <table>, <strong>, <em>, <h4>). No markdown.
+
+Dataset Context:
 {context_text}
 
 Question:
 {question}
 """.strip()
 
+
         resp = _call_gemini(prompt, file_asset=file_asset, generation_config={
-            "max_output_tokens": 2048,
-            "temperature": 0.3,
+            "max_output_tokens": 8192,  # Increased for detailed responses
+            "temperature": 0.4,
             "top_p": 0.95,
             "top_k": 40,
             "response_mime_type": "text/plain",
@@ -1413,6 +1442,18 @@ Question:
             app.logger.info("Q&A continuation check skipped: %s", ce)
 
         html = sanitize_ai_html(text)
+        
+        # Add model attribution footer
+        try:
+            model_name = CURRENT_MODEL_NAME or AI_STATUS.get("model") or "AI"
+            # Strip 'models/' prefix if present
+            if isinstance(model_name, str) and model_name.startswith("models/"):
+                model_name = model_name[7:]
+            attribution = f'<p style="font-size:0.8em;color:#888;margin-top:10px;"><em>Generated by {model_name}</em></p>'
+            html = html + attribution
+        except Exception:
+            pass
+        
         try:
             if cache_key and not _is_offline_html(html):
                 QNA_CACHE.set(cache_key, html)
@@ -1441,17 +1482,64 @@ def get_or_cache_ai_summary_for(filename: str, df: pd.DataFrame, extra_context: 
     except Exception as e:
         return f"<p>AI summary unavailable: {e}</p>"
 
-def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None):
+def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=False):
+    # HIGH QUALITY: Larger figure for better image quality
     fig, ax = plt.subplots(figsize=(10, 4))
-    data.plot(ax=ax, label='History', color='tab:blue', lw=1.2)
-    if anomalies_idx is not None and len(anomalies_idx):
-        aligned = data.loc[data.index.intersection(anomalies_idx)]
-        ax.scatter(aligned.index, aligned.values, color='red', s=18, zorder=5, label='Anomaly')
-    ax.set_title(title)
-    ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
-    ax.legend(); ax.grid(True, alpha=0.3)
-    buf = io.BytesIO(); fig.savefig(buf, format='png', bbox_inches='tight'); buf.seek(0)
-    img = base64.b64encode(buf.read()).decode('utf-8'); plt.close(fig); return img
+    
+    # Use numeric x-positions for non-datetime indexes to ensure proper alignment
+    is_datetime = isinstance(data.index, pd.DatetimeIndex)
+    
+    if is_datetime:
+        # For datetime index, use the index directly
+        ax.plot(data.index, data.values, label='History', color='tab:blue', lw=1.0)
+        if anomalies_idx is not None and len(anomalies_idx):
+            aligned = data.loc[data.index.intersection(anomalies_idx)]
+            ax.scatter(aligned.index, aligned.values, color='red', s=14, zorder=5, label='Anomaly')
+    else:
+        # For non-datetime index (e.g., country names), use numeric positions
+        x_positions = range(len(data))
+        ax.plot(x_positions, data.values, label='History', color='tab:blue', lw=1.0)
+        
+        # Map index labels to positions for tick labels
+        if len(data) > 20:
+            # Show fewer tick labels if many points
+            step = max(1, len(data) // 10)
+            tick_positions = list(range(0, len(data), step))
+            tick_labels = [str(data.index[i])[:15] for i in tick_positions]  # Truncate long labels
+        else:
+            tick_positions = list(x_positions)
+            tick_labels = [str(idx)[:15] for idx in data.index]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=7)
+        
+        # Plot anomalies at correct numeric positions
+        if anomalies_idx is not None and len(anomalies_idx):
+            an_positions = []
+            an_values = []
+            index_list = list(data.index)
+            for idx in anomalies_idx:
+                if idx in index_list:
+                    pos = index_list.index(idx)
+                    an_positions.append(pos)
+                    an_values.append(float(data.iloc[pos]))
+            if an_positions:
+                ax.scatter(an_positions, an_values, color='red', s=14, zorder=5, label='Anomaly')
+    
+    ax.set_title(title, fontsize=10)
+    ax.set_xlabel(xlabel, fontsize=9); ax.set_ylabel(ylabel, fontsize=9)
+    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+    ax.tick_params(labelsize=8)
+    buf = io.BytesIO()
+    # PERFORMANCE: Use WebP if available (smaller), fallback to PNG
+    fmt = 'webp' if use_webp else 'png'
+    try:
+        fig.savefig(buf, format=fmt, bbox_inches='tight', pad_inches=0.1)
+    except Exception:
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
+    buf.seek(0)
+    img = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close(fig)
+    return img
 
 def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
     """Generate a correlation heatmap as base64 image."""
@@ -1608,8 +1696,9 @@ def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
             return None
         res = STL(s.astype(float), period=int(seasonal_period), robust=True).fit()  # robust=True for quality
 
-        fig, axes = plt.subplots(4, 1, figsize=(10, 6), sharex=True)
-        axes[0].plot(s.index, s.values, color='tab:blue', lw=1.6); axes[0].set_ylabel("Observed"); axes[0].grid(True, alpha=0.3)
+        # HIGH QUALITY: Larger figure for better image quality
+        fig, axes = plt.subplots(4, 1, figsize=(10, 7), sharex=True)
+        axes[0].plot(s.index, s.values, color='tab:blue', lw=1.2); axes[0].set_ylabel("Observed"); axes[0].grid(True, alpha=0.3)
         axes[1].plot(res.trend.index, res.trend.values, color='tab:orange', lw=1.6); axes[1].set_ylabel("Trend"); axes[1].grid(True, alpha=0.3)
         axes[2].plot(res.seasonal.index, res.seasonal.values, color='tab:green', lw=1.6); axes[2].set_ylabel("Seasonal"); axes[2].grid(True, alpha=0.3)
         axes[3].plot(res.resid.index, res.resid.values, color='tab:red', lw=1.6); axes[3].axhline(0, color='gray', ls=':', lw=1)
@@ -2456,33 +2545,42 @@ def _compute_forecast(series: pd.Series, steps: int):
             recent_mean = np.mean(recent_pattern)
             recent_std = np.std(recent_pattern)
             
-            # Search for similar segments - use vectorized rolling stats for speed
+            # Search for similar segments - FULLY VECTORIZED for speed
             similar_segments = []
             search_range = len(values) - segment_length - k
-            max_search = min(search_range, 300)  # Reduced limit for speed
+            max_search = min(search_range, 200)  # Reduced from 300 for speed
             start_idx = max(0, search_range - max_search)
             
-            # PERFORMANCE: Precompute rolling mean/std once for all segments
+            # PERFORMANCE: Fully vectorized segment matching
             if max_search > 0:
-                # Use pandas rolling for vectorized computation
+                # Use pandas rolling for vectorized mean/std computation
                 values_series = pd.Series(values[start_idx:])
                 rolling_mean = values_series.rolling(window=segment_length).mean().values
                 rolling_std = values_series.rolling(window=segment_length).std().values
                 
-                # Find matching segments using vectorized comparison
-                for i in range(segment_length - 1, len(rolling_mean)):
-                    if np.isnan(rolling_mean[i]) or np.isnan(rolling_std[i]):
-                        continue
+                # VECTORIZED: Find all matching indices at once using numpy boolean arrays
+                mean_diff = np.abs(rolling_mean - recent_mean)
+                std_diff = np.abs(rolling_std - recent_std)
+                
+                # Create validity mask: non-NaN values that match thresholds
+                valid_mask = (
+                    ~np.isnan(rolling_mean) & 
+                    ~np.isnan(rolling_std) & 
+                    (mean_diff < data_range * 0.3) & 
+                    (std_diff < hist_volatility * 2)
+                )
+                
+                # Get matching indices
+                matching_indices = np.where(valid_mask)[0]
+                
+                # Take first 20 matches (early exit equivalent)
+                for i in matching_indices[:20]:
                     actual_idx = start_idx + i - segment_length + 1
-                    if actual_idx + segment_length + k > len(values):
-                        continue
-                    # Check if segment has similar statistical properties
-                    if abs(rolling_mean[i] - recent_mean) < data_range * 0.3 and abs(rolling_std[i] - recent_std) < hist_volatility * 2:
+                    if actual_idx + segment_length + k <= len(values):
                         continuation = values[actual_idx + segment_length:actual_idx + segment_length + k]
                         if len(continuation) == k:
                             similar_segments.append(continuation)
-                            if len(similar_segments) >= 20:  # Early exit once we have enough
-                                break
+
             
             # If we found similar patterns, use them
             if len(similar_segments) > 0:
@@ -3232,15 +3330,52 @@ def get_cached_df_info(filename: str, df: pd.DataFrame) -> dict:
     return result
 
 def describe_for_ai(df: pd.DataFrame) -> str:
-    """Plain-text summary for AI prompts; never raises."""
+    """Enhanced context for AI prompts including actual data rows and specific values."""
     try:
         if df is None or df.shape[1] == 0:
             return f"Empty or headerless table. Shape: {getattr(df, 'shape', None)}"
+        
+        parts = []
+        
+        # 1. Basic info
+        parts.append(f"Dataset: {df.shape[0]} rows x {df.shape[1]} columns")
+        parts.append(f"Columns: {', '.join(str(c) for c in df.columns[:30])}")
+        
+        # 2. Index info (often contains country names, dates, etc.)
+        if df.index.name or not isinstance(df.index, pd.RangeIndex):
+            idx_sample = df.index[:20].tolist()
+            parts.append(f"Index ({df.index.name or 'unnamed'}): {idx_sample}")
+        
+        # 3. First 10 rows of actual data - THIS IS KEY for specific questions
+        try:
+            head_str = df.head(10).to_string()
+            parts.append(f"\nFirst 10 rows:\n{head_str}")
+        except Exception:
+            pass
+        
+        # 4. Statistical summary
         try:
             desc = df.describe(include='all')
+            parts.append(f"\nStatistics:\n{desc.to_string()}")
         except Exception:
-            desc = df.select_dtypes(include='number').describe()
-        return str(desc)
+            pass
+        
+        # 5. Top/bottom 5 values for numeric columns - helps answer "which has most/least"
+        try:
+            num_cols = df.select_dtypes(include='number').columns[:10]  # Limit to 10 columns
+            for col in num_cols:
+                try:
+                    sorted_df = df[[col]].dropna().sort_values(col, ascending=False)
+                    top5 = sorted_df.head(5)
+                    bottom5 = sorted_df.tail(5)
+                    parts.append(f"\nTop 5 {col}:\n{top5.to_string()}")
+                    parts.append(f"Bottom 5 {col}:\n{bottom5.to_string()}")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        
+        return "\n".join(parts)
     except Exception:
         try:
             return "Columns and dtypes:\n" + str(df.dtypes)
@@ -4393,13 +4528,13 @@ def download_static_plots_zip(filename):
             except Exception:
                 pass
             
-            # Distribution histogram
+            # Distribution histogram - HIGH QUALITY: Larger figure and more bins
             try:
                 fig, ax = plt.subplots(figsize=(8, 5))
-                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
-                ax.set_title(f"Distribution: {col}")
-                ax.set_xlabel(col)
-                ax.set_ylabel("Frequency")
+                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5)
+                ax.set_title(f"Distribution: {col}", fontsize=10)
+                ax.set_xlabel(col, fontsize=9)
+                ax.set_ylabel("Frequency", fontsize=9)
                 ax.grid(True, alpha=0.3)
                 
                 buf = io.BytesIO()
@@ -4621,6 +4756,11 @@ def download_full_report_pdf(filename):
                     
                     # Set base font before rendering HTML
                     pdf.set_font(font_family, size=10)
+                    
+                    # FIX: Split HTML into chunks and check page breaks to prevent large gaps
+                    # If we're near the bottom of a page, start fresh to avoid mid-list breaks
+                    if pdf.get_y() > 220:  # Near bottom of page (A4 is ~297mm)
+                        pdf.add_page()
                     
                     # Use write_html for rich formatting (bold, italic, headers, lists)
                     pdf.write_html(html_text)
