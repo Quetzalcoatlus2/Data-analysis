@@ -2071,8 +2071,32 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
             if has_forecast:
                 all_y += list(fc_y)
             y_min, y_max = min(all_y), max(all_y)
-            pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
-            ax.set_ylim(y_min - pad, y_max + pad)
+            if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
+                pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
+                ax.set_ylim(y_min - pad, y_max + pad)
+        except Exception:
+            pass
+            
+        # Set x-ticks to match the original index labels (history + forecast)
+        try:
+            # Combine history and forecast indices
+            full_index = list(history_tail_series.index)
+            if has_forecast:
+                full_index.extend(forecast_series.index)
+            
+            total_points = len(full_index)
+            
+            # Decide on tick spacing
+            if total_points > 20:
+                step = max(1, total_points // 10)
+                tick_positions = list(range(0, total_points, step))
+                tick_labels = [str(full_index[i])[:15] for i in tick_positions]
+            else:
+                tick_positions = list(range(total_points))
+                tick_labels = [str(idx)[:15] for idx in full_index]
+                
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=8)
         except Exception:
             pass
         
@@ -2146,28 +2170,18 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.legend()
-    ax.grid(True)
+    ax.grid(True, alpha=0.3)
     
-    # Improve X-axis readability - handle both numeric and categorical indices
+    # Improve X-axis readability
     try:
-        n_points = len(history_tail_series)
-        
-        # For large datasets, manually hide most tick labels to prevent overlap
-        if n_points > 20:
-            # Show only a subset of labels
-            n_labels_to_show = 8  # Max labels to display
-            step = max(1, n_points // n_labels_to_show)
-            
-            # Get all tick labels and hide most of them
-            xticks = ax.get_xticks()
-            xticklabels = ax.get_xticklabels()
-            
-            for i, label in enumerate(xticklabels):
-                if i % step != 0:
-                    label.set_visible(False)
-        
         # Always rotate visible labels for better readability
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
+        # Use small font to fit more labels
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+        
+        # Apply tight layout to prevent cutoff
+        fig.tight_layout()
+    except Exception:
+        pass
         
         # Apply tight layout to prevent cutoff
         fig.tight_layout()
@@ -4116,6 +4130,44 @@ def analyze_file(filename):
             'contamination': user_contam
         }
     })
+    
+    # Generate category charts for categories view
+    if active_view == 'categories':
+        category_charts = {}
+        for col in df.columns:
+            try:
+                # Check if column is non-numeric (categorical)
+                s_numeric = pd.to_numeric(df[col], errors='coerce')
+                if s_numeric.notna().sum() >= 3:
+                    continue  # Skip - numeric column
+                
+                # Process as categorical
+                s_cat = df[col].astype(str).dropna()
+                if len(s_cat) < 3:
+                    continue
+                
+                # Generate Top 15 Categories bar chart
+                top_counts = s_cat.value_counts().head(15)
+                if len(top_counts) < 2:
+                    continue
+                    
+                fig, ax = plt.subplots(figsize=(10, 5))
+                top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
+                ax.set_title(f"Top 15 Categories: {col}", fontsize=12)
+                ax.set_xlabel(col, fontsize=10)
+                ax.set_ylabel("Count", fontsize=10)
+                ax.grid(True, alpha=0.3, axis='y')
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=9)
+                
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                plt.close(fig)
+                buf.seek(0)
+                category_charts[col] = base64.b64encode(buf.read()).decode('utf-8')
+            except Exception:
+                pass
+        analysis['category_charts'] = category_charts
+
 
     
     if (
@@ -4576,6 +4628,40 @@ def download_static_plots_zip(filename):
                     except Exception:
                         pass
 
+        # Generate Top 15 Categories bar charts for non-numeric columns
+        for col in df.columns:
+            try:
+                # Check if column is non-numeric (categorical)
+                s_numeric = pd.to_numeric(df[col], errors='coerce')
+                if s_numeric.notna().sum() >= 3:
+                    continue  # Skip - already processed as numeric
+                
+                # Process as categorical
+                s_cat = df[col].astype(str).dropna()
+                if len(s_cat) < 3:
+                    continue
+                
+                # Generate Top 15 Categories bar chart
+                top_counts = s_cat.value_counts().head(15)
+                if len(top_counts) < 2:
+                    continue
+                    
+                fig, ax = plt.subplots(figsize=(10, 5))
+                top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
+                ax.set_title(f"Top 15 Categories: {col}", fontsize=12)
+                ax.set_xlabel(col, fontsize=10)
+                ax.set_ylabel("Count", fontsize=10)
+                ax.grid(True, alpha=0.3, axis='y')
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=9)
+                
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                plt.close(fig)
+                buf.seek(0)
+                zf.writestr(f"{secure_filename(str(col))}_top15_categories.png", buf.read())
+            except Exception:
+                pass
+
     bio.seek(0)
     display = request.args.get('display') or filename
     base = os.path.splitext(display)[0]
@@ -4757,13 +4843,29 @@ def download_full_report_pdf(filename):
                     # Set base font before rendering HTML
                     pdf.set_font(font_family, size=10)
                     
-                    # FIX: Split HTML into chunks and check page breaks to prevent large gaps
-                    # If we're near the bottom of a page, start fresh to avoid mid-list breaks
-                    if pdf.get_y() > 220:  # Near bottom of page (A4 is ~297mm)
-                        pdf.add_page()
+                    # FIX: Render HTML in chunks (by paragraph/list) to prevent mid-content page breaks
+                    # Split on block-level elements to control page breaks better
+                    import re as regex_module
                     
-                    # Use write_html for rich formatting (bold, italic, headers, lists)
-                    pdf.write_html(html_text)
+                    # Split HTML by major block elements while keeping delimiters
+                    # This helps prevent large gaps when page breaks occur mid-list
+                    chunks = regex_module.split(r'(?=<(?:p|ul|ol|h[1-6]|table)[^>]*>)', html_text, flags=regex_module.I)
+                    chunks = [c.strip() for c in chunks if c.strip()]
+                    
+                    for chunk in chunks:
+                        # Check if we need a new page before rendering this chunk
+                        # If near bottom, start fresh to keep content together
+                        if pdf.get_y() > 240:  # 240mm leaves ~57mm for content (roughly 8-10 lines)
+                            pdf.add_page()
+                        
+                        # Render this chunk
+                        try:
+                            pdf.write_html(chunk)
+                        except Exception:
+                            # Fallback to plain text for this chunk
+                            plain = regex_module.sub(r'<[^>]+>', ' ', chunk)
+                            pdf.multi_cell(0, 5, plain.strip())
+                    
                     pdf.ln(5)
                     pdf.set_font(font_family, size=10)
                     return

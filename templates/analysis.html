@@ -358,6 +358,9 @@
           href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Forecast</a>
         <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}"
           href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct) }}">Correlation</a>
+        <a title="View top categories for non-numeric columns"
+          class="pill {{ 'active' if active_view == 'categories' else '' }}"
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='categories', forecast_pct=pct) }}">Categories</a>
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
       <div class="actions">
@@ -869,8 +872,15 @@
             title: { text: dist.name + ' Distribution', font: { size: 14 }, x: 0.02 },
             height: distHeight,
             paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-            margin: { l: 35, r: 10, t: 40, b: 50 },
+            margin: { l: 35, r: 10, t: 40, b: 80 },
             bargap: 0.1,
+            xaxis: {
+              automargin: true,
+              showticklabels: true,
+              tickangle: -45,
+              tickfont: { size: 10 }
+            },
+            yaxis: { automargin: true },
             hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
           }, {
             responsive: true,
@@ -1112,6 +1122,26 @@
       </script>
       {% else %}
       <div class="muted">Not enough numeric columns to compute correlation.</div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if active_view == 'categories' %}
+    <section class="panel" id="categories-section">
+      <h2>Top 15 Categories</h2>
+      <p class="muted">Bar charts showing the most frequent values for non-numeric (categorical) columns.</p>
+
+      {% if analysis.category_charts %}
+      <div class="grid grid-2">
+        {% for col, img_b64 in analysis.category_charts.items() %}
+        <div class="panel">
+          <h3 style="margin-top:0;">{{ col }}</h3>
+          <img class="plot" src="data:image/png;base64,{{ img_b64 }}" alt="Top 15 Categories: {{ col }}" loading="lazy">
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="muted">No categorical columns found in this dataset, or all columns are numeric.</div>
       {% endif %}
     </section>
     {% endif %}
