@@ -1529,6 +1529,54 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
     ax.set_xlabel(xlabel, fontsize=9); ax.set_ylabel(ylabel, fontsize=9)
     ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=8)
+    
+    # Add visual statistics markers on the chart
+    try:
+        stats_min = float(data.min())
+        stats_max = float(data.max())
+        stats_mean = float(data.mean())
+        stats_median = float(data.median())
+        stats_std = float(data.std())
+        
+        # Draw horizontal lines for Avg and Median
+        ax.axhline(y=stats_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
+        ax.axhline(y=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.7, label=f'Median: {stats_median:.2f}')
+        
+        # Add value tags - Avg ABOVE line (+offset), Median BELOW line (-offset) to avoid overlap
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        y_offset = (ylim[1] - ylim[0]) * 0.02  # 2% offset
+        ax.text(xlim[1], stats_mean + y_offset, f' Avg: {stats_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+        ax.text(xlim[1], stats_median - y_offset, f' Med: {stats_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+        
+        # Mark the actual Min and Max points on the data with value annotations
+        if is_datetime:
+            min_idx = data.idxmin()
+            max_idx = data.idxmax()
+            ax.scatter([min_idx], [stats_min], color='#e74c3c', s=80, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
+            ax.scatter([max_idx], [stats_max], color='#27ae60', s=80, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+            # Tags to the RIGHT of symbols
+            ax.annotate(f'{stats_min:.2f}', (min_idx, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#e74c3c', fontweight='bold')
+            ax.annotate(f'{stats_max:.2f}', (max_idx, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
+        else:
+            min_pos = data.values.argmin()
+            max_pos = data.values.argmax()
+            ax.scatter([min_pos], [stats_min], color='#e74c3c', s=80, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
+            ax.scatter([max_pos], [stats_max], color='#27ae60', s=80, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+            # Tags to the RIGHT of symbols
+            ax.annotate(f'{stats_min:.2f}', (min_pos, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#e74c3c', fontweight='bold')
+            ax.annotate(f'{stats_max:.2f}', (max_pos, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
+        
+        # Legend on single line - at the lowest position below x-axis label
+        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        
+        # Add text box with Std in TOP LEFT corner
+        stats_text = f"Std: {stats_std:.2f}"
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=8, verticalalignment='top',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+    except Exception:
+        pass  # Skip stats if calculation fails
+    
     buf = io.BytesIO()
     # PERFORMANCE: Use WebP if available (smaller), fallback to PNG
     fmt = 'webp' if use_webp else 'png'
@@ -2163,11 +2211,11 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
     # Use a sensible x-axis label depending on index type
     try:
         if isinstance(history_tail_series.index, pd.DatetimeIndex):
-            ax.set_xlabel('Timestamp')
+            ax.set_xlabel('Timestamp', labelpad=2)
         else:
-            ax.set_xlabel('Index')
+            ax.set_xlabel('Index', labelpad=2)
     except Exception:
-        ax.set_xlabel(xlabel)
+        ax.set_xlabel(xlabel, labelpad=2)
     ax.set_ylabel(ylabel)
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -2182,11 +2230,43 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         fig.tight_layout()
     except Exception:
         pass
+    
+    # Add visual statistics markers on the chart (use FULL history data for consistency with distribution)
+    try:
+        hist_vals = history.astype(float)  # Use full history, not just tail
+        hist_min = float(hist_vals.min())
+        hist_max = float(hist_vals.max())
+        hist_mean = float(hist_vals.mean())
+        hist_median = float(hist_vals.median())
+        hist_std = float(hist_vals.std())
         
-        # Apply tight layout to prevent cutoff
-        fig.tight_layout()
+        # Draw horizontal lines for Avg and Median
+        ax.axhline(y=hist_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.7, label=f'Avg: {hist_mean:.2f}')
+        ax.axhline(y=hist_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.6, label=f'Median: {hist_median:.2f}')
+        
+        # Add value tags - Avg ABOVE line (+offset), Median BELOW line (-offset) to avoid overlap
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        y_offset = (ylim[1] - ylim[0]) * 0.02  # 2% offset
+        ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+        ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+        
+        # Mark the actual Min and Max values in legend (not as markers since they may be outside visible range)
+        # Use dummy scatter at edge of visible area with label-only for legend
+        xlim = ax.get_xlim()
+        # Add Min/Max to legend without plotting markers at specific data points
+        ax.scatter([], [], color='#e74c3c', s=80, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {hist_min:.2f}')
+        ax.scatter([], [], color='#27ae60', s=80, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {hist_max:.2f}')
+        
+        # Legend on single line - at the lowest position below x-axis label
+        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        
+        # Add text box with Std in TOP LEFT corner
+        stats_text = f"Std: {hist_std:.2f}"
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=8, verticalalignment='top',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
     except Exception:
-        pass
+        pass  # Skip stats if calculation fails
 
     buf = io.BytesIO()
     fig.savefig(buf, format='png', bbox_inches='tight')
@@ -3827,7 +3907,7 @@ def analyze_file(filename):
                             history_tail=None,
                             anomalies_idx=an_idx  # Add anomaly markers to forecast plot
                         )
-                        forecast_plots.append({"img": img_fc, "title": title_fc})
+                        forecast_plots.append({"img": img_fc, "title": title_fc, "column": column, "type": "forecast"})
                     except Exception as _e:
                         app.logger.warning("Could not render forecast image for %s: %s", column, _e)
                     try:
@@ -3856,9 +3936,66 @@ def analyze_file(filename):
                             # Use cached STL plot for performance
                             stl_img = get_cached_stl_plot(filename, column, series, sp)
                             if stl_img:
-                                forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
+                                forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
                 except Exception as e:
                     app.logger.warning("STL plot failed for %s: %s", column, e)
+                
+                # Generate distribution histogram for this column
+                try:
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    ax.hist(series.values, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
+                    ax.set_title(f"Distribution: {column}", fontsize=10)
+                    ax.set_xlabel(column, fontsize=9)
+                    ax.set_ylabel("Frequency", fontsize=9)
+                    ax.grid(True, alpha=0.3)
+                    
+                    # Add stat markers
+                    stats_min, stats_max = float(series.min()), float(series.max())
+                    stats_mean, stats_median = float(series.mean()), float(series.median())
+                    stats_std = float(series.std())
+                    
+                    # Avg and Median vertical lines
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {stats_median:.2f}')
+                    
+                    # Avg/Median value tags - position based on which is actually left vs right
+                    ylim = ax.get_ylim()
+                    xlim = ax.get_xlim()
+                    # Whichever is LEFT gets ha='right' (tag extends left), whichever is RIGHT gets ha='left' (tag extends right)
+                    if stats_mean <= stats_median:
+                        # Mean is on the left, Median is on the right - add x_offset for spacing
+                        x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset
+                        ax.text(stats_mean - x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_median + x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    else:
+                        # Median is on the left, Mean is on the right - add x_offset for spacing
+                        x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset
+                        ax.text(stats_median - x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_mean + x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    
+                    # Min/Max markers at bottom - BOTH tags ABOVE their symbols
+                    marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
+                    ax.scatter([stats_min], [marker_y], color='#e74c3c', s=100, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
+                    ax.scatter([stats_max], [marker_y], color='#27ae60', s=100, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
+                    
+                    # Std in TOP RIGHT corner, legend on single line below x-label
+                    ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right', bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+                    ax.legend(fontsize=5, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
+                    
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+                    plt.close(fig)
+                    buf.seek(0)
+                    dist_img = base64.b64encode(buf.read()).decode('utf-8')
+                    forecast_plots.append({"img": dist_img, "title": f"Distribution: {column}", "column": column, "type": "distribution"})
+                except Exception as dist_e:
+                    app.logger.warning("Distribution plot failed for %s: %s", column, dist_e)
 
             if build_interactive and not skip_forecasts and len(series) >= 5:
                 try:
@@ -3867,7 +4004,7 @@ def analyze_file(filename):
                         # Use cached STL plot - may already be computed in forecast view
                         stl_img = get_cached_stl_plot(filename, column, series, sp)
                         if stl_img:
-                            forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}"})
+                            forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
                 except Exception:
                     pass
 
@@ -4108,6 +4245,19 @@ def analyze_file(filename):
     except Exception:
         pass
 
+    # Organize forecast_plots by column for grouped display
+    forecast_plots_by_column = {}
+    type_order = {'forecast': 0, 'distribution': 1, 'stl': 2}
+    for fp in forecast_plots:
+        if isinstance(fp, dict):
+            col = fp.get('column', 'Other')
+            if col not in forecast_plots_by_column:
+                forecast_plots_by_column[col] = []
+            forecast_plots_by_column[col].append(fp)
+    # Sort plots within each column by type order
+    for col in forecast_plots_by_column:
+        forecast_plots_by_column[col].sort(key=lambda x: type_order.get(x.get('type', ''), 99))
+
     analysis.update({
         'head': cached_info['head'],
         'description': cached_info['description'],
@@ -4115,6 +4265,7 @@ def analyze_file(filename):
         'missing_values': missing_values_html,
         'plots': _ensure_plot_dicts(plots) if build_static else [],
         'forecast_plots': _ensure_plot_dicts(forecast_plots) if build_forecast else [],
+        'forecast_plots_by_column': forecast_plots_by_column if build_forecast else {},
         'anomalies': anomalies_found,
         'ai_summary': ai_summary,
         'user_question': user_question,
@@ -4428,7 +4579,20 @@ def api_interactive_data(filename):
             layout["xaxis"]["rangeslider"] = {"visible": True}
         
         dist = {"name": column, "values": [float(v) for v in series.dropna().values[:1000]]}  # Limit distribution points
-        interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
+        
+        # Compute statistics for the column
+        try:
+            stats = {
+                "min": float(series.min()),
+                "max": float(series.max()),
+                "mean": float(series.mean()),
+                "median": float(series.median()),
+                "std": float(series.std())
+            }
+        except Exception:
+            stats = None
+        
+        interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist, "stats": stats})
     
     # Cache the result
     INTERACTIVE_DATA_CACHE.set(cache_key, interactive)
@@ -4583,11 +4747,61 @@ def download_static_plots_zip(filename):
             # Distribution histogram - HIGH QUALITY: Larger figure and more bins
             try:
                 fig, ax = plt.subplots(figsize=(8, 5))
-                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5)
+                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
                 ax.set_title(f"Distribution: {col}", fontsize=10)
                 ax.set_xlabel(col, fontsize=9)
                 ax.set_ylabel("Frequency", fontsize=9)
                 ax.grid(True, alpha=0.3)
+                
+                # Add vertical stat lines on the histogram
+                try:
+                    stats_min = float(s.min())
+                    stats_max = float(s.max())
+                    stats_median = float(s.median())
+                    stats_mean = float(s.mean())
+                    stats_std = float(s.std())
+                    
+                    # Draw vertical lines for Avg and Median
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {stats_median:.2f}')
+                    
+                    # Avg/Median value tags - position based on which is actually left vs right
+                    ylim = ax.get_ylim()
+                    xlim = ax.get_xlim()
+                    x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset for spacing
+                    # Whichever is LEFT gets ha='right' (tag extends left), whichever is RIGHT gets ha='left' (tag extends right)
+                    if stats_mean <= stats_median:
+                        # Mean is on the left, Median is on the right
+                        ax.text(stats_mean - x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_median + x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    else:
+                        # Median is on the left, Mean is on the right
+                        ax.text(stats_median - x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_mean + x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    
+                    # Min/Max markers at bottom - BOTH tags ABOVE their symbols
+                    y_lim = ax.get_ylim()
+                    marker_y = y_lim[0] + (y_lim[1] - y_lim[0]) * 0.05
+                    
+                    ax.scatter([stats_min], [marker_y], color='#e74c3c', s=100, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
+                    ax.scatter([stats_max], [marker_y], color='#27ae60', s=100, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    
+                    # Both annotations ABOVE the markers
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
+                    
+                    # Add Std in TOP RIGHT corner
+                    ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right',
+                            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+                    
+                    # Legend on single line below x-label
+                    ax.legend(fontsize=5, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
+                except Exception:
+                    pass
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
@@ -5188,9 +5402,23 @@ def download_full_report_pdf(filename):
         app.logger.error(traceback.format_exc())
         return jsonify({"ok": False, "message": f"PDF generation failed: {str(e)}"}), 500
 
-    out = io.BytesIO()
-    pdf.output(out)
-    out.seek(0)
+    # Output PDF with safeguard
+    try:
+        # Ensure at least one page exists before output
+        if pdf.page_no() == 0:
+            app.logger.warning("No pages in PDF, adding a blank page")
+            pdf.add_page()
+            pdf.set_font("helvetica", size=12)
+            pdf.cell(0, 10, "No content available for this report.", new_x="LMARGIN", new_y="NEXT")
+        
+        out = io.BytesIO()
+        pdf.output(out)
+        out.seek(0)
+    except Exception as e:
+        app.logger.error(f"PDF output failed: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({"ok": False, "message": f"PDF output failed: {str(e)}"}), 500
     
     base = os.path.splitext(display)[0]
     out_name = secure_filename(f"{base}_report.pdf")

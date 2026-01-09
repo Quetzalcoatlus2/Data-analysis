@@ -218,6 +218,10 @@
       .grid-2 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
 
     img.plot {
@@ -353,9 +357,10 @@
         <a title="Explore interactively with zoom & hover"
           class="pill {{ 'active' if active_view == 'interactive' else '' }}"
           href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive', forecast_pct=pct) }}">Interactive</a>
-        <a title="Show forecasts with 95% confidence band and anomaly detection"
+        <a title="View detailed analysis with forecasts, distributions, and statistics by column"
           class="pill {{ 'active' if active_view == 'forecast' else '' }}"
-          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Forecast</a>
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Detailed
+          Analysis</a>
         <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}"
           href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct) }}">Correlation</a>
         <a title="View top categories for non-numeric columns"
@@ -561,8 +566,8 @@
 
     {% elif active_view == 'forecast' %}
     <section class="panel" style="width:100%;">
-      <h3>Forecasts & Anomalies</h3>
-      <div class="muted">Full-history context with forecast, 95% confidence intervals, and detected anomalies</div>
+      <h3>Detailed Analysis by Column</h3>
+      <div class="muted">Comprehensive view: forecasts with 95% CI, trend analysis, and anomaly detection</div>
       <div class="row" style="margin-bottom:8px">
         <label for="forecastPctSelectTop">Forecast horizon</label>
         <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
@@ -588,18 +593,41 @@
           });
         })();
       </script>
-      <div class="muted">Full-history context with forecast and 95% CI</div>
-      {% if analysis.forecast_plots %}
-      <div class="grid grid-2">
+      {% if analysis.forecast_plots_by_column %}
+      {# Display plots grouped by column #}
+      {% for column, plots in analysis.forecast_plots_by_column.items() %}
+      <div class="panel" style="margin-bottom: 24px; border: 2px solid var(--accent); border-radius: 12px;">
+        <h4
+          style="background: linear-gradient(to right, var(--accent), transparent); color: var(--text); padding: 10px 16px; margin: -16px -16px 16px -16px; border-radius: 10px 10px 0 0; font-size: 1.1em;">
+          📊 {{ column }}
+        </h4>
+        <div class="grid grid-2" style="gap: 12px;">
+          {% for p in plots %}
+          <figure class="panel" style="margin:0; padding:10px; background: var(--bg);">
+            <figcaption style="margin-bottom:6px; font-size:0.85em; font-weight:500; color: var(--muted);">
+              {% if p.get('type') == 'forecast' %}📈 Forecast{% elif p.get('type') == 'distribution' %}📊 Distribution{%
+              elif p.get('type') == 'stl' %}🔄 STL Decomposition{% else %}{{ p.title }}{% endif %}
+            </figcaption>
+            <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}"
+              style="width:100%; height:auto; border-radius: 6px;" />
+          </figure>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      {% elif analysis.forecast_plots %}
+      {# Fallback: simple grid display #}
+      <div class="grid grid-2" style="gap: 16px;">
         {% for p in analysis.forecast_plots %}
-        <figure class="panel">
-          <figcaption style="margin-bottom:8px">{{ p.title }}</figcaption>
-          <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}" />
+        <figure class="panel" style="margin:0; padding:12px;">
+          <figcaption style="margin-bottom:6px; font-size:0.9em; font-weight:500;">{{ p.title }}</figcaption>
+          <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}"
+            style="width:100%; height:auto;" />
         </figure>
         {% endfor %}
       </div>
       {% else %}
-      <div class="muted">No timeseries forecasts available.</div>
+      <div class="muted">No detailed analysis available. Select a forecast horizon above.</div>
       {% endif %}
     </section>
 
@@ -1016,6 +1044,82 @@
         // Generate descriptive filename for downloads
         const colName = (item.column || 'data').replace(/[^a-zA-Z0-9_-]/g, '_');
 
+        // Add stat lines and markers on the chart (history data only)
+        if (item.stats) {
+          const s = item.stats;
+
+          // Add horizontal line shapes for Avg and Median
+          layout.shapes = layout.shapes || [];
+          layout.shapes.push(
+            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.mean, y1: s.mean, line: { color: '#f39c12', width: 2, dash: 'dot' } },
+            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.median, y1: s.median, line: { color: '#9b59b6', width: 1.5, dash: 'dashdot' } }
+          );
+
+          // Find the x-position of min and max values from the History trace
+          const historyTrace = traces.find(t => t.name === 'History');
+          if (historyTrace && historyTrace.y) {
+            const yVals = historyTrace.y;
+            const xVals = historyTrace.x;
+            let minIdx = 0, maxIdx = 0;
+            for (let i = 1; i < yVals.length; i++) {
+              if (yVals[i] < yVals[minIdx]) minIdx = i;
+              if (yVals[i] > yVals[maxIdx]) maxIdx = i;
+            }
+
+            // Add Min marker trace
+            traces.push({
+              type: 'scatter',
+              mode: 'markers+text',
+              name: `Min: ${s.min.toFixed(2)}`,
+              x: [xVals[minIdx]],
+              y: [s.min],
+              marker: { color: '#e74c3c', size: 12, symbol: 'triangle-down', line: { color: 'darkred', width: 1.5 } },
+              text: [s.min.toFixed(2)],
+              textposition: 'bottom center',
+              textfont: { size: 9, color: '#e74c3c' },
+              hoverinfo: 'name+y',
+              showlegend: true
+            });
+
+            // Add Max marker trace
+            traces.push({
+              type: 'scatter',
+              mode: 'markers+text',
+              name: `Max: ${s.max.toFixed(2)}`,
+              x: [xVals[maxIdx]],
+              y: [s.max],
+              marker: { color: '#27ae60', size: 12, symbol: 'triangle-up', line: { color: 'darkgreen', width: 1.5 } },
+              text: [s.max.toFixed(2)],
+              textposition: 'top center',
+              textfont: { size: 9, color: '#27ae60' },
+              hoverinfo: 'name+y',
+              showlegend: true
+            });
+          }
+
+          // Add annotations - Avg ABOVE line, Median BELOW line (to avoid overlap)
+          layout.annotations = layout.annotations || [];
+          layout.annotations.push(
+            { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: '#f39c12' }, xanchor: 'left', yanchor: 'bottom' },
+            { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 9, color: '#9b59b6' }, xanchor: 'left', yanchor: 'top' }
+          );
+
+          // Add Std annotation in TOP LEFT corner
+          layout.annotations.push({
+            x: 0.01, y: 0.99, xref: 'paper', yref: 'paper',
+            text: `Std: ${s.std.toFixed(2)}`,
+            showarrow: false,
+            font: { size: 10, color: 'gray' },
+            bgcolor: 'rgba(245, 222, 179, 0.7)',
+            borderpad: 3,
+            xanchor: 'left', yanchor: 'top'
+          });
+
+          // Increase right margin to show stat labels
+          layout.margin = layout.margin || {};
+          layout.margin.r = Math.max(layout.margin.r || 10, 70);
+        }
+
         Plotly.newPlot('chart', traces, layout, {
           displayModeBar: true,
           responsive: true,
@@ -1107,15 +1211,8 @@
             distValues = distValues.slice(-keepCount);
           }
 
-          Plotly.newPlot('dist', [{
-            type: 'histogram',
-            name: dist.name,
-            x: distValues,
-            marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
-            texttemplate: '%{y}',
-            textposition: 'outside',
-            textfont: { size: 9, color: t.muted || t.text }
-          }], {
+          // Build distribution layout with stats annotation
+          const distLayout = {
             title: { text: dist.name + ' Distribution', font: { size: 14 }, x: 0.02 },
             height: distHeight,
             paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
@@ -1129,7 +1226,91 @@
             },
             yaxis: { automargin: true },
             hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
-          }, {
+          };
+
+          // Build traces array starting with histogram
+          const distTraces = [{
+            type: 'histogram',
+            name: dist.name,
+            x: distValues,
+            marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
+            texttemplate: '%{y}',
+            textposition: 'outside',
+            textfont: { size: 9, color: t.muted || t.text }
+          }];
+
+          // Add vertical stat line shapes and Min/Max markers
+          if (item.stats) {
+            const s = item.stats;
+
+            // Add vertical line shapes for Avg and Median
+            distLayout.shapes = [
+              { type: 'line', x0: s.mean, x1: s.mean, y0: 0, y1: 1, yref: 'paper', line: { color: '#f39c12', width: 2, dash: 'dot' } },
+              { type: 'line', x0: s.median, x1: s.median, y0: 0, y1: 1, yref: 'paper', line: { color: '#9b59b6', width: 1.5, dash: 'dashdot' } }
+            ];
+
+            // Add Min/Max as scatter trace markers at bottom
+            distTraces.push({
+              type: 'scatter',
+              mode: 'markers+text',
+              name: 'Min',
+              x: [s.min],
+              y: [0],
+              marker: { color: '#e74c3c', size: 12, symbol: 'triangle-down', line: { color: 'darkred', width: 1.5 } },
+              text: [`Min: ${s.min.toFixed(2)}`],
+              textposition: 'bottom center',
+              textfont: { size: 9, color: '#e74c3c' },
+              hoverinfo: 'text',
+              showlegend: true
+            });
+
+            distTraces.push({
+              type: 'scatter',
+              mode: 'markers+text',
+              name: 'Max',
+              x: [s.max],
+              y: [0],
+              marker: { color: '#27ae60', size: 12, symbol: 'triangle-up', line: { color: 'darkgreen', width: 1.5 } },
+              text: [`Max: ${s.max.toFixed(2)}`],
+              textposition: 'top center',
+              textfont: { size: 9, color: '#27ae60' },
+              hoverinfo: 'text',
+              showlegend: true
+            });
+
+            // Add Avg/Med annotations - position based on which value is left vs right
+            // Calculate x-offset for spacing (approx 2% of range)
+            var xRange = s.max - s.min;
+            var xOffset = xRange * 0.03;  // 3% offset for visual spacing
+            if (s.mean <= s.median) {
+              // Mean is on the left, Median is on the right
+              distLayout.annotations = [
+                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#f39c12' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
+                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#9b59b6' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
+              ];
+            } else {
+              // Median is on the left, Mean is on the right
+              distLayout.annotations = [
+                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#9b59b6' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
+                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#f39c12' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
+              ];
+            }
+
+            // Add Std annotation in TOP RIGHT corner
+            distLayout.annotations.push({
+              x: 0.99, y: 0.99, xref: 'paper', yref: 'paper',
+              text: `Std: ${s.std.toFixed(2)}`,
+              showarrow: false,
+              font: { size: 9, color: 'gray' },
+              bgcolor: 'rgba(245, 222, 179, 0.7)',
+              borderpad: 3,
+              xanchor: 'right', yanchor: 'top'
+            });
+
+            distLayout.margin.t = 50;  // More top margin for labels
+          }
+
+          Plotly.newPlot('dist', distTraces, distLayout, {
             responsive: true,
             displayModeBar: true,
             toImageButtonOptions: { format: 'png', filename: 'distribution_' + (dist.name || 'data').replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
