@@ -2285,7 +2285,7 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
                     xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
         
         # Legend on single line - at the lowest position below x-axis label
-        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
         
         # Add text box with Std in TOP LEFT corner
         stats_text = f"Std: {hist_std:.2f}"
@@ -5383,7 +5383,7 @@ def download_full_report_pdf(filename):
             try:
                 fig, ax = plt.subplots(figsize=(7, 4))
                 if is_numeric:
-                    ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
+                    ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', label='Distribution')
                     ax.set_title(f"Distribution: {col}")
                     ax.set_ylabel("Frequency")
                     
