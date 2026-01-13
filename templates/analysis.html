@@ -1285,14 +1285,14 @@
             if (s.mean <= s.median) {
               // Mean is on the left, Median is on the right
               distLayout.annotations = [
-                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#f39c12' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
-                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#9b59b6' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
+                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#f39c12' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
+                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#9b59b6' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
               ];
             } else {
               // Median is on the left, Mean is on the right
               distLayout.annotations = [
-                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#9b59b6' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
-                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 10, color: '#f39c12' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
+                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#9b59b6' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
+                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#f39c12' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
               ];
             }
 
@@ -1301,7 +1301,7 @@
               x: 0.99, y: 0.99, xref: 'paper', yref: 'paper',
               text: `Std: ${s.std.toFixed(2)}`,
               showarrow: false,
-              font: { size: 9, color: 'gray' },
+              font: { size: 10, color: 'gray' },
               bgcolor: 'rgba(245, 222, 179, 0.7)',
               borderpad: 3,
               xanchor: 'right', yanchor: 'top'
@@ -1573,7 +1573,7 @@
 
     {% if active_view == 'categories' %}
     <section class="panel" id="categories-section">
-      <h2>Top 15 Categories</h2>
+      <h2>Categories</h2>
       <p class="muted">Bar charts showing the most frequent values for non-numeric (categorical) columns.</p>
 
       {% if analysis.category_charts %}
@@ -1581,7 +1581,7 @@
         {% for col, img_b64 in analysis.category_charts.items() %}
         <div class="panel">
           <h3 style="margin-top:0;">{{ col }}</h3>
-          <img class="plot" src="data:image/png;base64,{{ img_b64 }}" alt="Top 15 Categories: {{ col }}" loading="lazy">
+          <img class="plot" src="data:image/png;base64,{{ img_b64 }}" alt="Categories: {{ col }}" loading="lazy">
         </div>
         {% endfor %}
       </div>

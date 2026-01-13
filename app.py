@@ -374,14 +374,35 @@ def get_or_create_model(preferred: str | None = None):
 def configure_ai():
     global model, AI_ENABLED
     try:
-        # Try service account JSON authentication first (Vertex AI)
+        # IMPORTANT: genai SDK doesn't allow mixing api_key and credentials
+        # We prefer API key as it's simpler and more reliable for this use case
+        
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            # Clear any previous configuration
+            try:
+                genai.configure(api_key=api_key)
+            except Exception as e:
+                app.logger.warning("First configure attempt failed, retrying: %s", e)
+                # Sometimes SDK has stale state - try again
+                genai.configure(api_key=api_key)
+            
+            AI_ENABLED = True
+            model = None
+            app.logger.info("AI configured successfully using API key.")
+            try:
+                _set_ai_status("OK", ready=False, configured=True, model_name=None)
+            except Exception:
+                pass
+            return
+        
+        # Fall back to service account if no API key
         credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         
         # If no env var set, look for a JSON credentials file in the app directory
         if not credentials_path:
-            # Search for service account JSON files in the app directory
             for f in os.listdir(os.path.dirname(os.path.abspath(__file__)) or '.'):
-                if f.endswith('.json') and 'service_account' not in f.lower():
+                if f.endswith('.json'):
                     try:
                         with open(f, 'r') as jf:
                             content = json.load(jf)
@@ -393,7 +414,6 @@ def configure_ai():
                         continue
         
         if credentials_path and os.path.exists(credentials_path) and GOOGLE_AUTH_AVAILABLE:
-            # Use service account JSON for authentication
             try:
                 scopes = ['https://www.googleapis.com/auth/generative-language', 
                           'https://www.googleapis.com/auth/cloud-platform']
@@ -410,21 +430,9 @@ def configure_ai():
                     pass
                 return
             except Exception as e:
-                app.logger.warning("Service account auth failed, falling back to API key: %s", e)
+                app.logger.warning("Service account auth failed: %s", e)
         
-        # Fall back to API key authentication
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if api_key:
-            genai.configure(api_key=api_key)
-            AI_ENABLED = True
-            model = None
-            app.logger.info("AI configured successfully using API key.")
-            try:
-                _set_ai_status("OK", ready=False, configured=True, model_name=None)
-            except Exception:
-                pass
-        else:
-            raise ValueError("No valid authentication method found. Set GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS.")
+        raise ValueError("No valid authentication method found. Set GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS.")
     except Exception:
         app.logger.exception("AI configuration failed")
         model = None
@@ -2251,12 +2259,30 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
         ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
         
-        # Mark the actual Min and Max values in legend (not as markers since they may be outside visible range)
-        # Use dummy scatter at edge of visible area with label-only for legend
-        xlim = ax.get_xlim()
-        # Add Min/Max to legend without plotting markers at specific data points
-        ax.scatter([], [], color='#e74c3c', s=80, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {hist_min:.2f}')
-        ax.scatter([], [], color='#27ae60', s=80, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {hist_max:.2f}')
+        # Add Min/Max markers - position at visible data range boundaries
+        # Find positions within the visible history_tail_series for markers
+        tail_vals = history_tail_series.astype(float)
+        tail_min_val = float(tail_vals.min())
+        tail_max_val = float(tail_vals.max())
+        
+        if use_numeric_x:
+            tail_min_pos = int(tail_vals.values.argmin())
+            tail_max_pos = int(tail_vals.values.argmax())
+        else:
+            tail_min_pos = tail_vals.idxmin()
+            tail_max_pos = tail_vals.idxmax()
+        
+        # Plot Min marker at position where visible min occurs
+        ax.scatter([tail_min_pos], [tail_min_val], color='#e74c3c', s=80, zorder=10, marker='v', 
+                   edgecolors='darkred', linewidths=1.5, label=f'Min: {hist_min:.2f}')
+        ax.annotate(f'{tail_min_val:.2f}', (tail_min_pos, tail_min_val), textcoords='offset points', 
+                    xytext=(0, -12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
+        
+        # Plot Max marker at position where visible max occurs
+        ax.scatter([tail_max_pos], [tail_max_val], color='#27ae60', s=80, zorder=10, marker='^', 
+                   edgecolors='darkgreen', linewidths=1.5, label=f'Max: {hist_max:.2f}')
+        ax.annotate(f'{tail_max_val:.2f}', (tail_max_pos, tail_max_val), textcoords='offset points', 
+                    xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
         
         # Legend on single line - at the lowest position below x-axis label
         ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
@@ -3986,10 +4012,10 @@ def analyze_file(filename):
                     
                     # Std in TOP RIGHT corner, legend on single line below x-label
                     ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right', bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
-                    ax.legend(fontsize=5, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
+                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
                     
                     buf = io.BytesIO()
-                    fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+                    fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
                     plt.close(fig)
                     buf.seek(0)
                     dist_img = base64.b64encode(buf.read()).decode('utf-8')
@@ -4297,18 +4323,37 @@ def analyze_file(filename):
                 if len(s_cat) < 3:
                     continue
                 
-                # Generate Top 15 Categories bar chart
-                top_counts = s_cat.value_counts().head(15)
+                # Generate Categories bar chart (top 50 for readability)
+                all_counts = s_cat.value_counts()
+                top_counts = all_counts.head(50)
                 if len(top_counts) < 2:
                     continue
+                
+                # Calculate stats for annotation
+                total_unique = len(all_counts)
+                max_count = int(all_counts.max())
+                min_count = int(all_counts.min())
+                most_freq = str(all_counts.index[0])[:20]  # Truncate long names
                     
-                fig, ax = plt.subplots(figsize=(10, 5))
+                fig, ax = plt.subplots(figsize=(12, 5))
                 top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
-                ax.set_title(f"Top 15 Categories: {col}", fontsize=12)
+                
+                # Title indicates if showing subset
+                if len(all_counts) > 50:
+                    ax.set_title(f"Categories: {col} (Top 50 of {total_unique})", fontsize=12)
+                else:
+                    ax.set_title(f"Categories: {col} ({total_unique} unique)", fontsize=12)
+                
                 ax.set_xlabel(col, fontsize=10)
                 ax.set_ylabel("Count", fontsize=10)
                 ax.grid(True, alpha=0.3, axis='y')
-                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=9)
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+                
+                # Add stats annotation in top-right corner
+                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
+                ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
+                        verticalalignment='top', horizontalalignment='right',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
@@ -4799,12 +4844,12 @@ def download_static_plots_zip(filename):
                             bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
                     
                     # Legend on single line below x-label
-                    ax.legend(fontsize=5, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
+                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
                 except Exception:
                     pass
                 
                 buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
                 plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
@@ -4842,7 +4887,7 @@ def download_static_plots_zip(filename):
                     except Exception:
                         pass
 
-        # Generate Top 15 Categories bar charts for non-numeric columns
+        # Generate Categories bar charts for non-numeric columns (top 50)
         for col in df.columns:
             try:
                 # Check if column is non-numeric (categorical)
@@ -4855,24 +4900,42 @@ def download_static_plots_zip(filename):
                 if len(s_cat) < 3:
                     continue
                 
-                # Generate Top 15 Categories bar chart
-                top_counts = s_cat.value_counts().head(15)
+                # Generate Categories bar chart (top 50 for readability)
+                all_counts = s_cat.value_counts()
+                top_counts = all_counts.head(50)
                 if len(top_counts) < 2:
                     continue
+                
+                # Calculate stats for annotation
+                total_unique = len(all_counts)
+                max_count = int(all_counts.max())
+                min_count = int(all_counts.min())
+                most_freq = str(all_counts.index[0])[:20]
                     
-                fig, ax = plt.subplots(figsize=(10, 5))
+                fig, ax = plt.subplots(figsize=(12, 5))
                 top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
-                ax.set_title(f"Top 15 Categories: {col}", fontsize=12)
+                
+                if len(all_counts) > 50:
+                    ax.set_title(f"Categories: {col} (Top 50 of {total_unique})", fontsize=12)
+                else:
+                    ax.set_title(f"Categories: {col} ({total_unique} unique)", fontsize=12)
+                
                 ax.set_xlabel(col, fontsize=10)
                 ax.set_ylabel("Count", fontsize=10)
                 ax.grid(True, alpha=0.3, axis='y')
-                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=9)
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+                
+                # Add stats annotation
+                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
+                ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
+                        verticalalignment='top', horizontalalignment='right',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
                 plt.close(fig)
                 buf.seek(0)
-                zf.writestr(f"{secure_filename(str(col))}_top15_categories.png", buf.read())
+                zf.writestr(f"{secure_filename(str(col))}_categories.png", buf.read())
             except Exception:
                 pass
 
@@ -5314,25 +5377,78 @@ def download_full_report_pdf(filename):
 
             # Distribution
             try:
-                fig, ax = plt.subplots(figsize=(7, 3.5))
+                fig, ax = plt.subplots(figsize=(7, 4))
                 if is_numeric:
                     ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
                     ax.set_title(f"Distribution: {col}")
                     ax.set_ylabel("Frequency")
+                    
+                    # Add stat markers like web version
+                    stats_min, stats_max = float(s.min()), float(s.max())
+                    stats_mean, stats_median = float(s.mean()), float(s.median())
+                    stats_std = float(s.std())
+                    
+                    # Avg/Med vertical lines
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8)
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7)
+                    
+                    # Min/Max markers at bottom with annotations
+                    ylim = ax.get_ylim()
+                    xlim = ax.get_xlim()
+                    marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
+                    ax.scatter([stats_min], [marker_y], color='#e74c3c', s=80, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
+                    ax.scatter([stats_max], [marker_y], color='#27ae60', s=80, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    # Min/Max annotations above markers
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
+                    
+                    # Avg/Med tags
+                    x_offset = (xlim[1] - xlim[0]) * 0.02
+                    if stats_mean <= stats_median:
+                        ax.text(stats_mean - x_offset, ylim[1] * 0.95, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_median + x_offset, ylim[1] * 0.95, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    else:
+                        ax.text(stats_median - x_offset, ylim[1] * 0.95, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_mean + x_offset, ylim[1] * 0.95, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    
+                    # Std in corner
+                    ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right',
+                            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+                    
+                    # Legend
+                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=4, frameon=False)
                 else:
-                    # Categorical bar chart (top 15)
-                    top_counts = s.value_counts().head(15)
+                    # Categorical bar chart (top 50)
+                    all_counts = s.value_counts()
+                    top_counts = all_counts.head(50)
                     top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
-                    ax.set_title(f"Top 15 Categories: {col}")
+                    
+                    total_unique = len(all_counts)
+                    if len(all_counts) > 50:
+                        ax.set_title(f"Categories: {col} (Top 50 of {total_unique})")
+                    else:
+                        ax.set_title(f"Categories: {col} ({total_unique} unique)")
                     ax.set_ylabel("Count")
-                    # Rotate labels
-                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
+                    
+                    # Stats annotation
+                    max_count = int(all_counts.max())
+                    min_count = int(all_counts.min())
+                    most_freq = str(all_counts.index[0])[:15]
+                    stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
+                    ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=8,
+                            verticalalignment='top', horizontalalignment='right',
+                            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
 
                 ax.set_xlabel(col)
                 ax.grid(True, alpha=0.3)
                 
                 buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
                 plt.close(fig)
                 buf.seek(0)
                 pdf.image(buf, w=140, x=35)
