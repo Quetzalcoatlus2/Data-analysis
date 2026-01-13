@@ -2276,13 +2276,13 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         ax.scatter([tail_min_pos], [tail_min_val], color='#e74c3c', s=80, zorder=10, marker='v', 
                    edgecolors='darkred', linewidths=1.5, label=f'Min: {hist_min:.2f}')
         ax.annotate(f'{tail_min_val:.2f}', (tail_min_pos, tail_min_val), textcoords='offset points', 
-                    xytext=(0, -12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
+                    xytext=(10, 0), ha='left', fontsize=7, color='#e74c3c', fontweight='bold')
         
         # Plot Max marker at position where visible max occurs
         ax.scatter([tail_max_pos], [tail_max_val], color='#27ae60', s=80, zorder=10, marker='^', 
                    edgecolors='darkgreen', linewidths=1.5, label=f'Max: {hist_max:.2f}')
         ax.annotate(f'{tail_max_val:.2f}', (tail_max_pos, tail_max_val), textcoords='offset points', 
-                    xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
+                    xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
         
         # Legend on single line - at the lowest position below x-axis label
         ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
@@ -4333,6 +4333,8 @@ def analyze_file(filename):
                 total_unique = len(all_counts)
                 max_count = int(all_counts.max())
                 min_count = int(all_counts.min())
+                avg_count = float(all_counts.mean())
+                med_count = float(all_counts.median())
                 most_freq = str(all_counts.index[0])[:20]  # Truncate long names
                     
                 fig, ax = plt.subplots(figsize=(12, 5))
@@ -4349,8 +4351,8 @@ def analyze_file(filename):
                 ax.grid(True, alpha=0.3, axis='y')
                 plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
                 
-                # Add stats annotation in top-right corner
-                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
+                # Add stats annotation in top-right corner (include avg/med of counts)
+                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count} | Avg: {avg_count:.1f} | Med: {med_count:.1f}"
                 ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
                         verticalalignment='top', horizontalalignment='right',
                         bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
@@ -4910,6 +4912,8 @@ def download_static_plots_zip(filename):
                 total_unique = len(all_counts)
                 max_count = int(all_counts.max())
                 min_count = int(all_counts.min())
+                avg_count = float(all_counts.mean())
+                med_count = float(all_counts.median())
                 most_freq = str(all_counts.index[0])[:20]
                     
                 fig, ax = plt.subplots(figsize=(12, 5))
@@ -4925,8 +4929,8 @@ def download_static_plots_zip(filename):
                 ax.grid(True, alpha=0.3, axis='y')
                 plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
                 
-                # Add stats annotation
-                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
+                # Add stats annotation (include avg/med of counts)
+                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count} | Avg: {avg_count:.1f} | Med: {med_count:.1f}"
                 ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
                         verticalalignment='top', horizontalalignment='right',
                         bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
@@ -5388,9 +5392,9 @@ def download_full_report_pdf(filename):
                     stats_mean, stats_median = float(s.mean()), float(s.median())
                     stats_std = float(s.std())
                     
-                    # Avg/Med vertical lines
-                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8)
-                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7)
+                    # Avg/Med vertical lines (with labels for legend)
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Med: {stats_median:.2f}')
                     
                     # Min/Max markers at bottom with annotations
                     ylim = ax.get_ylim()
@@ -5419,8 +5423,8 @@ def download_full_report_pdf(filename):
                     ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right',
                             bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
                     
-                    # Legend
-                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=4, frameon=False)
+                    # Legend with all stats (Min, Max, Avg, Med)
+                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=6, frameon=False)
                 else:
                     # Categorical bar chart (top 50)
                     all_counts = s.value_counts()
@@ -5435,11 +5439,13 @@ def download_full_report_pdf(filename):
                     ax.set_ylabel("Count")
                     plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
                     
-                    # Stats annotation
+                    # Stats annotation (include avg/med of counts)
                     max_count = int(all_counts.max())
                     min_count = int(all_counts.min())
+                    avg_count = float(all_counts.mean())
+                    med_count = float(all_counts.median())
                     most_freq = str(all_counts.index[0])[:15]
-                    stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
+                    stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count} | Avg: {avg_count:.1f} | Med: {med_count:.1f}"
                     ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=8,
                             verticalalignment='top', horizontalalignment='right',
                             bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
