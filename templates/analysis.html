@@ -1176,23 +1176,20 @@
             const anomalyVis = vis('anomal') || vis('outlier');
             const forecastOnlyMode = !historyVis && !anomalyVis;
 
-            // CI/Anomaly toggle in normal mode: restore range; otherwise autoscale
-            if ((isCI || isAnomaly) && savedRange?.x && savedRange?.y && !forecastOnlyMode) {
-              Plotly.relayout(chartEl, { 'xaxis.range': savedRange.x, 'yaxis.range': savedRange.y, 'xaxis.autorange': false, 'yaxis.autorange': false });
+            // ALWAYS autoscale Y-axis when legend changes (user requested)
+            // ALWAYS ignore CI bands for Y range calculation (even when CI is visible)
+            let yMin = Infinity, yMax = -Infinity;
+            chartEl.data.forEach(t => {
+              // Always skip CI traces for autoscale
+              if (t.meta === 'ci-controller' || t.meta === 'ci-member') return;
+              if (t.visible === 'legendonly' || t.visible === false) return;
+              (t.y || []).forEach(v => { if (Number.isFinite(v)) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); } });
+            });
+            const pad = (yMax - yMin) * 0.1;
+            if (Number.isFinite(yMin) && yMax > yMin) {
+              Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.range': [yMin - pad, yMax + pad], 'yaxis.autorange': false });
             } else {
-              // Custom autoscale ignoring CI when History/Anomaly visible
-              let yMin = Infinity, yMax = -Infinity;
-              chartEl.data.forEach(t => {
-                if ((historyVis || anomalyVis) && (t.meta === 'ci-controller' || t.meta === 'ci-member')) return;
-                if (t.visible === 'legendonly' || t.visible === false) return;
-                (t.y || []).forEach(v => { if (Number.isFinite(v)) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); } });
-              });
-              const pad = (yMax - yMin) * 0.1;
-              if (Number.isFinite(yMin) && yMax > yMin) {
-                Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.range': [yMin - pad, yMax + pad], 'yaxis.autorange': false });
-              } else {
-                Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true });
-              }
+              Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true });
             }
           }, 50);
           return false;

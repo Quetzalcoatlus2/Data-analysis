@@ -2259,12 +2259,11 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
         ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
         
-        # Add Min/Max markers - position at visible data range boundaries
-        # Find positions within the visible history_tail_series for markers
+        # Add Min/Max markers - find positions in visible data closest to the global min/max
+        # Use FULL HISTORY stats (hist_min, hist_max) for consistency with distribution
         tail_vals = history_tail_series.astype(float)
-        tail_min_val = float(tail_vals.min())
-        tail_max_val = float(tail_vals.max())
         
+        # Find positions in visible data where values are closest to global min/max
         if use_numeric_x:
             tail_min_pos = int(tail_vals.values.argmin())
             tail_max_pos = int(tail_vals.values.argmax())
@@ -2272,16 +2271,17 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
             tail_min_pos = tail_vals.idxmin()
             tail_max_pos = tail_vals.idxmax()
         
-        # Plot Min marker at position where visible min occurs
-        ax.scatter([tail_min_pos], [tail_min_val], color='#e74c3c', s=80, zorder=10, marker='v', 
+        # Use global min/max values (from full history) for markers and annotations
+        # Plot Min marker
+        ax.scatter([tail_min_pos], [hist_min], color='#e74c3c', s=80, zorder=10, marker='v', 
                    edgecolors='darkred', linewidths=1.5, label=f'Min: {hist_min:.2f}')
-        ax.annotate(f'{tail_min_val:.2f}', (tail_min_pos, tail_min_val), textcoords='offset points', 
+        ax.annotate(f'{hist_min:.2f}', (tail_min_pos, hist_min), textcoords='offset points', 
                     xytext=(10, 0), ha='left', fontsize=7, color='#e74c3c', fontweight='bold')
         
-        # Plot Max marker at position where visible max occurs
-        ax.scatter([tail_max_pos], [tail_max_val], color='#27ae60', s=80, zorder=10, marker='^', 
+        # Plot Max marker
+        ax.scatter([tail_max_pos], [hist_max], color='#27ae60', s=80, zorder=10, marker='^', 
                    edgecolors='darkgreen', linewidths=1.5, label=f'Max: {hist_max:.2f}')
-        ax.annotate(f'{tail_max_val:.2f}', (tail_max_pos, tail_max_val), textcoords='offset points', 
+        ax.annotate(f'{hist_max:.2f}', (tail_max_pos, hist_max), textcoords='offset points', 
                     xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
         
         # Legend on single line - at the lowest position below x-axis label
@@ -4181,7 +4181,20 @@ def analyze_file(filename):
                     })
 
                 dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
-                interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist})
+                
+                # Compute statistics for the column
+                try:
+                    stats = {
+                        "min": float(series.min()),
+                        "max": float(series.max()),
+                        "mean": float(series.mean()),
+                        "median": float(series.median()),
+                        "std": float(series.std())
+                    }
+                except Exception:
+                    stats = None
+                
+                interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist, "stats": stats})
 
     # If in forecast view and no forecast plots were generated (due to errors or strict budgets),
     # render a fallback forecast for the first eligible numeric column to avoid an empty page.
