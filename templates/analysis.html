@@ -1077,14 +1077,7 @@
           const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
           const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
 
-          // Add horizontal line shapes for Avg and Median
-          layout.shapes = layout.shapes || [];
-          layout.shapes.push(
-            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.mean, y1: s.mean, line: { color: avgColor, width: 2, dash: 'dot' } },
-            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.median, y1: s.median, line: { color: medColor, width: 1.5, dash: 'dashdot' } }
-          );
-
-          // Add Avg/Med as traces for legend visibility using full data x-range
+          // Add Avg/Med as visible traces (no shapes - traces are toggleable via legend)
           traces.push({
             type: 'scatter',
             mode: 'lines',
@@ -1094,7 +1087,7 @@
             line: { color: avgColor, width: 2, dash: 'dot' },
             hoverinfo: 'name',
             showlegend: true,
-            visible: 'legendonly'  // Hidden by default since shape shows it
+            visible: true  // Visible by default, toggleable via legend
           });
 
           traces.push({
@@ -1106,7 +1099,7 @@
             line: { color: medColor, width: 1.5, dash: 'dashdot' },
             hoverinfo: 'name',
             showlegend: true,
-            visible: 'legendonly'  // Hidden by default since shape shows it
+            visible: true  // Visible by default, toggleable via legend
           });
 
           // Find the x-position of min and max values from the History trace
@@ -1154,8 +1147,8 @@
           // Add annotations - Avg ABOVE line, Median BELOW line (to avoid overlap)
           layout.annotations = layout.annotations || [];
           layout.annotations.push(
-            { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom' },
-            { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top' }
+            { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' },
+            { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top', name: 'med-annot' }
           );
 
           // Add Std annotation in TOP LEFT corner with dark mode support
@@ -1200,6 +1193,8 @@
           const nm = (d.name || '').toLowerCase();
           const isCI = d.meta === 'ci-controller' || d.meta === 'ci-member';
           const isAnomaly = nm.includes('anomal') || nm.includes('outlier');
+          const isAvg = nm.includes('avg');
+          const isMed = nm.includes('med');
 
           // Save current range for CI/Anomaly toggles
           const savedRange = (isCI || isAnomaly) ? {
@@ -1215,6 +1210,21 @@
             Plotly.restyle(chartEl, { visible: newVis }, ciIndices);
           } else {
             Plotly.restyle(chartEl, { visible: newVis }, [evt.curveNumber]);
+          }
+
+          // Toggle annotations for Avg/Med
+          if (isAvg || isMed) {
+            const isHiding = newVis === 'legendonly';
+            const annotations = [...(chartEl.layout.annotations || [])];
+            annotations.forEach(a => {
+              if (isAvg && (a.name === 'avg-annot' || (a.text && a.text.includes('Avg:')))) {
+                a.visible = !isHiding;
+              }
+              if (isMed && (a.name === 'med-annot' || (a.text && a.text.includes('Med:')))) {
+                a.visible = !isHiding;
+              }
+            });
+            Plotly.relayout(chartEl, { annotations: annotations });
           }
 
           setTimeout(() => {
@@ -1301,37 +1311,37 @@
             const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
             const annotBgColor = isDarkMode() ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
 
-            // Add vertical line shapes for Avg and Median
+            // Add vertical line shapes for Avg and Median (use yref: 'paper' to span full height)
             distLayout.shapes = [
-              { type: 'line', x0: s.mean, x1: s.mean, y0: 0, y1: 1, yref: 'paper', line: { color: avgColor, width: 2, dash: 'dot' } },
-              { type: 'line', x0: s.median, x1: s.median, y0: 0, y1: 1, yref: 'paper', line: { color: medColor, width: 1.5, dash: 'dashdot' } }
+              { type: 'line', x0: s.mean, x1: s.mean, y0: 0, y1: 1, yref: 'paper', line: { color: avgColor, width: 2, dash: 'dot' }, name: 'avg-shape' },
+              { type: 'line', x0: s.median, x1: s.median, y0: 0, y1: 1, yref: 'paper', line: { color: medColor, width: 1.5, dash: 'dashdot' }, name: 'med-shape' }
             ];
 
-            // Add Avg/Med as traces for legend visibility
+            // Add Avg/Med as invisible traces (for legend control only)
             distTraces.push({
               type: 'scatter',
-              mode: 'lines',
+              mode: 'markers',
               name: `Avg: ${s.mean.toFixed(2)}`,
-              x: [s.mean, s.mean],
-              y: [0, 1],
-              yaxis: 'y',
-              line: { color: avgColor, width: 2, dash: 'dot' },
-              hoverinfo: 'name',
+              x: [s.mean],
+              y: [null],  // Invisible point
+              marker: { color: avgColor, size: 0.1, opacity: 0 },
+              hoverinfo: 'skip',
               showlegend: true,
-              visible: 'legendonly'  // Hidden by default since shape shows it
+              visible: true,
+              meta: 'avg-control'  // Tag for legend handler
             });
 
             distTraces.push({
               type: 'scatter',
-              mode: 'lines',
+              mode: 'markers',
               name: `Med: ${s.median.toFixed(2)}`,
-              x: [s.median, s.median],
-              y: [0, 1],
-              yaxis: 'y',
-              line: { color: medColor, width: 1.5, dash: 'dashdot' },
-              hoverinfo: 'name',
+              x: [s.median],
+              y: [null],  // Invisible point
+              marker: { color: medColor, size: 0.1, opacity: 0 },
+              hoverinfo: 'skip',
               showlegend: true,
-              visible: 'legendonly'  // Hidden by default since shape shows it
+              visible: true,
+              meta: 'med-control'  // Tag for legend handler
             });
 
             // Add Min/Max as scatter trace markers at bottom
@@ -1370,14 +1380,14 @@
             if (s.mean <= s.median) {
               // Mean is on the left, Median is on the right
               distLayout.annotations = [
-                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'right', yanchor: 'bottom', bgcolor: annotBgColor },
-                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'left', yanchor: 'bottom', bgcolor: annotBgColor }
+                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'right', yanchor: 'bottom', bgcolor: annotBgColor, name: 'avg-annot' },
+                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'left', yanchor: 'bottom', bgcolor: annotBgColor, name: 'med-annot' }
               ];
             } else {
               // Median is on the left, Mean is on the right
               distLayout.annotations = [
-                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'right', yanchor: 'bottom', bgcolor: annotBgColor },
-                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'left', yanchor: 'bottom', bgcolor: annotBgColor }
+                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'right', yanchor: 'bottom', bgcolor: annotBgColor, name: 'med-annot' },
+                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'left', yanchor: 'bottom', bgcolor: annotBgColor, name: 'avg-annot' }
               ];
             }
 
@@ -1399,6 +1409,49 @@
             responsive: true,
             displayModeBar: true,
             toImageButtonOptions: { format: 'png', filename: 'distribution_' + (dist.name || 'data').replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
+          });
+
+          // Add legend click handler to toggle shapes and annotations for Avg/Med (reuse distEl from above)
+          distEl.on('plotly_legendclick', function (evt) {
+            const d = distEl.data[evt.curveNumber];
+            const meta = d.meta || '';
+            const isAvg = meta === 'avg-control' || (d.name || '').toLowerCase().includes('avg');
+            const isMed = meta === 'med-control' || (d.name || '').toLowerCase().includes('med');
+
+            if (isAvg || isMed) {
+              const newVis = (d.visible === undefined || d.visible === true) ? 'legendonly' : true;
+              const isHiding = newVis === 'legendonly';
+
+              // Toggle the trace
+              Plotly.restyle(distEl, { visible: newVis }, [evt.curveNumber]);
+
+              // Toggle the corresponding shape and annotation
+              const shapes = [...(distEl.layout.shapes || [])];
+              const annotations = [...(distEl.layout.annotations || [])];
+
+              if (isAvg) {
+                // Toggle avg shape (index 0)
+                if (shapes[0]) shapes[0].visible = !isHiding;
+                // Toggle avg annotation
+                annotations.forEach(a => {
+                  if (a.name === 'avg-annot' || (a.text && a.text.includes('Avg:'))) {
+                    a.visible = !isHiding;
+                  }
+                });
+              } else if (isMed) {
+                // Toggle med shape (index 1)
+                if (shapes[1]) shapes[1].visible = !isHiding;
+                // Toggle med annotation
+                annotations.forEach(a => {
+                  if (a.name === 'med-annot' || (a.text && a.text.includes('Med:'))) {
+                    a.visible = !isHiding;
+                  }
+                });
+              }
+
+              Plotly.relayout(distEl, { shapes: shapes, annotations: annotations });
+              return false;  // Prevent default legend behavior
+            }
           });
         } else {
           document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
