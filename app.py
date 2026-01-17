@@ -4364,11 +4364,25 @@ def analyze_file(filename):
                 ax.grid(True, alpha=0.3, axis='y')
                 plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
                 
+                # Add horizontal avg/med lines for counts
+                ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
+                ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
+                
+                # Add text labels for avg/med lines on the left side
+                xlim = ax.get_xlim()
+                ax.text(xlim[0] - 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                ax.text(xlim[0] - 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                
                 # Add stats annotation in top-right corner (include avg/med of counts)
-                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count} | Avg: {avg_count:.1f} | Med: {med_count:.1f}"
+                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
                 ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
                         verticalalignment='top', horizontalalignment='right',
                         bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
+                
+                # Legend below chart
+                ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=4, frameon=False)
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
@@ -5392,9 +5406,72 @@ def download_full_report_pdf(filename):
             
             pdf.set_font(font_family, size=10)
 
-            # Distribution
+            # IMAGE WIDTH: Use nearly full page width for maximum visibility
+            img_width = 180  # A4 is ~210mm, leaving 15mm margins on each side
+            img_x = 15  # Center the image
+
+            # 1. TREND CHART (History + Anomalies, no forecast) - always first
+            if is_numeric and len(s) >= 10:
+                try:
+                    # Detect anomalies
+                    an_idx, _ = detect_anomalies(s, contamination=0.02)
+                    
+                    # Generate trend plot (no forecast, just history + anomalies)
+                    trend_title = f"Trend: {col}"
+                    trend_b64 = generate_forecast_plot(
+                        s, 
+                        None,  # No forecast
+                        trend_title, 
+                        'Timestamp' if is_ts else 'Index', 
+                        col, 
+                        conf_int=None,
+                        history_tail=None, 
+                        anomalies_idx=an_idx
+                    )
+                    if trend_b64:
+                        pdf.image(io.BytesIO(base64.b64decode(trend_b64)), w=img_width, x=img_x)
+                        pdf.ln(4)
+                except Exception as e:
+                    app.logger.error(f"Error adding trend plot to PDF for {col}: {e}")
+                    pass
+            
+            # 2. FORECAST CHART (with forecast if pct > 0)
+            if is_numeric and len(s) >= 10 and forecast_pct > 0:
+                try:
+                    total_rows = len(df)
+                    forecast_steps = max(2, int(total_rows * forecast_pct))
+                    
+                    # Use cached forecast
+                    try:
+                        fc_mean, ci = get_cached_column_forecast(filename, col, s, forecast_steps)
+                    except Exception:
+                        fc_mean, ci = None, None
+                    
+                    if fc_mean is not None:
+                        # Detect anomalies
+                        an_idx, _ = detect_anomalies(s, contamination=0.02)
+                        
+                        fc_title = f"Forecast: {col} ({forecast_steps} steps)"
+                        fc_b64 = generate_forecast_plot(
+                            s, 
+                            fc_mean,
+                            fc_title, 
+                            'Timestamp' if is_ts else 'Index', 
+                            col, 
+                            conf_int=ci,
+                            history_tail=None, 
+                            anomalies_idx=an_idx
+                        )
+                        if fc_b64:
+                            pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=img_width, x=img_x)
+                            pdf.ln(4)
+                except Exception as e:
+                    app.logger.error(f"Error adding forecast plot to PDF for {col}: {e}")
+                    pass
+
+            # 3. DISTRIBUTION chart
             try:
-                fig, ax = plt.subplots(figsize=(7, 4))
+                fig, ax = plt.subplots(figsize=(10, 5))  # Wider figure for full-width image
                 if is_numeric:
                     ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', label='Distribution')
                     ax.set_title(f"Distribution: {col}")
@@ -5452,16 +5529,31 @@ def download_full_report_pdf(filename):
                     ax.set_ylabel("Count")
                     plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
                     
-                    # Stats annotation (include avg/med of counts)
+                    # Stats for annotation
                     max_count = int(all_counts.max())
                     min_count = int(all_counts.min())
                     avg_count = float(all_counts.mean())
                     med_count = float(all_counts.median())
                     most_freq = str(all_counts.index[0])[:15]
-                    stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count} | Avg: {avg_count:.1f} | Med: {med_count:.1f}"
+                    
+                    # Add horizontal avg/med lines for counts
+                    ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
+                    ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
+                    
+                    # Add text labels for avg/med lines on the left side
+                    cat_xlim = ax.get_xlim()
+                    ax.text(cat_xlim[0] - 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
+                            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    ax.text(cat_xlim[0] - 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
+                            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    
+                    stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
                     ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=8,
                             verticalalignment='top', horizontalalignment='right',
                             bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
+                    
+                    # Legend below chart
+                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=4, frameon=False)
 
                 ax.set_xlabel(col)
                 ax.grid(True, alpha=0.3)
@@ -5470,12 +5562,12 @@ def download_full_report_pdf(filename):
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
                 plt.close(fig)
                 buf.seek(0)
-                pdf.image(buf, w=140, x=35)
-                pdf.ln(2)
+                pdf.image(buf, w=img_width, x=img_x)
+                pdf.ln(4)
             except Exception:
                 pass
                 
-            # STL - use cached version for performance
+            # 4. STL DECOMPOSITION - last (for timeseries only)
             if is_numeric and is_ts and len(s) >= 28:
                 try:
                     sp = _infer_seasonal_period(s.index)
@@ -5483,53 +5575,9 @@ def download_full_report_pdf(filename):
                         # Use cached STL plot - may already be computed from web view
                         stl_b64 = get_cached_stl_plot(filename, col, s, sp)
                         if stl_b64:
-                            pdf.image(io.BytesIO(base64.b64decode(stl_b64)), w=140, x=35)
-                            pdf.ln(2)
+                            pdf.image(io.BytesIO(base64.b64decode(stl_b64)), w=img_width, x=img_x)
+                            pdf.ln(4)
                 except Exception:
-                    pass
-            
-            # Forecast/Data graph (respects forecast_pct setting)
-            # If forecast_pct is 0, shows data + anomalies only (no forecast lines)
-            if is_numeric and len(s) >= 10:
-                try:
-                    total_rows = len(df)
-                    
-                    fc_mean, ci = None, None
-                    forecast_steps = 0
-                    
-                    # Only compute forecast if pct > 0
-                    if forecast_pct > 0:
-                        forecast_steps = max(2, int(total_rows * forecast_pct))
-                        try:
-                            # Use cached forecast - reuses computation from web view if available
-                            fc_mean, ci = get_cached_column_forecast(filename, col, s, forecast_steps)
-                        except Exception as e:
-                            fc_mean, ci = None, None
-                    
-                    # Always detect anomalies
-                    an_idx, _ = detect_anomalies(s, contamination=0.02)
-                    
-                    # Generate plot - with or without forecast
-                    if forecast_pct > 0:
-                        title = f"Forecast: {col} ({forecast_steps} steps)"
-                    else:
-                        title = f"Data & Anomalies: {col}"
-                    
-                    fc_b64 = generate_forecast_plot(
-                        s, 
-                        fc_mean,  # None for 0% forecast
-                        title, 
-                        'Timestamp', 
-                        col, 
-                        conf_int=ci,  # None for 0% forecast
-                        history_tail=None, 
-                        anomalies_idx=an_idx
-                    )
-                    if fc_b64:
-                        pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=140, x=35)
-                        pdf.ln(2)
-                except Exception as e:
-                    app.logger.error(f"Error adding forecast/data plot to PDF for {col}: {e}")
                     pass
     except Exception as e:
         app.logger.error(f"Error generating PDF: {e}")
