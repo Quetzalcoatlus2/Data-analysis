@@ -323,6 +323,14 @@
           accent2: pick('--accent-2')
         };
       };
+      // Helper to detect dark mode
+      window.isDarkMode = function () {
+        const theme = document.documentElement.getAttribute('data-theme');
+        if (theme) return theme === 'dark';
+        // Fallback: check background color
+        const t = getThemeVars();
+        return t.bg && /^#0|^#1|^#2/i.test(t.bg.trim());
+      };
     })();
   </script>
   <script>
@@ -1049,22 +1057,41 @@
         if (item.stats) {
           const s = item.stats;
 
+          // Get x-axis range for drawing horizontal stat lines
+          let chartXMin = null, chartXMax = null;
+          traces.forEach(tr => {
+            if (tr.x && tr.x.length > 0) {
+              const first = tr.x[0];
+              const last = tr.x[tr.x.length - 1];
+              if (chartXMin === null || first < chartXMin) chartXMin = first;
+              if (chartXMax === null || last > chartXMax) chartXMax = last;
+            }
+          });
+          // Fallback to 0-1 if no data
+          if (chartXMin === null) chartXMin = 0;
+          if (chartXMax === null) chartXMax = 1;
+
+          // Use brighter colors for dark mode visibility
+          const avgColor = '#ffc107';  // Brighter amber
+          const medColor = '#ce93d8';  // Brighter purple
+          const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
+          const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
+
           // Add horizontal line shapes for Avg and Median
           layout.shapes = layout.shapes || [];
           layout.shapes.push(
-            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.mean, y1: s.mean, line: { color: '#f39c12', width: 2, dash: 'dot' } },
-            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.median, y1: s.median, line: { color: '#9b59b6', width: 1.5, dash: 'dashdot' } }
+            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.mean, y1: s.mean, line: { color: avgColor, width: 2, dash: 'dot' } },
+            { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: s.median, y1: s.median, line: { color: medColor, width: 1.5, dash: 'dashdot' } }
           );
 
-          // Add Avg/Med as traces for legend visibility (shapes don't appear in legend)
+          // Add Avg/Med as traces for legend visibility using full data x-range
           traces.push({
             type: 'scatter',
             mode: 'lines',
             name: `Avg: ${s.mean.toFixed(2)}`,
-            x: [0, 1],
+            x: [chartXMin, chartXMax],
             y: [s.mean, s.mean],
-            xaxis: 'x',
-            line: { color: '#f39c12', width: 2, dash: 'dot' },
+            line: { color: avgColor, width: 2, dash: 'dot' },
             hoverinfo: 'name',
             showlegend: true,
             visible: 'legendonly'  // Hidden by default since shape shows it
@@ -1074,10 +1101,9 @@
             type: 'scatter',
             mode: 'lines',
             name: `Med: ${s.median.toFixed(2)}`,
-            x: [0, 1],
+            x: [chartXMin, chartXMax],
             y: [s.median, s.median],
-            xaxis: 'x',
-            line: { color: '#9b59b6', width: 1.5, dash: 'dashdot' },
+            line: { color: medColor, width: 1.5, dash: 'dashdot' },
             hoverinfo: 'name',
             showlegend: true,
             visible: 'legendonly'  // Hidden by default since shape shows it
@@ -1128,17 +1154,17 @@
           // Add annotations - Avg ABOVE line, Median BELOW line (to avoid overlap)
           layout.annotations = layout.annotations || [];
           layout.annotations.push(
-            { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: '#f39c12' }, xanchor: 'left', yanchor: 'bottom' },
-            { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 9, color: '#9b59b6' }, xanchor: 'left', yanchor: 'top' }
+            { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom' },
+            { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top' }
           );
 
-          // Add Std annotation in TOP LEFT corner
+          // Add Std annotation in TOP LEFT corner with dark mode support
           layout.annotations.push({
             x: 0.01, y: 0.99, xref: 'paper', yref: 'paper',
             text: `Std: ${s.std.toFixed(2)}`,
             showarrow: false,
-            font: { size: 10, color: 'gray' },
-            bgcolor: 'rgba(245, 222, 179, 0.7)',
+            font: { size: 10, color: stdTextColor },
+            bgcolor: stdBgColor,
             borderpad: 3,
             xanchor: 'left', yanchor: 'top'
           });
@@ -1268,13 +1294,20 @@
           if (item.stats) {
             const s = item.stats;
 
+            // Use brighter colors for dark mode visibility
+            const avgColor = '#ffc107';  // Brighter amber
+            const medColor = '#ce93d8';  // Brighter purple
+            const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
+            const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
+            const annotBgColor = isDarkMode() ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+
             // Add vertical line shapes for Avg and Median
             distLayout.shapes = [
-              { type: 'line', x0: s.mean, x1: s.mean, y0: 0, y1: 1, yref: 'paper', line: { color: '#f39c12', width: 2, dash: 'dot' } },
-              { type: 'line', x0: s.median, x1: s.median, y0: 0, y1: 1, yref: 'paper', line: { color: '#9b59b6', width: 1.5, dash: 'dashdot' } }
+              { type: 'line', x0: s.mean, x1: s.mean, y0: 0, y1: 1, yref: 'paper', line: { color: avgColor, width: 2, dash: 'dot' } },
+              { type: 'line', x0: s.median, x1: s.median, y0: 0, y1: 1, yref: 'paper', line: { color: medColor, width: 1.5, dash: 'dashdot' } }
             ];
 
-            // Add Avg/Med as traces for legend visibility (shapes don't appear in legend)
+            // Add Avg/Med as traces for legend visibility
             distTraces.push({
               type: 'scatter',
               mode: 'lines',
@@ -1282,7 +1315,7 @@
               x: [s.mean, s.mean],
               y: [0, 1],
               yaxis: 'y',
-              line: { color: '#f39c12', width: 2, dash: 'dot' },
+              line: { color: avgColor, width: 2, dash: 'dot' },
               hoverinfo: 'name',
               showlegend: true,
               visible: 'legendonly'  // Hidden by default since shape shows it
@@ -1295,7 +1328,7 @@
               x: [s.median, s.median],
               y: [0, 1],
               yaxis: 'y',
-              line: { color: '#9b59b6', width: 1.5, dash: 'dashdot' },
+              line: { color: medColor, width: 1.5, dash: 'dashdot' },
               hoverinfo: 'name',
               showlegend: true,
               visible: 'legendonly'  // Hidden by default since shape shows it
@@ -1337,24 +1370,24 @@
             if (s.mean <= s.median) {
               // Mean is on the left, Median is on the right
               distLayout.annotations = [
-                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#f39c12' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
-                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#9b59b6' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
+                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'right', yanchor: 'bottom', bgcolor: annotBgColor },
+                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'left', yanchor: 'bottom', bgcolor: annotBgColor }
               ];
             } else {
               // Median is on the left, Mean is on the right
               distLayout.annotations = [
-                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#9b59b6' }, xanchor: 'right', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' },
-                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: '#f39c12' }, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.8)' }
+                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'right', yanchor: 'bottom', bgcolor: annotBgColor },
+                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'left', yanchor: 'bottom', bgcolor: annotBgColor }
               ];
             }
 
-            // Add Std annotation in TOP RIGHT corner
+            // Add Std annotation in TOP RIGHT corner with dark mode support
             distLayout.annotations.push({
               x: 0.99, y: 0.99, xref: 'paper', yref: 'paper',
               text: `Std: ${s.std.toFixed(2)}`,
               showarrow: false,
-              font: { size: 10, color: 'gray' },
-              bgcolor: 'rgba(245, 222, 179, 0.7)',
+              font: { size: 10, color: stdTextColor },
+              bgcolor: stdBgColor,
               borderpad: 3,
               xanchor: 'right', yanchor: 'top'
             });
