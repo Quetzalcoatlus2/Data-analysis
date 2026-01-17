@@ -1011,16 +1011,16 @@
           layout.height = (chartContainer.clientHeight - 30) || 400;
         }
 
-        // Calculate Y-axis range from History and Forecast only (exclude CI bands and anomalies)
-        // This prevents CI bands from compressing the main data
-        // Use meta property to identify CI (not index, since traces are reordered)
+        // Calculate Y-axis range from ONLY History and Forecast traces
+        // Strictly filter to main data traces - ignore CI, Avg/Med, stat markers, anomalies
         let yMin = Infinity, yMax = -Infinity;
         let xMin = null, xMax = null;
         traces.forEach((tr, idx) => {
-          // Skip CI traces using meta property (set during styling)
-          if (tr.meta === 'ci-controller' || tr.meta === 'ci-member') return;
           const nm = (tr.name || '').toLowerCase();
-          if (nm.includes('anomal') || nm.includes('outlier')) return;
+          // ONLY include History and Forecast traces
+          const isHistory = nm.includes('histor') || nm.includes('actual') || nm === 'history';
+          const isForecast = nm.includes('forecast');
+          if (!isHistory && !isForecast) return;
           // Only consider VISIBLE traces for autoscale
           if (tr.visible === 'legendonly' || tr.visible === false) return;
 
@@ -1036,11 +1036,12 @@
             if (xMax === null || xVals[xVals.length - 1] > xMax) xMax = xVals[xVals.length - 1];
           }
         });
-        // Apply a 10% padding to the range for visual breathing room
+        // Apply a 5% padding to the range for visual breathing room (smaller padding = bigger data)
         if (Number.isFinite(yMin) && Number.isFinite(yMax) && yMax > yMin) {
-          const padding = (yMax - yMin) * 0.1;
+          const padding = (yMax - yMin) * 0.05;
           layout.yaxis = layout.yaxis || {};
           layout.yaxis.range = [yMin - padding, yMax + padding];
+          layout.yaxis.autorange = false;  // Disable Plotly's autorange
         }
 
         // Always fit X-axis to the visible data range
@@ -1211,6 +1212,10 @@
           const isAnomaly = nm.includes('anomal') || nm.includes('outlier');
           const isAvg = nm.includes('avg');
           const isMed = nm.includes('med');
+          // Determine if this is a main data trace (History/Forecast) that should trigger autoscale
+          const isHistory = nm.includes('histor') || nm.includes('actual');
+          const isForecast = nm.includes('forecast');
+          const isMainDataTrace = isHistory || isForecast;
 
           // Save current range for CI/Anomaly toggles
           const savedRange = (isCI || isAnomaly) ? {
@@ -1248,33 +1253,54 @@
             if (!legendVisibilityState[colKey]) legendVisibilityState[colKey] = {};
             chartEl.data.forEach((t, i) => legendVisibilityState[colKey][t.name || `trace_${i}`] = t.visible);
 
-            // Check visible state of main traces
-            const vis = name => chartEl.data.some(t =>
-              (t.name || '').toLowerCase().includes(name) && t.visible !== 'legendonly' && t.visible !== false
-            );
-            const historyVis = vis('histor') || vis('actual');
-            const anomalyVis = vis('anomal') || vis('outlier');
-            const forecastOnlyMode = !historyVis && !anomalyVis;
+            // ONLY autoscale when main data traces (History/Forecast) visibility changes
+            // Do NOT autoscale when toggling Avg/Med, CI bands, or stat markers
+            if (isMainDataTrace) {
+              // Calculate Y and X range from only History and Forecast traces (visible ones)
+              let yMin = Infinity, yMax = -Infinity;
+              let xMin = null, xMax = null;
+              chartEl.data.forEach(t => {
+                const tName = (t.name || '').toLowerCase();
+                // Only include History and Forecast traces
+                const isHistoryTrace = tName.includes('histor') || tName.includes('actual') || tName === 'history';
+                const isForecastTrace = tName.includes('forecast');
+                if (!isHistoryTrace && !isForecastTrace) return;
+                // Skip hidden traces
+                if (t.visible === 'legendonly' || t.visible === false) return;
 
-            // ALWAYS autoscale Y-axis when legend changes (user requested)
-            // Only include History and Forecast traces (skip CI, Avg/Med, Min/Max stat-markers)
-            let yMin = Infinity, yMax = -Infinity;
-            chartEl.data.forEach(t => {
-              // Skip CI traces
-              if (t.meta === 'ci-controller' || t.meta === 'ci-member') return;
-              // Skip stat markers (Min/Max/Avg/Med)
-              if (t.meta === 'stat-marker') return;
-              const nm = (t.name || '').toLowerCase();
-              if (nm.includes('avg') || nm.includes('med')) return;
-              // Skip hidden traces
-              if (t.visible === 'legendonly' || t.visible === false) return;
-              (t.y || []).forEach(v => { if (Number.isFinite(v)) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); } });
-            });
-            const pad = (yMax - yMin) * 0.1;
-            if (Number.isFinite(yMin) && yMax > yMin) {
-              Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.range': [yMin - pad, yMax + pad], 'yaxis.autorange': false });
-            } else {
-              Plotly.relayout(chartEl, { 'xaxis.autorange': true, 'yaxis.autorange': true });
+                // Calculate Y range
+                (t.y || []).forEach(v => { if (Number.isFinite(v)) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); } });
+
+                // Calculate X range
+                const xVals = t.x || [];
+                if (xVals.length > 0) {
+                  const first = xVals[0];
+                  const last = xVals[xVals.length - 1];
+                  if (xMin === null || first < xMin) xMin = first;
+                  if (xMax === null || last > xMax) xMax = last;
+                }
+              });
+
+              const pad = (yMax - yMin) * 0.05;  // 5% padding for maximum data visibility
+              const layoutUpdate = {};
+
+              // Set Y range
+              if (Number.isFinite(yMin) && yMax > yMin) {
+                layoutUpdate['yaxis.range'] = [yMin - pad, yMax + pad];
+                layoutUpdate['yaxis.autorange'] = false;
+              } else {
+                layoutUpdate['yaxis.autorange'] = true;
+              }
+
+              // Set X range to visible data only
+              if (xMin !== null && xMax !== null) {
+                layoutUpdate['xaxis.range'] = [xMin, xMax];
+                layoutUpdate['xaxis.autorange'] = false;
+              } else {
+                layoutUpdate['xaxis.autorange'] = true;
+              }
+
+              Plotly.relayout(chartEl, layoutUpdate);
             }
           }, 50);
           return false;
