@@ -2,10 +2,13 @@
 import sys
 import os
 
+import pandas as pd
+import pytest
+
 # Add project root to sys.path to ensure app can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from app import allowed_file, app
+from app import allowed_file, app, _compute_basic_stats
 
 def test_allowed_file():
     """Test the allowed_file function."""
@@ -29,3 +32,14 @@ def test_index_route():
         assert response.status_code == 200
         # Check for expected content
         assert b"Upload Dataset" in response.data or b"Data Analysis" in response.data
+
+
+def test_compute_basic_stats():
+    """Ensure basic stats match pandas computations and drop NaNs."""
+    series = pd.Series([1, 2, 3, 4, 5, None])
+    stats = _compute_basic_stats(series)
+    assert stats["min"] == 1.0
+    assert stats["max"] == 5.0
+    assert stats["mean"] == pytest.approx(3.0)
+    assert stats["median"] == 3.0
+    assert stats["std"] == pytest.approx(series.dropna().std())

@@ -50,7 +50,6 @@
 
     /* Prevent layout shifts */
     #chart,
-    #dist,
     #corr,
     #pearson {
       contain: layout style;
@@ -58,8 +57,28 @@
       /* Prevent internal scrollbars */
     }
 
+    #dist {
+      contain: layout style;
+      overflow: visible;
+      /* Allow legend below chart to be visible */
+    }
+
+
     .grid .panel {
       contain: layout style;
+    }
+
+    /* Remove black background from Plotly modebar buttons */
+    .modebar-container {
+      background: transparent !important;
+    }
+
+    .modebar-btn {
+      background: transparent !important;
+    }
+
+    .modebar-group {
+      background: transparent !important;
     }
   </style>
   <style>
@@ -640,7 +659,7 @@
     </section>
 
     {% elif active_view == 'interactive' %}
-    <section class="panel" style="width:100%;">
+    <section class="panel" style="width:100%; overflow: visible;">
       <h3>Interactive charts</h3>
       <div class="row" style="margin-bottom:8px">
         <label for="forecastPctSelect">Forecast horizon</label>
@@ -676,11 +695,11 @@
       </div>
       <!-- Side-by-side layout for chart and distribution - fills available space -->
       <div
-        style="display: flex; gap: 16px; align-items: stretch; height: calc(100vh - 290px); min-height: 250px; overflow: hidden;">
-        <div id="chart" class="panel" style="flex: 2 1 60%; height: 100%; overflow: hidden;">
+        style="display: flex; gap: 16px; align-items: stretch; height: calc(100vh - 270px); min-height: 240px; overflow: hidden;">
+        <div id="chart" class="panel" style="flex: 2 1 60%; height: 100%; max-height: 100%; overflow: hidden;">
           <div class="skeleton" style="height: 100%"></div>
         </div>
-        <div id="dist" class="panel" style="flex: 1 1 35%; height: 100%; overflow: hidden;">
+        <div id="dist" class="panel" style="flex: 1 1 35%; height: 100%; max-height: 100%; overflow: hidden;">
           <div class="skeleton" style="height: 100%"></div>
         </div>
       </div>
@@ -753,12 +772,14 @@
         const t = getThemeVars();
         const isDark = t.bg && /^#0|^#1|^#2/i.test(t.bg.trim());
         const gridColor = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
+        const sharedLegend = { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.2, yanchor: 'top' };
         layout.paper_bgcolor = t.panel;
         layout.plot_bgcolor = t.panel;
         layout.font = { color: t.text };
         layout.margin = layout.margin || { l: 50, r: 20, t: 28, b: 60 }; // Increased bottom margin
         layout.height = layout.height || 500; // Explicit height for better aspect ratio
-        layout.legend = Object.assign({ orientation: 'h' }, layout.legend || {});
+        layout.legend = Object.assign(sharedLegend, layout.legend || {});
+        layout.legend.font = Object.assign({ size: 10 }, layout.legend.font || {});
         layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
         layout.title = null;
         if (!layout.xaxis) layout.xaxis = {};
@@ -1075,6 +1096,10 @@
           // Use brighter colors for dark mode visibility
           const avgColor = '#ffc107';  // Brighter amber
           const medColor = '#ce93d8';  // Brighter purple
+          const minColor = '#ff3b30';
+          const maxColor = '#00e5ff';
+          const edgeColor = isDarkMode() ? '#ffffff' : '#0b1220';
+          const stdColor = '#94a3b8';
           const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
           const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
 
@@ -1103,6 +1128,17 @@
             visible: true  // Visible by default, toggleable via legend
           });
 
+          traces.push({
+            type: 'scatter',
+            mode: 'markers',
+            name: `Std: ${s.std.toFixed(2)}`,
+            x: [chartXMin],
+            y: [s.mean],
+            marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
+            hoverinfo: 'skip',
+            showlegend: true
+          });
+
           // Find the x-position of min and max values from the FILTERED History trace
           // Use the currently filtered history data, not the original stats
           const historyTrace = traces.find(t => t.name === 'History');
@@ -1125,10 +1161,10 @@
               name: `Min: ${filteredMin.toFixed(2)}`,
               x: [xVals[minIdx]],
               y: [filteredMin],
-              marker: { color: '#e74c3c', size: 12, symbol: 'triangle-down', line: { color: 'darkred', width: 1.5 } },
+              marker: { color: minColor, size: 12, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
               text: [filteredMin.toFixed(2)],
               textposition: 'bottom center',
-              textfont: { size: 9, color: '#e74c3c' },
+              textfont: { size: 9, color: minColor },
               hoverinfo: 'name+y',
               showlegend: true,
               meta: 'stat-marker'  // Tag so autoscale can skip it
@@ -1141,10 +1177,10 @@
               name: `Max: ${filteredMax.toFixed(2)}`,
               x: [xVals[maxIdx]],
               y: [filteredMax],
-              marker: { color: '#27ae60', size: 12, symbol: 'triangle-up', line: { color: 'darkgreen', width: 1.5 } },
+              marker: { color: maxColor, size: 12, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
               text: [filteredMax.toFixed(2)],
               textposition: 'top center',
-              textfont: { size: 9, color: '#27ae60' },
+              textfont: { size: 9, color: maxColor },
               hoverinfo: 'name+y',
               showlegend: true,
               meta: 'stat-marker'  // Tag so autoscale can skip it
@@ -1167,17 +1203,6 @@
               { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'top', name: 'avg-annot' }
             );
           }
-
-          // Add Std annotation in TOP LEFT corner with dark mode support
-          layout.annotations.push({
-            x: 0.01, y: 0.99, xref: 'paper', yref: 'paper',
-            text: `Std: ${s.std.toFixed(2)}`,
-            showarrow: false,
-            font: { size: 10, color: stdTextColor },
-            bgcolor: stdBgColor,
-            borderpad: 3,
-            xanchor: 'left', yanchor: 'top'
-          });
 
           // Increase right margin to show stat labels
           layout.margin = layout.margin || {};
@@ -1322,10 +1347,20 @@
           // Build distribution layout with stats annotation
           const distLayout = {
             title: { text: dist.name + ' Distribution', font: { size: 14 }, x: 0.02 },
-            height: distHeight,
+            height: distHeight + 100,
             paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-            margin: { l: 35, r: 10, t: 40, b: 80 },
+            margin: { l: 35, r: 10, t: 40, b: 200 },
             bargap: 0.1,
+            showlegend: true,
+            legend: {
+              orientation: 'v',
+              x: 0.01,
+              xanchor: 'left',
+              y: 1.05,
+              yanchor: 'top',
+              font: { size: 8, color: t.text },
+              bgcolor: 'rgba(0,0,0,0)'
+            },
             xaxis: {
               automargin: true,
               showticklabels: true,
@@ -1344,7 +1379,8 @@
             marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
             texttemplate: '%{y}',
             textposition: 'outside',
-            textfont: { size: 9, color: t.muted || t.text }
+            textfont: { size: 9, color: t.muted || t.text },
+            showlegend: true
           }];
 
           // Add vertical stat line shapes and Min/Max markers
@@ -1360,8 +1396,8 @@
 
             // Add vertical line shapes for Avg and Median (use yref: 'paper' to span full height)
             distLayout.shapes = [
-              { type: 'line', x0: s.mean, x1: s.mean, y0: 0, y1: 1, yref: 'paper', line: { color: avgColor, width: 2, dash: 'dot' }, name: 'avg-shape' },
-              { type: 'line', x0: s.median, x1: s.median, y0: 0, y1: 1, yref: 'paper', line: { color: medColor, width: 1.5, dash: 'dashdot' }, name: 'med-shape' }
+              { type: 'line', x0: s.mean, x1: s.mean, y0: 0.08, y1: 0.92, yref: 'paper', line: { color: avgColor, width: 2, dash: 'dot' }, name: 'avg-shape' },
+              { type: 'line', x0: s.median, x1: s.median, y0: 0.08, y1: 0.92, yref: 'paper', line: { color: medColor, width: 1.5, dash: 'dashdot' }, name: 'med-shape' }
             ];
 
             // Add Avg/Med as line traces for legend control (visible styling for legend symbols)
@@ -1402,16 +1438,21 @@
             };
 
             // Add Min/Max as scatter trace markers at bottom
+            const minColor = '#ff3b30';
+            const maxColor = '#00e5ff';
+            const edgeColor = isDarkMode() ? '#ffffff' : '#0b1220';
+            const stdColor = '#94a3b8';
+
             distTraces.push({
               type: 'scatter',
               mode: 'markers+text',
               name: `Min: ${s.min.toFixed(2)}`,
               x: [s.min],
               y: [0],
-              marker: { color: '#e74c3c', size: 12, symbol: 'triangle-down', line: { color: 'darkred', width: 1.5 } },
+              marker: { color: minColor, size: 12, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
               text: [`Min: ${s.min.toFixed(2)}`],
               textposition: 'bottom center',
-              textfont: { size: 9, color: '#e74c3c' },
+              textfont: { size: 9, color: minColor },
               hoverinfo: 'text',
               showlegend: true
             });
@@ -1422,11 +1463,22 @@
               name: `Max: ${s.max.toFixed(2)}`,
               x: [s.max],
               y: [0],
-              marker: { color: '#27ae60', size: 12, symbol: 'triangle-up', line: { color: 'darkgreen', width: 1.5 } },
+              marker: { color: maxColor, size: 12, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
               text: [`Max: ${s.max.toFixed(2)}`],
               textposition: 'top center',
-              textfont: { size: 9, color: '#27ae60' },
+              textfont: { size: 9, color: maxColor },
               hoverinfo: 'text',
+              showlegend: true
+            });
+
+            distTraces.push({
+              type: 'scatter',
+              mode: 'markers',
+              name: `Std: ${s.std.toFixed(2)}`,
+              x: [s.mean],
+              y: [0],
+              marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
+              hoverinfo: 'skip',
               showlegend: true
             });
 
@@ -1447,17 +1499,6 @@
                 { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'left', yanchor: 'bottom', bgcolor: annotBgColor, name: 'avg-annot' }
               ];
             }
-
-            // Add Std annotation in TOP RIGHT corner with dark mode support
-            distLayout.annotations.push({
-              x: 0.99, y: 0.99, xref: 'paper', yref: 'paper',
-              text: `Std: ${s.std.toFixed(2)}`,
-              showarrow: false,
-              font: { size: 10, color: stdTextColor },
-              bgcolor: stdBgColor,
-              borderpad: 3,
-              xanchor: 'right', yanchor: 'top'
-            });
 
             distLayout.margin.t = 50;  // More top margin for labels
           }
@@ -1562,11 +1603,14 @@
           let vals = (yData || []).filter(v => Number.isFinite(v));
           if (vals.length) {
             Plotly.newPlot('dist', [{
-              type: 'histogram', name: column, x: vals, marker: { color: t.accent }
+              type: 'histogram', name: column, x: vals, marker: { color: t.accent }, showlegend: true
             }], {
               title: null,
               paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-              margin: { l: 40, r: 10, t: 20, b: 40 },
+              height: (distEl ? (distEl.clientHeight || 400) : 400) + 60,
+              margin: { l: 40, r: 10, t: 20, b: 150 },
+              showlegend: true,
+              legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.12, yanchor: 'top', font: { size: 10 } },
               hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
             }, {
               responsive: true,
@@ -1772,14 +1816,43 @@
       <p class="muted">Bar charts showing the most frequent values for non-numeric (categorical) columns.</p>
 
       {% if analysis.category_charts %}
-      <div class="grid grid-2">
-        {% for col, img_b64 in analysis.category_charts.items() %}
-        <div class="panel">
-          <h3 style="margin-top:0;">{{ col }}</h3>
-          <img class="plot" src="data:image/png;base64,{{ img_b64 }}" alt="Categories: {{ col }}" loading="lazy">
+      <div class="grid">
+        {% for col, chart_data in analysis.category_charts.items() %}
+        <div class="panel" style="width:100%; padding-top: 0;">
+          <div id="category-chart-{{ loop.index }}" class="category-chart" style="width:100%; height:700px;"></div>
         </div>
         {% endfor %}
       </div>
+
+      <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          var categoryData = {{ analysis.category_charts | tojson | safe
+        }};
+        var idx = 1;
+        loadPlotly().then(function () {
+          for (var col in categoryData) {
+            if (categoryData.hasOwnProperty(col)) {
+              var data = categoryData[col];
+              var el = document.getElementById('category-chart-' + idx);
+              if (el && data.traces && data.layout) {
+                var layout = Object.assign({}, data.layout);
+                if (typeof applyThemeLayoutDefaults === 'function') {
+                  applyThemeLayoutDefaults(layout);
+                }
+                Plotly.newPlot(el, data.traces, layout, {
+                  responsive: true,
+                  displaylogo: true,
+                  displayModeBar: true,
+                  modeBarButtonsToRemove: [],
+                  toImageButtonOptions: { format: 'png', filename: 'category_chart_' + col.replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
+                });
+              }
+              idx++;
+            }
+          }
+        });
+        });
+      </script>
       {% else %}
       <div class="muted">No categorical columns found in this dataset, or all columns are numeric.</div>
       {% endif %}

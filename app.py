@@ -3,20 +3,34 @@ import math
 import io
 import base64
 import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed  # PERFORMANCE: Parallel processing
+import logging
+import time
+import traceback
+import re
+import hashlib
+import uuid
+import json
+import html as htmllib
+from collections import OrderedDict
+from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
+
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
 from fpdf import FPDF
-
-from datetime import datetime, timedelta
 import pandas as pd
-
-# Globally disable pandas column truncation so ALL columns are always shown
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', None)
-pd.set_option('display.max_colwidth', None)
-
+import numpy as np
 from werkzeug.utils import secure_filename
+from sklearn.ensemble import IsolationForest
+from statsmodels.tsa.seasonal import STL
+import google.generativeai as genai
 
+# Optional / Feature Flag Imports
+try:
+    import google.auth  # noqa: F401
+    from google.oauth2 import service_account
+    GOOGLE_AUTH_AVAILABLE = True
+except ImportError:
+    GOOGLE_AUTH_AVAILABLE = False
 
 try:
     from dotenv import load_dotenv
@@ -25,64 +39,47 @@ try:
 except Exception:
     pass
 
+try:
+    from flask_compress import Compress
+except ImportError:
+    Compress = None
+
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+except ImportError:
+    Limiter = None
+
+try:
+    from flask_talisman import Talisman
+except ImportError:
+    Talisman = None
+
 import matplotlib
 matplotlib.use('Agg')
 # HIGH QUALITY: Increased DPI for sharp images in PDF, ZIP, and web views
-matplotlib.rcParams['savefig.dpi'] = 150  # High quality images
+matplotlib.rcParams['savefig.dpi'] = 150  
 matplotlib.rcParams['figure.dpi'] = 150
 matplotlib.rcParams['path.simplify'] = True
-matplotlib.rcParams['path.simplify_threshold'] = 0.3  # Less aggressive simplification for quality
-matplotlib.rcParams['agg.path.chunksize'] = 10000  # Larger chunks for faster rendering
-import matplotlib.pyplot as plt
+matplotlib.rcParams['path.simplify_threshold'] = 0.3 
+matplotlib.rcParams['agg.path.chunksize'] = 10000 
+import matplotlib.pyplot as plt  # noqa: E402
 
-
-
-import google.generativeai as genai
-
-# For service account authentication via Vertex AI
-try:
-    import google.auth
-    from google.oauth2 import service_account
-    GOOGLE_AUTH_AVAILABLE = True
-except ImportError:
-    GOOGLE_AUTH_AVAILABLE = False
-from sklearn.ensemble import IsolationForest
-from statsmodels.tsa.arima.model import ARIMA
-import warnings
-import hashlib
-import uuid
-import json  
-import numpy as np  
-from statsmodels.tsa.holtwinters import ExponentialSmoothing  
-from statsmodels.tsa.seasonal import STL  
-from collections import OrderedDict  
-import re
-import html as htmllib  
-import math  
-from flask import Flask
+# Globally disable pandas column truncation so ALL columns are always shown
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', None)
+pd.set_option('display.max_colwidth', None)
 
 
 app = Flask(__name__)
 
 # PERFORMANCE: Flask-Compress for automatic gzip/brotli compression
-try:
-    from flask_compress import Compress
+if Compress:
     Compress(app)
     app.config['COMPRESS_MIMETYPES'] = ['text/html', 'text/css', 'text/javascript', 'application/json', 'application/javascript']
     app.config['COMPRESS_LEVEL'] = 6  # Balance between speed and compression ratio
     app.config['COMPRESS_MIN_SIZE'] = 500  # Only compress responses > 500 bytes
-except ImportError:
-    pass  # flask-compress not installed, skip
 
-try:
-    from flask_limiter import Limiter  
-    from flask_limiter.util import get_remote_address  
-except Exception:
-    Limiter = None
-try:
-    from flask_talisman import Talisman  
-except Exception:
-    Talisman = None
 
 UPLOAD_FOLDER = 'datasets'
 ALLOWED_EXTENSIONS = {'txt', 'csv', 'xlsx', 'json'}
@@ -111,10 +108,7 @@ app.config.setdefault('FORECAST_MAX_INPUT_POINTS', int(os.getenv('FORECAST_MAX_I
 app.config.setdefault('FORECAST_BOOTSTRAP_SAMPLES', int(os.getenv('FORECAST_BOOTSTRAP_SAMPLES', '60')))
 # PERFORMANCE: Browser caching for static files (CSS, JS) - 1 hour
 app.config.setdefault('SEND_FILE_MAX_AGE_DEFAULT', int(os.getenv('SEND_FILE_MAX_AGE', '3600')))
-import logging
-import re
-from logging.handlers import RotatingFileHandler
-import time 
+
 
 os.environ.setdefault("NO_COLOR", "1")
 
@@ -245,10 +239,12 @@ def _normalize_model_aliases(name: str) -> list[str]:
         if prefixed not in candidates:
             candidates.append(prefixed)
     
-    seen = set(); out = []
+    seen = set()
+    out = []
     for c in candidates:
         if c and c not in seen:
-            out.append(c); seen.add(c)
+            out.append(c)
+            seen.add(c)
     return out
 
 def _extract_text_from_gemini_response(resp) -> str:
@@ -671,7 +667,7 @@ def _safe_delete(path, retries=3, delay=0.2):
             if i < retries - 1:
                 time.sleep(delay)
             else:
-                return False, f"Permission denied (file may be locked by OneDrive or antivirus)"
+                return False, "Permission denied (file may be locked by OneDrive or antivirus)"
         except Exception as e:
             app.logger.warning("Delete failed (%s), attempt %d/%d: %s", path, i + 1, retries, e)
             if i < retries - 1:
@@ -1534,8 +1530,10 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
                 ax.scatter(an_positions, an_values, color='red', s=14, zorder=5, label='Anomaly')
     
     ax.set_title(title, fontsize=10)
-    ax.set_xlabel(xlabel, fontsize=9); ax.set_ylabel(ylabel, fontsize=9)
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+    ax.set_xlabel(xlabel, fontsize=9)
+    ax.set_ylabel(ylabel, fontsize=9)
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=8)
     
     # Add visual statistics markers on the chart
@@ -1550,38 +1548,48 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         ax.axhline(y=stats_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
         ax.axhline(y=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.7, label=f'Median: {stats_median:.2f}')
         
-        # Add value tags - Avg ABOVE line (+offset), Median BELOW line (-offset) to avoid overlap
+        # Add value tags - position based on which line is higher
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
         y_offset = (ylim[1] - ylim[0]) * 0.02  # 2% offset
-        ax.text(xlim[1], stats_mean + y_offset, f' Avg: {stats_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
-        ax.text(xlim[1], stats_median - y_offset, f' Med: {stats_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+        # Position tags so they don't overlap: higher line's tag above it, lower line's tag below it
+        if stats_mean >= stats_median:
+            # Avg is above Med - Avg tag above its line, Med tag below its line
+            ax.text(xlim[1], stats_mean + y_offset, f' Avg: {stats_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+            ax.text(xlim[1], stats_median - y_offset, f' Med: {stats_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+        else:
+            # Med is above Avg - Med tag above its line, Avg tag below its line
+            ax.text(xlim[1], stats_median + y_offset, f' Med: {stats_median:.2f}', va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+            ax.text(xlim[1], stats_mean - y_offset, f' Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
         
         # Mark the actual Min and Max points on the data with value annotations
+        min_color = '#ff3b30'
+        max_color = '#00e5ff'
+        edge_color = '#0b1220'
         if is_datetime:
             min_idx = data.idxmin()
             max_idx = data.idxmax()
-            ax.scatter([min_idx], [stats_min], color='#e74c3c', s=80, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
-            ax.scatter([max_idx], [stats_max], color='#27ae60', s=80, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+            ax.scatter([min_idx], [stats_min], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
+            ax.scatter([max_idx], [stats_max], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
             # Tags to the RIGHT of symbols
-            ax.annotate(f'{stats_min:.2f}', (min_idx, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#e74c3c', fontweight='bold')
-            ax.annotate(f'{stats_max:.2f}', (max_idx, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
+            ax.annotate(f'{stats_min:.2f}', (min_idx, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=min_color, fontweight='bold')
+            ax.annotate(f'{stats_max:.2f}', (max_idx, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=max_color, fontweight='bold')
         else:
             min_pos = data.values.argmin()
             max_pos = data.values.argmax()
-            ax.scatter([min_pos], [stats_min], color='#e74c3c', s=80, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
-            ax.scatter([max_pos], [stats_max], color='#27ae60', s=80, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+            ax.scatter([min_pos], [stats_min], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
+            ax.scatter([max_pos], [stats_max], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
             # Tags to the RIGHT of symbols
-            ax.annotate(f'{stats_min:.2f}', (min_pos, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#e74c3c', fontweight='bold')
-            ax.annotate(f'{stats_max:.2f}', (max_pos, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
+            ax.annotate(f'{stats_min:.2f}', (min_pos, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=min_color, fontweight='bold')
+            ax.annotate(f'{stats_max:.2f}', (max_pos, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=max_color, fontweight='bold')
         
+        # Std legend entry
+        ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
+
         # Legend on single line - at the lowest position below x-axis label
-        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
-        
-        # Add text box with Std in TOP LEFT corner
-        stats_text = f"Std: {stats_std:.2f}"
-        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=8, verticalalignment='top',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
+
+        # Std appears in legend only
     except Exception:
         pass  # Skip stats if calculation fails
     
@@ -1640,7 +1648,7 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
     except Exception:
         try:
             plt.close(fig)
-        except:
+        except Exception:
             pass
         return None
 
@@ -1754,11 +1762,19 @@ def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
 
         # HIGH QUALITY: Larger figure for better image quality
         fig, axes = plt.subplots(4, 1, figsize=(10, 7), sharex=True)
-        axes[0].plot(s.index, s.values, color='tab:blue', lw=1.2); axes[0].set_ylabel("Observed"); axes[0].grid(True, alpha=0.3)
-        axes[1].plot(res.trend.index, res.trend.values, color='tab:orange', lw=1.6); axes[1].set_ylabel("Trend"); axes[1].grid(True, alpha=0.3)
-        axes[2].plot(res.seasonal.index, res.seasonal.values, color='tab:green', lw=1.6); axes[2].set_ylabel("Seasonal"); axes[2].grid(True, alpha=0.3)
-        axes[3].plot(res.resid.index, res.resid.values, color='tab:red', lw=1.6); axes[3].axhline(0, color='gray', ls=':', lw=1)
-        axes[3].set_ylabel("Residual"); axes[3].grid(True, alpha=0.3)
+        axes[0].plot(s.index, s.values, color='tab:blue', lw=1.2)
+        axes[0].set_ylabel("Observed")
+        axes[0].grid(True, alpha=0.3)
+        axes[1].plot(res.trend.index, res.trend.values, color='tab:orange', lw=1.6)
+        axes[1].set_ylabel("Trend")
+        axes[1].grid(True, alpha=0.3)
+        axes[2].plot(res.seasonal.index, res.seasonal.values, color='tab:green', lw=1.6)
+        axes[2].set_ylabel("Seasonal")
+        axes[2].grid(True, alpha=0.3)
+        axes[3].plot(res.resid.index, res.resid.values, color='tab:red', lw=1.6)
+        axes[3].axhline(0, color='gray', ls=':', lw=1)
+        axes[3].set_ylabel("Residual")
+        axes[3].grid(True, alpha=0.3)
         axes[0].set_title(title)
         plt.tight_layout()
 
@@ -1800,7 +1816,7 @@ def _infer_future_index(idx, steps):
         # Debug logging
         try:
             print(f"[DEBUG] Forecast: {steps} steps, offset={offset}, last_date={idx[-1]}, forecast_end={idx[-1] + offset * steps}")
-        except:
+        except Exception:
             pass
         
         # Generate future timestamps manually to ensure correct spacing
@@ -2046,14 +2062,30 @@ def _seasonality_strength(series: pd.Series, seasonal_period: int | None) -> flo
         template = detr.iloc[-seasonal_period:]
         template = template - template.mean()
         seasonal = pd.Series(np.resize(template.values, len(detr)), index=detr.index)
-        resid = detr - seasonal
+        # resid is not used
+        # resid = detr - seasonal
         var_sea = float(np.nanvar(seasonal.values))
         var_tot = float(np.nanvar(detr.values)) + 1e-12
         strength = max(0.0, min(1.0, var_sea / var_tot))
         return float(strength)
     except Exception:
         return 0.0
-def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None, anomalies_idx=None):
+def _compute_basic_stats(series: pd.Series) -> dict[str, float]:
+    """Compute basic statistics for a series (min, max, mean, median, std)."""
+    s = pd.to_numeric(series, errors='coerce').dropna()
+    if s.empty:
+        nan = float('nan')
+        return {"min": nan, "max": nan, "mean": nan, "median": nan, "std": nan}
+    return {
+        "min": float(s.min()),
+        "max": float(s.max()),
+        "mean": float(s.mean()),
+        "median": float(s.median()),
+        "std": float(s.std()),
+    }
+
+
+def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None, anomalies_idx=None, stats=None):
     """Generate a plot showing historical data and forecast with confidence intervals and anomaly markers.
        If forecast_series is None or empty, only history is shown (0% forecast mode).
     """
@@ -2120,7 +2152,7 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
                               label='Anomaly', marker='o', edgecolors='darkred', linewidths=1.5)
             except Exception as e:
                 app.logger.warning(f"Could not plot anomalies: {e}")
-        
+
         # Set Y limits based on data
         try:
             all_y = list(hist_y)
@@ -2239,25 +2271,39 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
     except Exception:
         pass
     
-    # Add visual statistics markers on the chart (use FULL history data for consistency with distribution)
+    # Add visual statistics markers on the chart (use FULL history stats for consistency with distribution)
     try:
-        hist_vals = history.astype(float)  # Use full history, not just tail
-        hist_min = float(hist_vals.min())
-        hist_max = float(hist_vals.max())
-        hist_mean = float(hist_vals.mean())
-        hist_median = float(hist_vals.median())
-        hist_std = float(hist_vals.std())
+        if stats:
+            hist_min = float(stats.get('min', np.nan))
+            hist_max = float(stats.get('max', np.nan))
+            hist_mean = float(stats.get('mean', np.nan))
+            hist_median = float(stats.get('median', np.nan))
+            hist_std = float(stats.get('std', np.nan))
+        else:
+            hist_vals = history.astype(float)  # Use full history, not just tail
+            hist_min = float(hist_vals.min())
+            hist_max = float(hist_vals.max())
+            hist_mean = float(hist_vals.mean())
+            hist_median = float(hist_vals.median())
+            hist_std = float(hist_vals.std())
+
+        if not all(np.isfinite(v) for v in [hist_min, hist_max, hist_mean, hist_median, hist_std]):
+            raise ValueError("Non-finite stats")
         
         # Draw horizontal lines for Avg and Median
         ax.axhline(y=hist_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.7, label=f'Avg: {hist_mean:.2f}')
         ax.axhline(y=hist_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.6, label=f'Median: {hist_median:.2f}')
         
-        # Add value tags - Avg ABOVE line (+offset), Median BELOW line (-offset) to avoid overlap
+        # Add value tags - place labels consistent with line ordering
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
         y_offset = (ylim[1] - ylim[0]) * 0.02  # 2% offset
-        ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
-        ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+        if hist_mean >= hist_median:
+            ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+            ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+        else:
+            ax.text(xlim[1], hist_mean - y_offset, f' Avg: {hist_mean:.2f}', va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+            ax.text(xlim[1], hist_median + y_offset, f' Med: {hist_median:.2f}', va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
         
         # Add Min/Max markers - find positions in visible data closest to the global min/max
         # Use FULL HISTORY stats (hist_min, hist_max) for consistency with distribution
@@ -2272,25 +2318,28 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
             tail_max_pos = tail_vals.idxmax()
         
         # Use global min/max values (from full history) for markers and annotations
+        min_color = '#ff3b30'
+        max_color = '#00e5ff'
+        edge_color = '#0b1220'
         # Plot Min marker
-        ax.scatter([tail_min_pos], [hist_min], color='#e74c3c', s=80, zorder=10, marker='v', 
-                   edgecolors='darkred', linewidths=1.5, label=f'Min: {hist_min:.2f}')
+        ax.scatter([tail_min_pos], [hist_min], color=min_color, s=80, zorder=10, marker='v', 
+               edgecolors=edge_color, linewidths=1.5, label=f'Min: {hist_min:.2f}')
         ax.annotate(f'{hist_min:.2f}', (tail_min_pos, hist_min), textcoords='offset points', 
-                    xytext=(10, 0), ha='left', fontsize=7, color='#e74c3c', fontweight='bold')
+                xytext=(10, 0), ha='left', fontsize=7, color=min_color, fontweight='bold')
         
         # Plot Max marker
-        ax.scatter([tail_max_pos], [hist_max], color='#27ae60', s=80, zorder=10, marker='^', 
-                   edgecolors='darkgreen', linewidths=1.5, label=f'Max: {hist_max:.2f}')
+        ax.scatter([tail_max_pos], [hist_max], color=max_color, s=80, zorder=10, marker='^', 
+               edgecolors=edge_color, linewidths=1.5, label=f'Max: {hist_max:.2f}')
         ax.annotate(f'{hist_max:.2f}', (tail_max_pos, hist_max), textcoords='offset points', 
-                    xytext=(10, 0), ha='left', fontsize=7, color='#27ae60', fontweight='bold')
+                xytext=(10, 0), ha='left', fontsize=7, color=max_color, fontweight='bold')
         
+        # Std legend entry
+        ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {hist_std:.2f}')
+
         # Legend on single line - at the lowest position below x-axis label
-        ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=9, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
         
-        # Add text box with Std in TOP LEFT corner
-        stats_text = f"Std: {hist_std:.2f}"
-        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=8, verticalalignment='top',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+        # Std appears in legend only
     except Exception:
         pass  # Skip stats if calculation fails
 
@@ -2846,7 +2895,7 @@ def read_csv_fallback(path, **kwargs):
         except UnicodeDecodeError as e:
             last_err = e
             continue
-        except Exception as e:
+        except Exception:
             raise
     try:
         return pd.read_csv(path, encoding="utf-8", encoding_errors="replace", **kwargs)
@@ -3122,7 +3171,9 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
         
         try:
             if corr_payload and corr_payload.get("z"):
-                x = corr_payload["x"]; y = corr_payload["y"]; z = corr_payload["z"]
+                x = corr_payload["x"]
+                y = corr_payload["y"]
+                z = corr_payload["z"]
                 pairs = []
                 for i, row in enumerate(z):
                     for j, val in enumerate(row):
@@ -3375,7 +3426,7 @@ def get_dataframe_for(filename):
 
         DATAFRAME_CACHE.set(filename, df)
         return df
-    except Exception as e:
+    except Exception:
         app.logger.exception("get_dataframe_for failed for %s", filename)
         return None
 
@@ -3920,6 +3971,9 @@ def analyze_file(filename):
                         fc_mean_thin = fc_mean
                         conf_df_thin = conf_df
                     
+                    # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
+                    fc_stats = _compute_basic_stats(series)
+
                     xlab = 'Timestamp' if isinstance(series.index, pd.DatetimeIndex) else 'Index'
                     try:
                         # Pass anomaly indices to the forecast plot generation
@@ -3931,7 +3985,8 @@ def analyze_file(filename):
                             column,
                             conf_int=conf_df_thin,
                             history_tail=None,
-                            anomalies_idx=an_idx  # Add anomaly markers to forecast plot
+                            anomalies_idx=an_idx,  # Add anomaly markers to forecast plot
+                            stats=fc_stats         # Pass stats for visualization
                         )
                         forecast_plots.append({"img": img_fc, "title": title_fc, "column": column, "type": "forecast"})
                     except Exception as _e:
@@ -3976,9 +4031,12 @@ def analyze_file(filename):
                     ax.grid(True, alpha=0.3)
                     
                     # Add stat markers
-                    stats_min, stats_max = float(series.min()), float(series.max())
-                    stats_mean, stats_median = float(series.mean()), float(series.median())
-                    stats_std = float(series.std())
+                    stats = _compute_basic_stats(series)
+                    stats_min = stats['min']
+                    stats_max = stats['max']
+                    stats_mean = stats['mean']
+                    stats_median = stats['median']
+                    stats_std = stats['std']
                     
                     # Avg and Median vertical lines
                     ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
@@ -4005,13 +4063,16 @@ def analyze_file(filename):
                     
                     # Min/Max markers at bottom - BOTH tags ABOVE their symbols
                     marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
-                    ax.scatter([stats_min], [marker_y], color='#e74c3c', s=100, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
-                    ax.scatter([stats_max], [marker_y], color='#27ae60', s=100, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
+                    min_color = '#ff3b30'
+                    max_color = '#00e5ff'
+                    edge_color = '#0b1220'
+                    ax.scatter([stats_min], [marker_y], color=min_color, s=100, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
+                    ax.scatter([stats_max], [marker_y], color=max_color, s=100, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=min_color, fontweight='bold')
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=max_color, fontweight='bold')
                     
-                    # Std in TOP RIGHT corner, legend on single line below x-label
-                    ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right', bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+                    # Std in legend only, single-line legend
+                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
                     
                     buf = io.BytesIO()
@@ -4086,7 +4147,8 @@ def analyze_file(filename):
                         "hovertemplate": "Anomaly<br>%{text}<br>%{y}<extra></extra>"
                     })
             
-            fc_x = fc_y = ci_lower = ci_upper = split_x = None
+            # fc_x removed as it was unused
+            fc_y = ci_lower = ci_upper = split_x = None
             # Generate forecasts and CI for interactive plots (removed is_timeseries requirement)
             if build_interactive and not skip_forecasts and len(series) >= 5:
                 try:
@@ -4349,46 +4411,135 @@ def analyze_file(filename):
                 avg_count = float(all_counts.mean())
                 med_count = float(all_counts.median())
                 most_freq = str(all_counts.index[0])[:20]  # Truncate long names
-                    
-                fig, ax = plt.subplots(figsize=(12, 5))
-                top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
+                least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
                 
-                # Title indicates if showing subset
+                # Build title
                 if len(all_counts) > 50:
-                    ax.set_title(f"Categories: {col} (Top 50 of {total_unique})", fontsize=12)
+                    chart_title = f"Categories: {col} (Top 50 of {total_unique})"
                 else:
-                    ax.set_title(f"Categories: {col} ({total_unique} unique)", fontsize=12)
+                    chart_title = f"Categories: {col} ({total_unique} unique)"
                 
-                ax.set_xlabel(col, fontsize=10)
-                ax.set_ylabel("Count", fontsize=10)
-                ax.grid(True, alpha=0.3, axis='y')
-                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
+                # Create Plotly interactive chart data
+                bar_trace = {
+                    "type": "bar",
+                    "name": "Count",
+                    "x": [str(x) for x in top_counts.index.tolist()],
+                    "y": [int(y) for y in top_counts.values.tolist()],
+                    "marker": {"color": "rgb(46, 204, 113)", "opacity": 0.7, "line": {"color": "black", "width": 0.5}},
+                    "hovertemplate": "%{x}<br>Count: %{y}<extra></extra>"
+                }
                 
-                # Add horizontal avg/med lines for counts
-                ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
-                ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
+                traces = [bar_trace]
                 
-                # Add text labels for avg/med lines on the left side
-                xlim = ax.get_xlim()
-                ax.text(xlim[0] - 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                ax.text(xlim[0] - 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                # Layout with avg/med shapes and annotations - dark mode supported
+                layout = {
+                    "title": {"text": chart_title, "x": 0.5, "xanchor": "center", "font": {"color": "#e0e0e0"}},
+                    "xaxis": {"title": col, "tickangle": -45, "tickfont": {"size": 9, "color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
+                    "yaxis": {"title": "Count", "showgrid": True, "gridcolor": "rgba(128,128,128,0.3)", "tickfont": {"color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
+                    "showlegend": True,
+                    "legend": {
+                        "orientation": "v",
+                        "x": 1.0,
+                        "xanchor": "right",
+                        "y": 0.99,
+                        "yanchor": "top",
+                        "font": {"color": "#d0d0d0", "size": 10}
+                    },
+                    "margin": {"l": 60, "r": 160, "t": 50, "b": 120},
+                    "paper_bgcolor": "rgba(0,0,0,0)",
+                    "plot_bgcolor": "rgba(0,0,0,0)",
+                    "font": {"color": "#d0d0d0"},
+                    "hoverlabel": {"bgcolor": "#1e1e1e", "font": {"color": "#e0e0e0"}, "bordercolor": "#4a4a4a"},
+                    "shapes": [
+                        # Avg horizontal line
+                        {
+                            "type": "line",
+                            "xref": "paper",
+                            "yref": "y",
+                            "x0": 0,
+                            "x1": 1,
+                            "y0": avg_count,
+                            "y1": avg_count,
+                            "line": {"color": "#f39c12", "width": 2, "dash": "dot"}
+                        },
+                        # Med horizontal line
+                        {
+                            "type": "line",
+                            "xref": "paper",
+                            "yref": "y",
+                            "x0": 0,
+                            "x1": 1,
+                            "y0": med_count,
+                            "y1": med_count,
+                            "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"}
+                        }
+                    ],
+                    "annotations": [
+                        # Avg label on RIGHT side with more space
+                        {
+                            "x": 1.01,
+                            "y": avg_count,
+                            "xref": "paper",
+                            "yref": "y",
+                            "text": f"Avg: {avg_count:.1f}",
+                            "showarrow": False,
+                            "font": {"size": 10, "color": "#f39c12"},
+                            "xanchor": "left"
+                        },
+                        # Med label on RIGHT side with more space
+                        {
+                            "x": 1.01,
+                            "y": med_count,
+                            "xref": "paper",
+                            "yref": "y",
+                            "text": f"Med: {med_count:.1f}",
+                            "showarrow": False,
+                            "font": {"size": 10, "color": "#9b59b6"},
+                            "xanchor": "left"
+                        }
+                    ]
+                }
                 
-                # Add stats annotation in top-right corner (include avg/med of counts)
-                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
-                ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
-                        verticalalignment='top', horizontalalignment='right',
-                        bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
+                # Add dummy traces for legend entries (avg/med lines don't show in legend automatically)
+                traces.append({
+                    "type": "scatter",
+                    "mode": "lines",
+                    "name": f"Avg: {avg_count:.1f}",
+                    "x": [None],
+                    "y": [None],
+                    "line": {"color": "#f39c12", "width": 2, "dash": "dot"},
+                    "showlegend": True
+                })
+                traces.append({
+                    "type": "scatter",
+                    "mode": "lines",
+                    "name": f"Med: {med_count:.1f}",
+                    "x": [None],
+                    "y": [None],
+                    "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"},
+                    "showlegend": True
+                })
+                # Add Most/Least info as legend entries
+                traces.append({
+                    "type": "scatter",
+                    "mode": "markers",
+                    "name": f"Most: '{most_freq}' ({max_count})",
+                    "x": [None],
+                    "y": [None],
+                    "marker": {"color": "#27ae60", "symbol": "triangle-up", "size": 8},
+                    "showlegend": True
+                })
+                traces.append({
+                    "type": "scatter",
+                    "mode": "markers",
+                    "name": f"Least: '{least_freq}' ({min_count})",
+                    "x": [None],
+                    "y": [None],
+                    "marker": {"color": "#e74c3c", "symbol": "triangle-down", "size": 8},
+                    "showlegend": True
+                })
                 
-                # Legend below chart
-                ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=4, frameon=False)
-                
-                buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
-                plt.close(fig)
-                buf.seek(0)
-                category_charts[col] = base64.b64encode(buf.read()).decode('utf-8')
+                category_charts[col] = {"traces": traces, "layout": layout}
             except Exception:
                 pass
         analysis['category_charts'] = category_charts
@@ -4505,7 +4656,7 @@ def api_interactive_data(filename):
         pct = float(raw_pct) if raw_pct else 0.05
         # Allow 0 for no-forecast mode, clamp max to 0.5
         pct = max(0, min(0.5, pct))
-    except:
+    except Exception:
         pct = 0.05
     
     total_rows = len(df)
@@ -4861,16 +5012,18 @@ def download_static_plots_zip(filename):
                     y_lim = ax.get_ylim()
                     marker_y = y_lim[0] + (y_lim[1] - y_lim[0]) * 0.05
                     
-                    ax.scatter([stats_min], [marker_y], color='#e74c3c', s=100, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
-                    ax.scatter([stats_max], [marker_y], color='#27ae60', s=100, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    min_color = '#ff3b30'
+                    max_color = '#00e5ff'
+                    edge_color = '#0b1220'
+                    ax.scatter([stats_min], [marker_y], color=min_color, s=100, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
+                    ax.scatter([stats_max], [marker_y], color=max_color, s=100, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
                     
                     # Both annotations ABOVE the markers
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=min_color, fontweight='bold')
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=max_color, fontweight='bold')
                     
-                    # Add Std in TOP RIGHT corner
-                    ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right',
-                            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+                    # Std in legend only
+                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
                     
                     # Legend on single line below x-label
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
@@ -4944,7 +5097,7 @@ def download_static_plots_zip(filename):
                 most_freq = str(all_counts.index[0])[:20]
                     
                 fig, ax = plt.subplots(figsize=(12, 5))
-                top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
+                top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black', label='Count')
                 
                 if len(all_counts) > 50:
                     ax.set_title(f"Categories: {col} (Top 50 of {total_unique})", fontsize=12)
@@ -4956,11 +5109,26 @@ def download_static_plots_zip(filename):
                 ax.grid(True, alpha=0.3, axis='y')
                 plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
                 
-                # Add stats annotation (include avg/med of counts)
-                stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count} | Avg: {avg_count:.1f} | Med: {med_count:.1f}"
-                ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
-                        verticalalignment='top', horizontalalignment='right',
-                        bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
+                # Add horizontal avg/med lines for counts
+                ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
+                ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
+                
+                # Add text labels for avg/med lines on the RIGHT side
+                xlim = ax.get_xlim()
+                ax.text(xlim[1] + 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                ax.text(xlim[1] + 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                
+                # Get least frequent item name
+                least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
+                
+                # Add Most/Least as legend entries (invisible traces)
+                ax.plot([], [], color='#27ae60', marker='s', linestyle='', markersize=8, label=f"Most: '{most_freq}' ({max_count})")
+                ax.plot([], [], color='#e74c3c', marker='s', linestyle='', markersize=8, label=f"Least: '{least_freq}' ({min_count})")
+                
+                # Legend on top-right, vertical (line by line)
+                ax.legend(fontsize=8, loc='upper right', framealpha=0.9)
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
@@ -4986,9 +5154,38 @@ class PDFReport(FPDF):
         super().__init__()
         self.report_title = title_str
         self.display_name = display_name
+        self._first_page_added = False
+    
+    def _ensure_first_page(self):
+        """Ensure at least one page exists before any operation."""
+        if not self._first_page_added and self.page_no() == 0:
+            super().add_page()
+            self._first_page_added = True
+    
+    def add_page(self, *args, **kwargs):
+        super().add_page(*args, **kwargs)
+        self._first_page_added = True
+    
+    def cell(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().cell(*args, **kwargs)
+    
+    def multi_cell(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().multi_cell(*args, **kwargs)
+    
+    def image(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().image(*args, **kwargs)
+    
+    def write_html(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().write_html(*args, **kwargs)
     
     def header(self):
         # Only show header on first page
+        if self.page_no() == 0:
+            return
         if self.page_no() != 1:
             return
         try:
@@ -5034,6 +5231,8 @@ class PDFReport(FPDF):
             pass
 
     def footer(self):
+        if self.page_no() == 0:
+            return
         self.set_y(-15)
         self.set_font('helvetica', 'I', 8)
         self.cell(0, 10, f'Page {self.page_no()}/{{nb}}', align='C')
@@ -5097,8 +5296,18 @@ def download_full_report_pdf(filename):
         except Exception as e:
             app.logger.warning(f"Could not load custom font: {e}")
 
-        app.logger.info("Adding page...")
+        # CRITICAL: Must add first page IMMEDIATELY after initialization
+        # This prevents "No page open" errors from fpdf2
+        app.logger.info("Adding initial page...")
         pdf.add_page()
+        app.logger.info(f"Initial page added. Page No: {pdf.page_no()}")
+
+        def ensure_page():
+            if pdf.page_no() == 0:
+                pdf.add_page()
+
+        app.logger.info("Continuing PDF generation...")
+        ensure_page()
         app.logger.info(f"Page added. Page No: {pdf.page_no()}")
         
         # Set default font
@@ -5109,6 +5318,7 @@ def download_full_report_pdf(filename):
 
         # Helper for adding sections
         def add_section_title(title, new_page=True):
+            ensure_page()
             if new_page:
                 pdf.add_page()
             else:
@@ -5128,7 +5338,7 @@ def download_full_report_pdf(filename):
             # Ensure we have a page
             if pdf.page_no() == 0:
                 app.logger.warning("No page open, adding one.")
-                pdf.add_page()
+                ensure_page()
             
             # Use fpdf2's write_html for HTML content with actual formatting
             if is_html:
@@ -5209,6 +5419,7 @@ def download_full_report_pdf(filename):
             """Renders a pandas DataFrame as a table in the PDF.
                If new_page=True (default), ALWAYS starts on a fresh page.
             """
+            ensure_page()
             # ALWAYS start on fresh page to prevent mid-page tables
             if new_page:
                 pdf.add_page()
@@ -5288,7 +5499,7 @@ def download_full_report_pdf(filename):
                 # Convert to DataFrame and use add_df_table for consistent formatting
                 mv_df = mvf.to_frame('Missing Count')
                 add_df_table(mv_df, title="Missing Values:")
-        except:
+        except Exception:
             pass
 
         # AI Summary
@@ -5313,7 +5524,7 @@ def download_full_report_pdf(filename):
             if corr_heatmap_spearman:
                 ensure_corr_header()
                 # Keep-with-next logic: If near bottom, page break
-                if pdf.get_y() > 200: # Approx 297mm height, safety margin
+                if pdf.page_no() > 0 and pdf.get_y() > 200: # Approx 297mm height, safety margin
                     pdf.add_page()
                     
                 pdf.set_font(font_family, 'B', 10)
@@ -5328,7 +5539,7 @@ def download_full_report_pdf(filename):
                 ensure_corr_header()
                 # Keep label and image together - add page if not enough space for both
                 # Image height is approximately 100-120mm, so break earlier
-                if pdf.get_y() > 120:
+                if pdf.page_no() > 0 and pdf.get_y() > 120:
                     pdf.add_page()
                     
                 pdf.set_font(font_family, 'B', 10)
@@ -5348,7 +5559,7 @@ def download_full_report_pdf(filename):
         pdf.set_font(font_family, 'B', 10)
         forecast_pct_display = int(forecast_pct * 100)
         if forecast_pct == 0:
-            pdf.cell(0, 8, f"Forecast Setting: 0% (data and anomalies only)", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 8, "Forecast Setting: 0% (data and anomalies only)", new_x="LMARGIN", new_y="NEXT")
         else:
             total_rows = len(df)
             forecast_steps = max(2, int(total_rows * forecast_pct))
@@ -5378,7 +5589,7 @@ def download_full_report_pdf(filename):
                  try:
                      s_temp = df[col].copy()
                      s = pd.to_numeric(s_temp, errors='coerce').dropna()
-                 except:
+                 except Exception:
                      pass
 
             # Force new page for EACH column to ensure clean layout
@@ -5386,6 +5597,9 @@ def download_full_report_pdf(filename):
             # FIX: Only add page if it's NOT the first column (title page covers it)
             if first_col:
                 first_col = False
+                # Ensure we have a page before writing
+                if pdf.page_no() == 0:
+                    pdf.add_page()
             else:
                 pdf.add_page()
             
@@ -5430,7 +5644,7 @@ def download_full_report_pdf(filename):
                     )
                     if trend_b64:
                         pdf.image(io.BytesIO(base64.b64decode(trend_b64)), w=img_width, x=img_x)
-                        pdf.ln(4)
+                        pdf.ln(30)
                 except Exception as e:
                     app.logger.error(f"Error adding trend plot to PDF for {col}: {e}")
                     pass
@@ -5464,7 +5678,7 @@ def download_full_report_pdf(filename):
                         )
                         if fc_b64:
                             pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=img_width, x=img_x)
-                            pdf.ln(4)
+                            pdf.ln(30)
                 except Exception as e:
                     app.logger.error(f"Error adding forecast plot to PDF for {col}: {e}")
                     pass
@@ -5490,11 +5704,14 @@ def download_full_report_pdf(filename):
                     ylim = ax.get_ylim()
                     xlim = ax.get_xlim()
                     marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
-                    ax.scatter([stats_min], [marker_y], color='#e74c3c', s=80, zorder=10, marker='v', edgecolors='darkred', linewidths=1.5, label=f'Min: {stats_min:.2f}')
-                    ax.scatter([stats_max], [marker_y], color='#27ae60', s=80, zorder=10, marker='^', edgecolors='darkgreen', linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    min_color = '#ff3b30'
+                    max_color = '#00e5ff'
+                    edge_color = '#0b1220'
+                    ax.scatter([stats_min], [marker_y], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
+                    ax.scatter([stats_max], [marker_y], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
                     # Min/Max annotations above markers
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#e74c3c', fontweight='bold')
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color='#27ae60', fontweight='bold')
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=min_color, fontweight='bold')
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=max_color, fontweight='bold')
                     
                     # Avg/Med tags
                     x_offset = (xlim[1] - xlim[0]) * 0.02
@@ -5509,12 +5726,12 @@ def download_full_report_pdf(filename):
                         ax.text(stats_mean + x_offset, ylim[1] * 0.95, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
                                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
                     
-                    # Std in corner
-                    ax.text(0.98, 0.98, f"Std: {stats_std:.2f}", transform=ax.transAxes, fontsize=8, verticalalignment='top', horizontalalignment='right',
-                            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.6, edgecolor='none'))
+                    # Std in legend only (always add this, outside the if/else)
+                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
                     
-                    # Legend with all stats (Min, Max, Avg, Med)
+                    # Legend with all stats (Min, Max, Avg, Med, Std) - always show
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=6, frameon=False)
+                    fig.subplots_adjust(bottom=0.22)
                 else:
                     # Categorical bar chart (top 50)
                     all_counts = s.value_counts()
@@ -5540,20 +5757,23 @@ def download_full_report_pdf(filename):
                     ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
                     ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
                     
-                    # Add text labels for avg/med lines on the left side
+                    # Add text labels for avg/med lines on the RIGHT side
                     cat_xlim = ax.get_xlim()
-                    ax.text(cat_xlim[0] - 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
+                    ax.text(cat_xlim[1] + 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
                             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                    ax.text(cat_xlim[0] - 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
+                    ax.text(cat_xlim[1] + 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
                             bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
                     
-                    stats_text = f"Most: '{most_freq}' ({max_count})\nLeast: {min_count}"
-                    ax.text(0.98, 0.98, stats_text, transform=ax.transAxes, fontsize=8,
-                            verticalalignment='top', horizontalalignment='right',
-                            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.7, edgecolor='none'))
+                    # Stats in TOP-RIGHT corner
+                    # Get least frequent item name
+                    least_freq = str(all_counts.index[-1])[:15] if len(all_counts) > 0 else "N/A"
                     
-                    # Legend below chart
-                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=4, frameon=False)
+                    # Add Most/Least as legend entries
+                    ax.plot([], [], color='#27ae60', marker='s', linestyle='', markersize=8, label=f"Most: '{most_freq}' ({max_count})")
+                    ax.plot([], [], color='#e74c3c', marker='s', linestyle='', markersize=8, label=f"Least: '{least_freq}' ({min_count})")
+                    
+                    # Legend on top-right, vertical (line by line)
+                    ax.legend(fontsize=7, loc='upper right', framealpha=0.9)
 
                 ax.set_xlabel(col)
                 ax.grid(True, alpha=0.3)
@@ -5563,7 +5783,7 @@ def download_full_report_pdf(filename):
                 plt.close(fig)
                 buf.seek(0)
                 pdf.image(buf, w=img_width, x=img_x)
-                pdf.ln(4)
+                pdf.ln(30)
             except Exception:
                 pass
                 
@@ -5576,12 +5796,11 @@ def download_full_report_pdf(filename):
                         stl_b64 = get_cached_stl_plot(filename, col, s, sp)
                         if stl_b64:
                             pdf.image(io.BytesIO(base64.b64decode(stl_b64)), w=img_width, x=img_x)
-                            pdf.ln(4)
+                            pdf.ln(30)
                 except Exception:
                     pass
     except Exception as e:
         app.logger.error(f"Error generating PDF: {e}")
-        import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({"ok": False, "message": f"PDF generation failed: {str(e)}"}), 500
 
@@ -5599,7 +5818,6 @@ def download_full_report_pdf(filename):
         out.seek(0)
     except Exception as e:
         app.logger.error(f"PDF output failed: {e}")
-        import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({"ok": False, "message": f"PDF output failed: {str(e)}"}), 500
     
@@ -5690,7 +5908,7 @@ def download_full_report_html(filename):
                 # Re-align with df to maintain proper index
                 s_temp = df[col].copy()
                 s = pd.to_numeric(s_temp, errors='coerce').dropna()
-            except:
+            except Exception:
                 pass
         
         # Detect anomalies for forecast plots
@@ -5713,7 +5931,7 @@ def download_full_report_html(filename):
         except Exception:
             try:
                 plt.close(fig)
-            except:
+            except Exception:
                 pass
         
         # STL decomposition (for timeseries with sufficient data)
@@ -5750,18 +5968,17 @@ def download_full_report_html(filename):
                     print(f"[DEBUG] Successfully created forecast plot for {col}")
                 except Exception as e:
                     print(f"Forecast plot error for {col}: {e}")
-                    import traceback
                     traceback.print_exc()
             else:
                 print(f"Forecast is None or empty for {col}")
 
     # Build HTML report
-    print(f"[DEBUG] Report generation complete:")
+    print("[DEBUG] Report generation complete:")
     print(f"  - Distribution sections: {len(distribution_sections)}")
     print(f"  - STL sections: {len(stl_sections)}")
     print(f"  - Forecast sections: {len(forecast_sections)}")
     if len(forecast_sections) == 0:
-        print(f"  - WARNING: No forecast sections were generated!")
+        print("  - WARNING: No forecast sections were generated!")
     
     display = request.args.get('display') or filename
     title = f"Analysis Report — {display}"
