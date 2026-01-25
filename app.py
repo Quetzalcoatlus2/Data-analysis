@@ -1,28 +1,48 @@
-import os
-import math
-import io
 import base64
-import zipfile
+import hashlib
+import html as htmllib
+import io
+import json
 import logging
+import math
+import os
+import re
 import time
 import traceback
-import re
-import hashlib
 import uuid
-import json
-import html as htmllib
+import warnings
+import zipfile
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
+from typing import Any
 
+import google.generativeai as genai
+import matplotlib
+import numpy as np
+import pandas as pd
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
 from fpdf import FPDF
-import pandas as pd
-import numpy as np
+from sklearn.ensemble import IsolationForest  # type: ignore[import-untyped]
+from statsmodels.tsa.seasonal import STL  # type: ignore[import-untyped]
 from werkzeug.utils import secure_filename
-from sklearn.ensemble import IsolationForest
-from statsmodels.tsa.seasonal import STL
-import google.generativeai as genai
+
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=r".*google\.generativeai.*",
+)
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    module=r"app",
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r"You have both PyFPDF & fpdf2 installed\..*",
+    category=UserWarning,
+    module=r"fpdf",
+)
 
 # Optional / Feature Flag Imports
 try:
@@ -40,22 +60,21 @@ except Exception:
     pass
 
 try:
-    from flask_compress import Compress
+    from flask_compress import Compress  # type: ignore[import-untyped]
 except ImportError:
     Compress = None
 
 try:
-    from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
+    from flask_limiter import Limiter  # type: ignore[import-untyped]
+    from flask_limiter.util import get_remote_address  # type: ignore[import-untyped]
 except ImportError:
     Limiter = None
 
 try:
-    from flask_talisman import Talisman
+    from flask_talisman import Talisman  # type: ignore[import-untyped]
 except ImportError:
     Talisman = None
 
-import matplotlib
 matplotlib.use('Agg')
 # HIGH QUALITY: Increased DPI for sharp images in PDF, ZIP, and web views
 matplotlib.rcParams['savefig.dpi'] = 150  
@@ -92,7 +111,9 @@ app.config['SECRET_KEY'] = os.getenv("SECRET_KEY") or "dev-secret-change-me"
 app.config['DELETE_UPLOADED_AFTER_PROCESSING'] = os.getenv("DELETE_UPLOADED_AFTER_PROCESSING", "true").strip().lower() in ("1", "true", "yes", "on")
 if "UPLOAD_RETENTION_DAYS" in os.environ:
     try:
-        app.config['UPLOAD_RETENTION_DAYS'] = int(os.getenv("UPLOAD_RETENTION_DAYS"))
+        retention_val = os.getenv("UPLOAD_RETENTION_DAYS")
+        if retention_val is not None:
+            app.config['UPLOAD_RETENTION_DAYS'] = int(retention_val)
     except Exception:
         app.logger.warning("Invalid UPLOAD_RETENTION_DAYS; ignoring")
 
@@ -146,16 +167,18 @@ DEFAULT_AI_MODEL = (
     # Prefer gemini-3.0-flash as default (strongest Flash model)
     or "gemini-3.0-flash"
 )
-MODEL_CACHE = {}
-CURRENT_MODEL_NAME = None
-AI_STATUS = {"configured": False, "ready": False, "message": "", "model": None}
+MODEL_CACHE: dict[str, Any] = {}
+CURRENT_MODEL_NAME: str | None = None
+AI_STATUS: dict[str, Any] = {"configured": False, "ready": False, "message": "", "model": None}
+AI_ENABLED: bool = False
+model: Any | None = None
 
 # Track rate-limited models with cooldown timestamps
 # Format: {"model_name": timestamp_when_limit_expires}
-RATE_LIMITED_MODELS = {}
+RATE_LIMITED_MODELS: dict[str, float] = {}
 RATE_LIMIT_COOLDOWN_SECONDS = 60  # Skip rate-limited models for 60 seconds
 
-def _sanitize_error_message(msg: str) -> str:
+def _sanitize_error_message(msg: str | None) -> str:
     try:
         s = str(msg or "").strip()
         if not s:
@@ -607,9 +630,9 @@ DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'], max_size_mb=i
 NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  
 # Allow configuration of file upload size limit to Gemini (smaller = faster, less timeout risk)
 app.config['AI_FULL_UPLOAD_MAX_MB'] = int(os.getenv('AI_FULL_UPLOAD_MAX_MB', '5'))  
-AI_FILE_MAP = {}  
-ORIGINAL_NAME_MAP = {}  
-AI_SUMMARY_CACHE = {}
+AI_FILE_MAP: dict[str, Any] = {}
+ORIGINAL_NAME_MAP: dict[str, Any] = {}
+AI_SUMMARY_CACHE: dict[str, Any] = {}
 QNA_CACHE = TinyLRU(max_items=50)
 FORECAST_CACHE = TinyLRU(max_items=32)
 # Performance optimization caches - avoid recomputing expensive operations
@@ -1530,7 +1553,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
                 ax.scatter(an_positions, an_values, color='red', s=14, zorder=5, label='Anomaly')
     
     ax.set_title(title, fontsize=10)
-    ax.set_xlabel(xlabel, fontsize=9)
+    ax.set_xlabel(xlabel, fontsize=9, labelpad=4)
     ax.set_ylabel(ylabel, fontsize=9)
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
@@ -1551,7 +1574,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         # Add value tags - position based on which line is higher
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
-        y_offset = (ylim[1] - ylim[0]) * 0.02  # 2% offset
+        y_offset = (ylim[1] - ylim[0]) * 0.004  # 0.4% offset for tighter Avg/Med tags
         # Position tags so they don't overlap: higher line's tag above it, lower line's tag below it
         if stats_mean >= stats_median:
             # Avg is above Med - Avg tag above its line, Med tag below its line
@@ -1587,7 +1610,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
 
         # Legend on single line - at the lowest position below x-axis label
-        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.30), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
 
         # Std appears in legend only
     except Exception:
@@ -1608,7 +1631,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
 def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
     """Generate a correlation heatmap as base64 image."""
     try:
-        import seaborn as sns
+        import seaborn as sns  # type: ignore[import-untyped]
         
         # Get numeric columns
         df_num = coerce_numeric_df(df)
@@ -2085,7 +2108,170 @@ def _compute_basic_stats(series: pd.Series) -> dict[str, float]:
     }
 
 
-def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf_int=None, history_tail=None, anomalies_idx=None, stats=None):
+def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object] | None:
+    """Build Plotly traces/layout for a categorical bar chart with Avg/Med annotations.
+
+    Args:
+        s_cat: Series of categorical values.
+        col: Column name for labels.
+
+    Returns:
+        Plotly chart data dict or None when insufficient categories.
+    """
+    s_cat = s_cat.astype(str).dropna()
+    if len(s_cat) < 3:
+        return None
+
+    all_counts = s_cat.value_counts()
+    top_counts = all_counts.head(50)
+    if len(top_counts) < 2:
+        return None
+
+    total_unique = len(all_counts)
+    max_count = int(all_counts.max())
+    min_count = int(all_counts.min())
+    avg_count = float(all_counts.mean())
+    med_count = float(all_counts.median())
+    most_freq = str(all_counts.index[0])[:20]
+    least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
+
+    if len(all_counts) > 50:
+        chart_title = f"Categories: {col} (Top 50 of {total_unique})"
+    else:
+        chart_title = f"Categories: {col} ({total_unique} unique)"
+
+    bar_trace = {
+        "type": "bar",
+        "name": "Count",
+        "x": [str(x) for x in top_counts.index.tolist()],
+        "y": [int(y) for y in top_counts.values.tolist()],
+        "text": [int(y) for y in top_counts.values.tolist()],
+        "textposition": "outside",
+        "textfont": {"size": 9},
+        "cliponaxis": False,
+        "marker": {"color": "rgb(46, 204, 113)", "opacity": 0.7, "line": {"color": "black", "width": 0.5}},
+        "hovertemplate": "%{x}<br>Count: %{y}<extra></extra>"
+    }
+
+    traces = [bar_trace]
+
+    layout = {
+        "title": {"text": chart_title, "x": 0.5, "xanchor": "center", "font": {"color": "#e0e0e0"}},
+        "xaxis": {"title": col, "tickangle": -45, "tickfont": {"size": 9, "color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
+        "yaxis": {"title": "Count", "showgrid": True, "gridcolor": "rgba(128,128,128,0.3)", "tickfont": {"color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
+        "showlegend": True,
+        "legend": {
+            "orientation": "v",
+            "x": 1.0,
+            "xanchor": "right",
+            "y": 0.99,
+            "yanchor": "top",
+            "font": {"color": "#d0d0d0", "size": 10}
+        },
+        "margin": {"l": 60, "r": 160, "t": 50, "b": 120},
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"color": "#d0d0d0"},
+        "hoverlabel": {"bgcolor": "#1e1e1e", "font": {"color": "#e0e0e0"}, "bordercolor": "#4a4a4a"},
+        "shapes": [
+            {
+                "type": "line",
+                "xref": "paper",
+                "yref": "y",
+                "x0": 0,
+                "x1": 1,
+                "y0": avg_count,
+                "y1": avg_count,
+                "line": {"color": "#f39c12", "width": 2, "dash": "dot"}
+            },
+            {
+                "type": "line",
+                "xref": "paper",
+                "yref": "y",
+                "x0": 0,
+                "x1": 1,
+                "y0": med_count,
+                "y1": med_count,
+                "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"}
+            }
+        ],
+        "annotations": [
+            {
+                "x": 1.01,
+                "y": avg_count + (max_count * 0.015 if abs(avg_count - med_count) < max_count * 0.05 else 0),
+                "xref": "paper",
+                "yref": "y",
+                "text": f"Avg: {avg_count:.1f}",
+                "showarrow": False,
+                "font": {"size": 10, "color": "#f39c12"},
+                "xanchor": "left"
+            },
+            {
+                "x": 1.01,
+                "y": med_count - (max_count * 0.015 if abs(avg_count - med_count) < max_count * 0.05 else 0),
+                "xref": "paper",
+                "yref": "y",
+                "text": f"Med: {med_count:.1f}",
+                "showarrow": False,
+                "font": {"size": 10, "color": "#9b59b6"},
+                "xanchor": "left"
+            }
+        ]
+    }
+
+    traces.append({
+        "type": "scatter",
+        "mode": "lines",
+        "name": f"Avg: {avg_count:.1f}",
+        "x": [None],
+        "y": [None],
+        "line": {"color": "#f39c12", "width": 2, "dash": "dot"},
+        "showlegend": True
+    })
+    traces.append({
+        "type": "scatter",
+        "mode": "lines",
+        "name": f"Med: {med_count:.1f}",
+        "x": [None],
+        "y": [None],
+        "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"},
+        "showlegend": True
+    })
+    traces.append({
+        "type": "scatter",
+        "mode": "markers",
+        "name": f"Most: '{most_freq}' ({max_count})",
+        "x": [None],
+        "y": [None],
+        "marker": {"color": "#27ae60", "symbol": "triangle-up", "size": 8},
+        "showlegend": True
+    })
+    traces.append({
+        "type": "scatter",
+        "mode": "markers",
+        "name": f"Least: '{least_freq}' ({min_count})",
+        "x": [None],
+        "y": [None],
+        "marker": {"color": "#e74c3c", "symbol": "triangle-down", "size": 8},
+        "showlegend": True
+    })
+
+    return {"traces": traces, "layout": layout}
+
+
+def generate_forecast_plot(
+    history,
+    forecast_series,
+    title,
+    xlabel,
+    ylabel,
+    conf_int=None,
+    history_tail=None,
+    anomalies_idx=None,
+    stats=None,
+    legend_y=None,
+    xlabel_labelpad=None,
+):
     """Generate a plot showing historical data and forecast with confidence intervals and anomaly markers.
        If forecast_series is None or empty, only history is shown (0% forecast mode).
     """
@@ -2250,12 +2436,14 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
     ax.set_title(title)
     # Use a sensible x-axis label depending on index type
     try:
+        label_pad = 2 if xlabel_labelpad is None else xlabel_labelpad
         if isinstance(history_tail_series.index, pd.DatetimeIndex):
-            ax.set_xlabel('Timestamp', labelpad=2)
+            ax.set_xlabel('Timestamp', labelpad=label_pad)
         else:
-            ax.set_xlabel('Index', labelpad=2)
+            ax.set_xlabel('Index', labelpad=label_pad)
     except Exception:
-        ax.set_xlabel(xlabel, labelpad=2)
+        label_pad = 2 if xlabel_labelpad is None else xlabel_labelpad
+        ax.set_xlabel(xlabel, labelpad=label_pad)
     ax.set_ylabel(ylabel)
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -2297,7 +2485,7 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         # Add value tags - place labels consistent with line ordering
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
-        y_offset = (ylim[1] - ylim[0]) * 0.008  # 0.8% offset for very close Avg/Med tags
+        y_offset = (ylim[1] - ylim[0]) * 0.004  # 0.4% offset for tighter Avg/Med tags
         if hist_mean >= hist_median:
             ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
             ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
@@ -2337,7 +2525,8 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {hist_std:.2f}')
 
         # Legend on single line - below x-axis title (Index)
-        ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.38), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        legend_anchor = -0.30 if legend_y is None else legend_y
+        ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, legend_anchor), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
         
         # Std appears in legend only
     except Exception:
@@ -2419,7 +2608,7 @@ def _simple_forecast(series: pd.Series, steps: int):
             boot = (boot - float(np.mean(boot))) * (0.35 * scale_boost)
             boot_walk = np.cumsum(boot)
         else:
-            boot_walk = 0.0
+            boot_walk = np.zeros(steps, dtype=float)
         fc_vals = baseline + seasonal + eps + boot_walk
 
         # Mild clamp to recent envelope to avoid extremes but keep amplitude
@@ -3986,7 +4175,9 @@ def analyze_file(filename):
                             conf_int=conf_df_thin,
                             history_tail=None,
                             anomalies_idx=an_idx,  # Add anomaly markers to forecast plot
-                            stats=fc_stats         # Pass stats for visualization
+                            stats=fc_stats,        # Pass stats for visualization
+                            legend_y=-0.42,
+                            xlabel_labelpad=6
                         )
                         forecast_plots.append({"img": img_fc, "title": title_fc, "column": column, "type": "forecast"})
                     except Exception as _e:
@@ -4026,7 +4217,7 @@ def analyze_file(filename):
                     fig, ax = plt.subplots(figsize=(6, 4))
                     ax.hist(series.values, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
                     ax.set_title(f"Distribution: {column}", fontsize=10)
-                    ax.set_xlabel(column, fontsize=9)
+                    ax.set_xlabel(column, fontsize=9, labelpad=8)
                     ax.set_ylabel("Frequency", fontsize=9)
                     ax.grid(True, alpha=0.3)
                     
@@ -4049,17 +4240,13 @@ def analyze_file(filename):
                     if stats_mean <= stats_median:
                         # Mean is on the left, Median is on the right - add x_offset for spacing
                         x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset
-                        ax.text(stats_mean - x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                        ax.text(stats_median + x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_mean - x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median + x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                     else:
                         # Median is on the left, Mean is on the right - add x_offset for spacing
                         x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset
-                        ax.text(stats_median - x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                        ax.text(stats_mean + x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_median - x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean + x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
                     
                     # Min/Max markers at bottom - BOTH tags ABOVE their symbols
                     marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
@@ -4073,7 +4260,8 @@ def analyze_file(filename):
                     
                     # Std in legend only, single-line legend
                     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
-                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
+                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.34), ncol=6, frameon=False, columnspacing=0.5)
+                    fig.subplots_adjust(bottom=0.28)
                     
                     buf = io.BytesIO()
                     fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
@@ -4283,7 +4471,9 @@ def analyze_file(filename):
                             column,
                             conf_int=conf_df,
                             history_tail=None,
-                            anomalies_idx=an_idx_fb
+                            anomalies_idx=an_idx_fb,
+                            legend_y=-0.42,
+                            xlabel_labelpad=6
                         ),
                         "title": title_fc
                     })
@@ -4398,149 +4588,10 @@ def analyze_file(filename):
                 if len(s_cat) < 3:
                     continue
                 
-                # Generate Categories bar chart (top 50 for readability)
-                all_counts = s_cat.value_counts()
-                top_counts = all_counts.head(50)
-                if len(top_counts) < 2:
+                chart_data = _build_category_plotly_chart(s_cat, col)
+                if chart_data is None:
                     continue
-                
-                # Calculate stats for annotation
-                total_unique = len(all_counts)
-                max_count = int(all_counts.max())
-                min_count = int(all_counts.min())
-                avg_count = float(all_counts.mean())
-                med_count = float(all_counts.median())
-                most_freq = str(all_counts.index[0])[:20]  # Truncate long names
-                least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
-                
-                # Build title
-                if len(all_counts) > 50:
-                    chart_title = f"Categories: {col} (Top 50 of {total_unique})"
-                else:
-                    chart_title = f"Categories: {col} ({total_unique} unique)"
-                
-                # Create Plotly interactive chart data
-                bar_trace = {
-                    "type": "bar",
-                    "name": "Count",
-                    "x": [str(x) for x in top_counts.index.tolist()],
-                    "y": [int(y) for y in top_counts.values.tolist()],
-                    "marker": {"color": "rgb(46, 204, 113)", "opacity": 0.7, "line": {"color": "black", "width": 0.5}},
-                    "hovertemplate": "%{x}<br>Count: %{y}<extra></extra>"
-                }
-                
-                traces = [bar_trace]
-                
-                # Layout with avg/med shapes and annotations - dark mode supported
-                layout = {
-                    "title": {"text": chart_title, "x": 0.5, "xanchor": "center", "font": {"color": "#e0e0e0"}},
-                    "xaxis": {"title": col, "tickangle": -45, "tickfont": {"size": 9, "color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
-                    "yaxis": {"title": "Count", "showgrid": True, "gridcolor": "rgba(128,128,128,0.3)", "tickfont": {"color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
-                    "showlegend": True,
-                    "legend": {
-                        "orientation": "v",
-                        "x": 1.0,
-                        "xanchor": "right",
-                        "y": 0.99,
-                        "yanchor": "top",
-                        "font": {"color": "#d0d0d0", "size": 10}
-                    },
-                    "margin": {"l": 60, "r": 160, "t": 50, "b": 120},
-                    "paper_bgcolor": "rgba(0,0,0,0)",
-                    "plot_bgcolor": "rgba(0,0,0,0)",
-                    "font": {"color": "#d0d0d0"},
-                    "hoverlabel": {"bgcolor": "#1e1e1e", "font": {"color": "#e0e0e0"}, "bordercolor": "#4a4a4a"},
-                    "shapes": [
-                        # Avg horizontal line
-                        {
-                            "type": "line",
-                            "xref": "paper",
-                            "yref": "y",
-                            "x0": 0,
-                            "x1": 1,
-                            "y0": avg_count,
-                            "y1": avg_count,
-                            "line": {"color": "#f39c12", "width": 2, "dash": "dot"}
-                        },
-                        # Med horizontal line
-                        {
-                            "type": "line",
-                            "xref": "paper",
-                            "yref": "y",
-                            "x0": 0,
-                            "x1": 1,
-                            "y0": med_count,
-                            "y1": med_count,
-                            "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"}
-                        }
-                    ],
-                    "annotations": [
-                        # Avg label on RIGHT side with more space
-                        # Offset avg up and med down if they are equal or very close
-                        {
-                            "x": 1.01,
-                            "y": avg_count + (max_count * 0.03 if abs(avg_count - med_count) < max_count * 0.05 else 0),
-                            "xref": "paper",
-                            "yref": "y",
-                            "text": f"Avg: {avg_count:.1f}",
-                            "showarrow": False,
-                            "font": {"size": 10, "color": "#f39c12"},
-                            "xanchor": "left"
-                        },
-                        # Med label on RIGHT side with more space
-                        {
-                            "x": 1.01,
-                            "y": med_count - (max_count * 0.03 if abs(avg_count - med_count) < max_count * 0.05 else 0),
-                            "xref": "paper",
-                            "yref": "y",
-                            "text": f"Med: {med_count:.1f}",
-                            "showarrow": False,
-                            "font": {"size": 10, "color": "#9b59b6"},
-                            "xanchor": "left"
-                        }
-                    ]
-                }
-                
-                # Add dummy traces for legend entries (avg/med lines don't show in legend automatically)
-                traces.append({
-                    "type": "scatter",
-                    "mode": "lines",
-                    "name": f"Avg: {avg_count:.1f}",
-                    "x": [None],
-                    "y": [None],
-                    "line": {"color": "#f39c12", "width": 2, "dash": "dot"},
-                    "showlegend": True
-                })
-                traces.append({
-                    "type": "scatter",
-                    "mode": "lines",
-                    "name": f"Med: {med_count:.1f}",
-                    "x": [None],
-                    "y": [None],
-                    "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"},
-                    "showlegend": True
-                })
-                # Add Most/Least info as legend entries
-                traces.append({
-                    "type": "scatter",
-                    "mode": "markers",
-                    "name": f"Most: '{most_freq}' ({max_count})",
-                    "x": [None],
-                    "y": [None],
-                    "marker": {"color": "#27ae60", "symbol": "triangle-up", "size": 8},
-                    "showlegend": True
-                })
-                traces.append({
-                    "type": "scatter",
-                    "mode": "markers",
-                    "name": f"Least: '{least_freq}' ({min_count})",
-                    "x": [None],
-                    "y": [None],
-                    "marker": {"color": "#e74c3c", "symbol": "triangle-down", "size": 8},
-                    "showlegend": True
-                })
-                
-                category_charts[col] = {"traces": traces, "layout": layout}
+                category_charts[col] = chart_data
             except Exception:
                 pass
         analysis['category_charts'] = category_charts
@@ -4975,7 +5026,7 @@ def download_static_plots_zip(filename):
                 fig, ax = plt.subplots(figsize=(8, 5))
                 ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
                 ax.set_title(f"Distribution: {col}", fontsize=10)
-                ax.set_xlabel(col, fontsize=9)
+                ax.set_xlabel(col, fontsize=9, labelpad=8)
                 ax.set_ylabel("Frequency", fontsize=9)
                 ax.grid(True, alpha=0.3)
                 
@@ -4995,10 +5046,14 @@ def download_static_plots_zip(filename):
                     ylim = ax.get_ylim()
                     xlim = ax.get_xlim()
                     x_offset = (xlim[1] - xlim[0]) * 0.01  # 1% offset to position text just right of line
-                    y_stagger = (ylim[1] - ylim[0]) * 0.025  # 2.5% vertical stagger between labels
-                    # Always place Avg higher than Med, both on the right of their lines
-                    ax.text(stats_mean + x_offset, ylim[1] * 0.98, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
-                    ax.text(stats_median + x_offset, ylim[1] * 0.98 - y_stagger, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
+                    y_pos = ylim[1] * 0.985
+                    # Place Avg and Med at the same height on opposite sides
+                    if stats_mean <= stats_median:
+                        ax.text(stats_mean - x_offset, y_pos, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median + x_offset, y_pos, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
+                    else:
+                        ax.text(stats_median - x_offset, y_pos, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean + x_offset, y_pos, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
                     
                     # Min/Max markers at bottom - BOTH tags ABOVE their symbols
                     y_lim = ax.get_ylim()
@@ -5019,6 +5074,7 @@ def download_static_plots_zip(filename):
                     
                     # Legend on single line - just below x-axis title
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
+                    fig.subplots_adjust(bottom=0.30)
                 except Exception:
                     pass
                 
@@ -5043,23 +5099,42 @@ def download_static_plots_zip(filename):
                 except Exception:
                     pass
             
-            # Forecast (for timeseries)
-            if is_timeseries and len(s) >= 10:
+            # Forecast (for numeric series)
+            if len(s) >= 10:
                 try:
-                    fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
-                except Exception:
                     try:
-                        fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
+                        fc_mean, ci = get_cached_column_forecast(filename, col, s, forecast_steps)
                     except Exception:
                         fc_mean, ci = None, None
-                
-                if fc_mean is not None and len(fc_mean) > 0:
-                    try:
-                        fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps)", 'Timestamp', col, conf_int=ci, history_tail=None, anomalies_idx=an_idx)
-                        raw = base64.b64decode(fc_b64.encode('utf-8'))
-                        zf.writestr(f"{secure_filename(str(col))}_forecast.png", raw)
-                    except Exception:
-                        pass
+
+                    if fc_mean is None or len(fc_mean) == 0:
+                        try:
+                            fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
+                        except Exception:
+                            fc_mean, ci = None, None
+
+                    if fc_mean is None or len(fc_mean) == 0:
+                        idx = _infer_future_index(s.index, forecast_steps)
+                        last = float(s.iloc[-1]) if len(s) else 0.0
+                        fc_mean = pd.Series([last] * len(idx), index=idx)
+                        ci = None
+
+                    xlab = 'Timestamp' if is_timeseries else 'Index'
+                    fc_b64 = generate_forecast_plot(
+                        s,
+                        fc_mean,
+                        f"Forecast: {col} ({forecast_steps} steps)",
+                        xlab,
+                        col,
+                        conf_int=ci,
+                        history_tail=None,
+                        anomalies_idx=an_idx,
+                        legend_y=-0.38
+                    )
+                    raw = base64.b64decode(fc_b64.encode('utf-8'))
+                    zf.writestr(f"{secure_filename(str(col))}_forecast.png", raw)
+                except Exception:
+                    pass
 
         # Generate Categories bar charts for non-numeric columns (top 50)
         for col in df.columns:
@@ -5090,6 +5165,18 @@ def download_static_plots_zip(filename):
                     
                 fig, ax = plt.subplots(figsize=(12, 5))
                 top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black', label='Count')
+
+                # Add value labels above each bar
+                try:
+                    if ax.containers:
+                        ax.bar_label(
+                            ax.containers[0],
+                            labels=[str(int(v)) for v in top_counts.values],
+                            padding=2,
+                            fontsize=7
+                        )
+                except Exception:
+                    pass
                 
                 if len(all_counts) > 50:
                     ax.set_title(f"Categories: {col} (Top 50 of {total_unique})", fontsize=12)
@@ -5105,16 +5192,13 @@ def download_static_plots_zip(filename):
                 ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
                 ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
                 
-                # Add text labels for avg/med lines on the RIGHT side
-                # If avg and med are close, offset them vertically to prevent overlap
-                xlim = ax.get_xlim()
+                # Add text labels for avg/med lines next to the chart
                 ylim = ax.get_ylim()
                 y_range = ylim[1] - ylim[0]
-                threshold = y_range * 0.05  # 5% of y-range threshold for "close" values
-                
+                threshold = y_range * 0.06  # 6% threshold for close values
+
                 if abs(avg_count - med_count) < threshold:
-                    # Values are close - offset them vertically
-                    offset = threshold * 0.5
+                    offset = threshold * 0.8
                     if avg_count >= med_count:
                         avg_y = avg_count + offset
                         med_y = med_count - offset
@@ -5124,11 +5208,9 @@ def download_static_plots_zip(filename):
                 else:
                     avg_y = avg_count
                     med_y = med_count
-                
-                ax.text(xlim[1] + 0.3, avg_y, f'Avg: {avg_count:.1f}', va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                ax.text(xlim[1] + 0.3, med_y, f'Med: {med_count:.1f}', va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+
+                ax.text(1.02, avg_y, f'Avg: {avg_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
+                ax.text(1.02, med_y, f'Med: {med_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                 
                 # Get least frequent item name
                 least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
@@ -5674,7 +5756,9 @@ def download_full_report_pdf(filename):
                         col, 
                         conf_int=None,
                         history_tail=None, 
-                        anomalies_idx=an_idx
+                        anomalies_idx=an_idx,
+                        legend_y=-0.36,
+                        xlabel_labelpad=6
                     )
                     if trend_b64:
                         pdf.image(io.BytesIO(base64.b64decode(trend_b64)), w=img_width, x=img_x)
@@ -5708,7 +5792,9 @@ def download_full_report_pdf(filename):
                             col, 
                             conf_int=ci,
                             history_tail=None, 
-                            anomalies_idx=an_idx
+                            anomalies_idx=an_idx,
+                            legend_y=-0.40,
+                            xlabel_labelpad=6
                         )
                         if fc_b64:
                             pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=img_width, x=img_x)
@@ -5750,15 +5836,11 @@ def download_full_report_pdf(filename):
                     # Avg/Med tags
                     x_offset = (xlim[1] - xlim[0]) * 0.02
                     if stats_mean <= stats_median:
-                        ax.text(stats_mean - x_offset, ylim[1] * 0.95, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                        ax.text(stats_median + x_offset, ylim[1] * 0.95, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_mean - x_offset, ylim[1] * 0.985, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median + x_offset, ylim[1] * 0.985, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                     else:
-                        ax.text(stats_median - x_offset, ylim[1] * 0.95, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                        ax.text(stats_mean + x_offset, ylim[1] * 0.95, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                        ax.text(stats_median - x_offset, ylim[1] * 0.985, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean + x_offset, ylim[1] * 0.985, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
                     
                     # Std in legend only (always add this, outside the if/else)
                     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
@@ -5771,6 +5853,18 @@ def download_full_report_pdf(filename):
                     all_counts = s.value_counts()
                     top_counts = all_counts.head(50)
                     top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
+
+                    # Add value labels above each bar
+                    try:
+                        if ax.containers:
+                            ax.bar_label(
+                                ax.containers[0],
+                                labels=[str(int(v)) for v in top_counts.values],
+                                padding=2,
+                                fontsize=7
+                            )
+                    except Exception:
+                        pass
                     
                     total_unique = len(all_counts)
                     if len(all_counts) > 50:
@@ -5791,12 +5885,24 @@ def download_full_report_pdf(filename):
                     ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
                     ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
                     
-                    # Add text labels for avg/med lines on the RIGHT side
-                    cat_xlim = ax.get_xlim()
-                    ax.text(cat_xlim[1] + 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
-                            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                    ax.text(cat_xlim[1] + 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
-                            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    # Add text labels for avg/med lines next to the chart, with extra separation if close
+                    cat_ylim = ax.get_ylim()
+                    y_range = cat_ylim[1] - cat_ylim[0]
+                    threshold = y_range * 0.03
+                    if abs(avg_count - med_count) < threshold:
+                        offset = threshold * 0.4
+                        if avg_count >= med_count:
+                            avg_y = avg_count + offset
+                            med_y = med_count - offset
+                        else:
+                            avg_y = avg_count - offset
+                            med_y = med_count + offset
+                    else:
+                        avg_y = avg_count
+                        med_y = med_count
+
+                    ax.text(1.01, avg_y, f'Avg: {avg_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
+                    ax.text(1.01, med_y, f'Med: {med_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                     
                     # Stats in TOP-RIGHT corner
                     # Get least frequent item name
