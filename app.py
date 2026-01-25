@@ -2297,7 +2297,7 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         # Add value tags - place labels consistent with line ordering
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
-        y_offset = (ylim[1] - ylim[0]) * 0.02  # 2% offset
+        y_offset = (ylim[1] - ylim[0]) * 0.008  # 0.8% offset for very close Avg/Med tags
         if hist_mean >= hist_median:
             ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
             ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
@@ -2319,25 +2319,25 @@ def generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, conf
         
         # Use global min/max values (from full history) for markers and annotations
         min_color = '#ff3b30'
-        max_color = '#00e5ff'
+        max_color = '#00BCD4'  # Cyan - works on both light and dark backgrounds
         edge_color = '#0b1220'
         # Plot Min marker
         ax.scatter([tail_min_pos], [hist_min], color=min_color, s=80, zorder=10, marker='v', 
                edgecolors=edge_color, linewidths=1.5, label=f'Min: {hist_min:.2f}')
         ax.annotate(f'{hist_min:.2f}', (tail_min_pos, hist_min), textcoords='offset points', 
-                xytext=(10, 0), ha='left', fontsize=7, color=min_color, fontweight='bold')
+                xytext=(5, -8), ha='left', fontsize=7, color=min_color, fontweight='bold')  # Lower-right of marker
         
         # Plot Max marker
         ax.scatter([tail_max_pos], [hist_max], color=max_color, s=80, zorder=10, marker='^', 
                edgecolors=edge_color, linewidths=1.5, label=f'Max: {hist_max:.2f}')
         ax.annotate(f'{hist_max:.2f}', (tail_max_pos, hist_max), textcoords='offset points', 
-                xytext=(10, 0), ha='left', fontsize=7, color=max_color, fontweight='bold')
+                xytext=(5, 2), ha='left', fontsize=7, color=max_color, fontweight='bold')  # Upper-right, close to marker
         
         # Std legend entry
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {hist_std:.2f}')
 
-        # Legend on single line - at the lowest position below x-axis label
-        ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        # Legend on single line - below x-axis title (Index)
+        ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, -0.38), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
         
         # Std appears in legend only
     except Exception:
@@ -4476,9 +4476,10 @@ def analyze_file(filename):
                     ],
                     "annotations": [
                         # Avg label on RIGHT side with more space
+                        # Offset avg up and med down if they are equal or very close
                         {
                             "x": 1.01,
-                            "y": avg_count,
+                            "y": avg_count + (max_count * 0.03 if abs(avg_count - med_count) < max_count * 0.05 else 0),
                             "xref": "paper",
                             "yref": "y",
                             "text": f"Avg: {avg_count:.1f}",
@@ -4489,7 +4490,7 @@ def analyze_file(filename):
                         # Med label on RIGHT side with more space
                         {
                             "x": 1.01,
-                            "y": med_count,
+                            "y": med_count - (max_count * 0.03 if abs(avg_count - med_count) < max_count * 0.05 else 0),
                             "xref": "paper",
                             "yref": "y",
                             "text": f"Med: {med_count:.1f}",
@@ -4990,30 +4991,21 @@ def download_static_plots_zip(filename):
                     ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
                     ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {stats_median:.2f}')
                     
-                    # Avg/Median value tags - position based on which is actually left vs right
+                    # Avg/Median value tags - both on RIGHT side of their lines, staggered vertically to avoid overlap
                     ylim = ax.get_ylim()
                     xlim = ax.get_xlim()
-                    x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset for spacing
-                    # Whichever is LEFT gets ha='right' (tag extends left), whichever is RIGHT gets ha='left' (tag extends right)
-                    if stats_mean <= stats_median:
-                        # Mean is on the left, Median is on the right
-                        ax.text(stats_mean - x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                        ax.text(stats_median + x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                    else:
-                        # Median is on the left, Mean is on the right
-                        ax.text(stats_median - x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                        ax.text(stats_mean + x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
-                                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+                    x_offset = (xlim[1] - xlim[0]) * 0.01  # 1% offset to position text just right of line
+                    y_stagger = (ylim[1] - ylim[0]) * 0.025  # 2.5% vertical stagger between labels
+                    # Always place Avg higher than Med, both on the right of their lines
+                    ax.text(stats_mean + x_offset, ylim[1] * 0.98, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
+                    ax.text(stats_median + x_offset, ylim[1] * 0.98 - y_stagger, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                     
                     # Min/Max markers at bottom - BOTH tags ABOVE their symbols
                     y_lim = ax.get_ylim()
                     marker_y = y_lim[0] + (y_lim[1] - y_lim[0]) * 0.05
                     
                     min_color = '#ff3b30'
-                    max_color = '#00e5ff'
+                    max_color = '#00BCD4'  # Cyan - works on both light and dark backgrounds
                     edge_color = '#0b1220'
                     ax.scatter([stats_min], [marker_y], color=min_color, s=100, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
                     ax.scatter([stats_max], [marker_y], color=max_color, s=100, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
@@ -5025,7 +5017,7 @@ def download_static_plots_zip(filename):
                     # Std in legend only
                     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
                     
-                    # Legend on single line below x-label
+                    # Legend on single line - just below x-axis title
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
                 except Exception:
                     pass
@@ -5114,10 +5106,28 @@ def download_static_plots_zip(filename):
                 ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
                 
                 # Add text labels for avg/med lines on the RIGHT side
+                # If avg and med are close, offset them vertically to prevent overlap
                 xlim = ax.get_xlim()
-                ax.text(xlim[1] + 0.3, avg_count, f'Avg: {avg_count:.1f}', va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
+                ylim = ax.get_ylim()
+                y_range = ylim[1] - ylim[0]
+                threshold = y_range * 0.05  # 5% of y-range threshold for "close" values
+                
+                if abs(avg_count - med_count) < threshold:
+                    # Values are close - offset them vertically
+                    offset = threshold * 0.5
+                    if avg_count >= med_count:
+                        avg_y = avg_count + offset
+                        med_y = med_count - offset
+                    else:
+                        avg_y = avg_count - offset
+                        med_y = med_count + offset
+                else:
+                    avg_y = avg_count
+                    med_y = med_count
+                
+                ax.text(xlim[1] + 0.3, avg_y, f'Avg: {avg_count:.1f}', va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold',
                         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
-                ax.text(xlim[1] + 0.3, med_count, f'Med: {med_count:.1f}', va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
+                ax.text(xlim[1] + 0.3, med_y, f'Med: {med_count:.1f}', va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold',
                         bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
                 
                 # Get least frequent item name
@@ -5181,6 +5191,30 @@ class PDFReport(FPDF):
     def write_html(self, *args, **kwargs):
         self._ensure_first_page()
         return super().write_html(*args, **kwargs)
+    
+    def ln(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().ln(*args, **kwargs)
+    
+    def set_font(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().set_font(*args, **kwargs)
+    
+    def line(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().line(*args, **kwargs)
+    
+    def set_draw_color(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().set_draw_color(*args, **kwargs)
+    
+    def set_y(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().set_y(*args, **kwargs)
+    
+    def get_y(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().get_y(*args, **kwargs)
     
     def header(self):
         # Only show header on first page
