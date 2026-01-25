@@ -1867,10 +1867,12 @@
         {% endfor %}
       </div>
 
+      <script type="application/json" id="category-data">
+        {{ analysis.category_charts | tojson | safe }}
+      </script>
       <script>
         document.addEventListener('DOMContentLoaded', function () {
-          var categoryData = {{ analysis.category_charts | tojson | safe
-        }};
+          var categoryData = JSON.parse(document.getElementById('category-data').textContent || '{}');
 
         function initCategoryCharts() {
           // Get theme colors directly
@@ -1945,7 +1947,7 @@
         loadPlotly().then(function () {
           initCategoryCharts();
         });
-        });
+      });
       </script>
       {% else %}
       <div class="muted">No categorical columns found in this dataset, or all columns are numeric.</div>
