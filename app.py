@@ -651,6 +651,8 @@ STL_CACHE = TinyLRU(max_items=100)
 HEATMAP_CACHE = TinyLRU(max_items=20)
 # PERFORMANCE: Numeric DataFrame cache - avoids repeated coerce_numeric_df calls
 NUMERIC_DF_CACHE = TinyLRU(max_items=10)
+# PERFORMANCE: Cache describe_for_ai output - expensive string building with sorts
+AI_DESCRIBE_CACHE = TinyLRU(max_items=20)
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -708,7 +710,7 @@ SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
 HASHED_UPLOAD_RE = re.compile(r'^[a-f0-9]{40}\.(txt|csv|xlsx|json)$', re.IGNORECASE)
 
 def allowed_file(filename):
-    return '.' in filename and \
+    return bool(filename) and '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def sanitize_ai_html(raw: str) -> str:
@@ -1105,7 +1107,8 @@ def _get_finish_reason(resp) -> str | None:
     except Exception:
         return None
 
-def html_to_pdf_bytes(html: str) -> bytes:
+def html_to_pdf_bytes(html: str) -> bytes:  # noqa: ARG001
+    """Stub — always raises because no PDF renderer is installed."""
     raise RuntimeError("PDF export is disabled because no renderer (weasyprint/pdfkit/xhtml2pdf) is installed.")
 
 
@@ -1630,6 +1633,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
 
 def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
     """Generate a correlation heatmap as base64 image."""
+    fig = None
     try:
         import seaborn as sns  # type: ignore[import-untyped]
         
@@ -1669,10 +1673,8 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
         plt.close(fig)
         return img
     except Exception:
-        try:
+        if fig is not None:
             plt.close(fig)
-        except Exception:
-            pass
         return None
 
 def get_cached_heatmap(filename: str, df: pd.DataFrame, method: str = 'spearman'):
@@ -1777,6 +1779,7 @@ def normalize_timeseries(series: pd.Series) -> pd.Series:
     return s
 
 def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
+    fig = None
     try:
         s = normalize_timeseries(series)
         if s is None or len(s) < max(28, seasonal_period * 2):
@@ -1808,10 +1811,8 @@ def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
         plt.close(fig)
         return img
     except Exception:
-        try:
+        if fig is not None:
             plt.close(fig)
-        except Exception:
-            pass
         return None
 
 def _infer_future_index(idx, steps):
@@ -1838,7 +1839,7 @@ def _infer_future_index(idx, steps):
         
         # Debug logging
         try:
-            print(f"[DEBUG] Forecast: {steps} steps, offset={offset}, last_date={idx[-1]}, forecast_end={idx[-1] + offset * steps}")
+            app.logger.debug("Forecast: %d steps, offset=%s, last_date=%s, forecast_end=%s", steps, offset, idx[-1], idx[-1] + offset * steps)
         except Exception:
             pass
         
@@ -1962,11 +1963,12 @@ def _pattern_replay_forecast(series: pd.Series, steps: int, seasonal_period: int
 
         vals = []
         cur = y.iloc[-1]
+        _rng = np.random.default_rng(int(abs(hash((float(y.iloc[-1]), float(y.mean()), len(y)))) % (2**31)))
         for k in range(steps):
             d = inc[(k + 1) % sp]
             if np.isfinite(jitter) and jitter > 0:
                 # light jitter from residuals distribution
-                noise = np.random.normal(0.0, jitter)
+                noise = _rng.normal(0.0, jitter)
             else:
                 noise = 0.0
             cur = cur + d + drift + noise
@@ -2033,8 +2035,9 @@ def _forecast_natural(series: pd.Series, steps: int):
         rho = 0.6
         if sigma > 0:
             e = np.zeros(steps, dtype=float)
+            _rng = np.random.default_rng(int(abs(hash((float(y.iloc[-1]), float(y.mean()), n))) % (2**31)))
             for i in range(steps):
-                shock = np.random.normal(0.0, sigma)
+                shock = _rng.normal(0.0, sigma)
                 e[i] = (rho * (e[i-1] if i > 0 else 0.0)) + shock
             incs = incs + e
 
@@ -2597,13 +2600,15 @@ def _simple_forecast(series: pd.Series, steps: int):
         eps_scale = (inc_std * 0.35 if np.isfinite(inc_std) and inc_std > 0 else (rs * 0.25 if np.isfinite(rs) and rs > 0 else 0.0)) * scale_boost
         rho = 0.6  # persistence for smooth variation
         eps = np.zeros(steps, dtype=float)
+        # Use local RNG seeded from data for reproducibility without global state mutation
+        _rng = np.random.default_rng(int(abs(hash((float(y.iloc[-1]), float(y.mean()), n))) % (2**31)))
         if eps_scale > 0:
             for i in range(steps):
-                shock = np.random.normal(0.0, eps_scale)
+                shock = _rng.normal(0.0, eps_scale)
                 eps[i] = (rho * (eps[i-1] if i > 0 else 0.0)) + shock
         # Optional bootstrap of recent increments to mimic natural variability
         if len(diffs) >= 4:
-            boot = np.random.choice(diffs, size=steps, replace=True).astype(float)
+            boot = _rng.choice(diffs, size=steps, replace=True).astype(float)
             # center and shrink
             boot = (boot - float(np.mean(boot))) * (0.35 * scale_boost)
             boot_walk = np.cumsum(boot)
@@ -2889,7 +2894,7 @@ def _compute_forecast(series: pd.Series, steps: int):
             last, trend, len(s), data_min, data_max
         ))
         seed_val = int(abs(series_hash) % (2**31))
-        np.random.seed(seed_val)
+        rng = np.random.default_rng(seed_val)
         
         # Use actual historical segments to build forecast
         forecast_vals = np.zeros(k, dtype=float)
@@ -2942,18 +2947,18 @@ def _compute_forecast(series: pd.Series, steps: int):
             
             # If we found similar patterns, use them
             if len(similar_segments) > 0:
-                chosen_continuation = similar_segments[np.random.randint(0, len(similar_segments))]
+                chosen_continuation = similar_segments[rng.integers(0, len(similar_segments))]
                 offset = last - chosen_continuation[0]
                 forecast_vals = chosen_continuation + offset
             else:
                 # Fallback: use change sampling with vectorized cumsum
                 historical_changes = np.diff(recent_data)
-                random_changes = np.random.choice(historical_changes, size=k, replace=True)
+                random_changes = rng.choice(historical_changes, size=k, replace=True)
                 forecast_vals = last + np.cumsum(random_changes)
         else:
             # Not enough data, use change sampling with vectorized cumsum
             historical_changes = np.diff(recent_data)
-            random_changes = np.random.choice(historical_changes, size=k, replace=True)
+            random_changes = rng.choice(historical_changes, size=k, replace=True)
             forecast_vals = last + np.cumsum(random_changes)
         
         # Scale forecast to fit within bounds
@@ -3113,8 +3118,11 @@ def read_json_fallback(path):
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return pd.read_json(f, orient="records")
     except ValueError:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            return pd.read_json(f, lines=True)
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                return pd.read_json(f, lines=True)
+        except Exception:
+            pass
     if last_err:
         raise last_err
     raise UnicodeDecodeError("unknown", b"", 0, 1, "Unable to decode JSON with common encodings")
@@ -3297,8 +3305,9 @@ def get_cached_anomalies(filename: str, column: str, series: pd.Series, contamin
         return cached
     app.logger.debug("Anomaly cache MISS: %s/%s - computing", filename[:8], column)
     an_idx, an_score = detect_anomalies(series, contamination)
-    ANOMALY_CACHE.set(cache_key, (an_idx, an_score))
-    return an_idx, an_score
+    result = (an_idx, an_score)
+    ANOMALY_CACHE.set(cache_key, result)
+    return result
 
 def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict, used_cols: list, is_timeseries: bool, forecast_horizon: int, contamination: float) -> str:
     """Assemble structured stats the AI can leverage for a deeper analysis."""
@@ -3432,19 +3441,6 @@ def upload_file():
 
                 
                 try:
-                   # Configure basic logging
-                    logging.basicConfig(level=logging.INFO)
-
-                    # Add file handler for debugging persistence
-                    fh = logging.FileHandler('app_debug.log')
-                    fh.setLevel(logging.INFO)
-                    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-                    fh.setFormatter(formatter)
-                    app.logger.addHandler(fh)
-                    app.logger.info("Application starting - Log file initialized")
-
-                    # Increase upload size limit to 64MB
-                    app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024
                     size_bytes = os.path.getsize(final_path)
                     if size_bytes <= app.config['AI_FULL_UPLOAD_MAX_MB'] * 1024 * 1024:
                         uploaded = genai.upload_file(path=final_path, mime_type="text/csv", display_name=orig_name)
@@ -3689,8 +3685,21 @@ def get_cached_df_info(filename: str, df: pd.DataFrame) -> dict:
     DESCRIPTION_CACHE.set(filename, result)
     return result
 
-def describe_for_ai(df: pd.DataFrame) -> str:
-    """Enhanced context for AI prompts including actual data rows and specific values."""
+def describe_for_ai(df: pd.DataFrame, filename: str | None = None) -> str:
+    """Enhanced context for AI prompts including actual data rows and specific values.
+    
+    Args:
+        df: The DataFrame to describe.
+        filename: Optional cache key. If provided, results are cached per filename.
+    
+    Returns:
+        A string with structured dataset description for AI consumption.
+    """
+    # Check cache first if filename is provided
+    if filename:
+        cached = AI_DESCRIBE_CACHE.get(filename)
+        if cached is not None:
+            return cached
     try:
         if df is None or df.shape[1] == 0:
             return f"Empty or headerless table. Shape: {getattr(df, 'shape', None)}"
@@ -3735,7 +3744,10 @@ def describe_for_ai(df: pd.DataFrame) -> str:
         except Exception:
             pass
         
-        return "\n".join(parts)
+        result = "\n".join(parts)
+        if filename:
+            AI_DESCRIBE_CACHE.set(filename, result)
+        return result
     except Exception:
         try:
             return "Columns and dtypes:\n" + str(df.dtypes)
@@ -4039,10 +4051,12 @@ def analyze_file(filename):
         # Use cached info for fast response
         cached_info = get_cached_df_info(filename, df)
         
-        used_cols = [c for c in df.columns if not pd.to_numeric(df[c], errors='coerce').dropna().empty][:20]
+        # Use cached numeric DF to avoid per-column pd.to_numeric calls
+        _num_df = get_cached_numeric_df(filename, df)
+        used_cols = list(_num_df.columns)[:20] if _num_df is not None and not _num_df.empty else list(df.columns)[:20]
         
         # Build minimal AI context without expensive operations
-        ai_context = describe_for_ai(df)
+        ai_context = describe_for_ai(df, filename=filename)
         
         ai_summary = AI_SUMMARY_CACHE.get(filename)
         if ai_summary is None and active_view == 'overview':
@@ -4058,6 +4072,7 @@ def analyze_file(filename):
             'missing_values': cached_info['missing_values'],
             'plots': [],
             'forecast_plots': [],
+            'forecast_plots_by_column': {},
             'anomalies': {},
             'ai_summary': ai_summary,
             'user_question': user_question,
@@ -4076,7 +4091,17 @@ def analyze_file(filename):
         
         total_dt = time.perf_counter() - request_start
         app.logger.info("Analyze FAST PATH done file=%s view=%s elapsed=%.2fs", filename, active_view, total_dt)
-        return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name)
+        
+        # Compute AI model attribution for template (same logic as full path)
+        _ai_model_name = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        if isinstance(_ai_model_name, str) and _ai_model_name.startswith('models/'):
+            _ai_model_display = _ai_model_name[7:]
+        else:
+            _ai_model_display = str(_ai_model_name) if _ai_model_name else 'gemini-3.0-flash'
+        _ai_is_valid = isinstance(ai_summary, str) and ai_summary and not _is_offline_html(ai_summary)
+        
+        return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name,
+                               ai_model_name=_ai_model_display, ai_is_valid=_ai_is_valid)
 
     # Per-request timing and budgets to prevent long hangs
     overview_budget_s = float(os.getenv("OVERVIEW_TIME_BUDGET_SEC", "6.0"))
@@ -4103,12 +4128,11 @@ def analyze_file(filename):
             used_cols.append(column)
             
             # Optimization: Only run anomaly detection if we are in a view that needs it
-            # or if we are reasonably sure it won't kill performance (e.g. small number of columns)
             # 'overview' doesn't show anomalies in the UI directly, only in AI context.
             # We skip it for overview on large datasets to speed up transitions.
-            an_idx = []
+            an_idx = pd.Index([])
             if build_forecast or build_interactive or len(df.columns) < 10:
-                 an_idx, an_score = detect_anomalies(series, contamination=user_contam)
+                 an_idx, an_score = get_cached_anomalies(filename, column, series, user_contam)
                  if len(an_idx):
                      try:
                          anomalies_found[str(column)] = [str(i) for i in an_idx]
@@ -4430,7 +4454,7 @@ def analyze_file(filename):
                         }
                     })
 
-                dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
+                dist = {"name": column, "values": [float(v) for v in series.dropna().values[:2000]]}
                 
                 # Compute statistics for the column
                 try:
@@ -4663,7 +4687,7 @@ def api_ai_summary(filename):
         return jsonify({"ok": False, "html": "<p>Dataset not found.</p>"}), 404
     
     file_asset = AI_FILE_MAP.get(filename) if 'AI_FILE_MAP' in globals() else None
-    ai_context = describe_for_ai(df)
+    ai_context = describe_for_ai(df, filename=filename)
     
     try:
         if ensure_ai_ready():
@@ -5377,7 +5401,7 @@ def download_full_report_pdf(filename):
             if ensure_ai_ready():
                 # Build context for AI
                 try:
-                    ai_context = describe_for_ai(df)
+                    ai_context = describe_for_ai(df, filename=filename)
                 except Exception:
                     ai_context = ""
                 
@@ -5479,11 +5503,10 @@ def download_full_report_pdf(filename):
                     
                     # FIX: Render HTML in chunks (by paragraph/list) to prevent mid-content page breaks
                     # Split on block-level elements to control page breaks better
-                    import re as regex_module
                     
                     # Split HTML by major block elements while keeping delimiters
                     # This helps prevent large gaps when page breaks occur mid-list
-                    chunks = regex_module.split(r'(?=<(?:p|ul|ol|h[1-6]|table)[^>]*>)', html_text, flags=regex_module.I)
+                    chunks = re.split(r'(?=<(?:p|ul|ol|h[1-6]|table)[^>]*>)', html_text, flags=re.I)
                     chunks = [c.strip() for c in chunks if c.strip()]
                     
                     for chunk in chunks:
@@ -5497,7 +5520,7 @@ def download_full_report_pdf(filename):
                             pdf.write_html(chunk)
                         except Exception:
                             # Fallback to plain text for this chunk
-                            plain = regex_module.sub(r'<[^>]+>', ' ', chunk)
+                            plain = re.sub(r'<[^>]+>', ' ', chunk)
                             pdf.multi_cell(0, 5, plain.strip())
                     
                     pdf.ln(5)
@@ -6089,36 +6112,34 @@ def download_full_report_html(filename):
         # Forecast (for timeseries) - use 10% of data as forecast horizon
         if is_ts and len(s) >= 10:
             try:
-                print(f"[DEBUG] Generating forecast for {col}: is_ts={is_ts}, len={len(s)}, steps={forecast_steps}, index_type={type(s.index)}")
+                app.logger.debug("Generating forecast for %s: is_ts=%s, len=%d, steps=%d, index_type=%s", col, is_ts, len(s), forecast_steps, type(s.index))
                 fc_mean, ci = _compute_forecast(s, steps=forecast_steps)
-                print(f"[DEBUG] Forecast result for {col}: fc_mean is {'None' if fc_mean is None else f'{len(fc_mean)} points'}")
+                app.logger.debug("Forecast result for %s: fc_mean is %s", col, 'None' if fc_mean is None else f'{len(fc_mean)} points')
             except Exception as e:
-                print(f"Forecast error for {col} (_compute_forecast): {e}")
+                app.logger.warning("Forecast error for %s (_compute_forecast): %s", col, e)
                 try:
                     fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
                 except Exception as e2:
-                    print(f"Forecast error for {col} (_recent_slope_forecast): {e2}")
+                    app.logger.warning("Forecast error for %s (_recent_slope_forecast): %s", col, e2)
                     fc_mean, ci = None, None
             
             if fc_mean is not None and len(fc_mean) > 0:
                 try:
-                    print(f"[DEBUG] Creating forecast plot for {col}")
+                    app.logger.debug("Creating forecast plot for %s", col)
                     fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps = 10%)", 'Timestamp', col, conf_int=ci, history_tail=None, anomalies_idx=an_idx)
                     forecast_sections.append(f'<figure><figcaption><strong>Forecast: {col}</strong> ({forecast_steps} steps, 10% of data)</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
-                    print(f"[DEBUG] Successfully created forecast plot for {col}")
+                    app.logger.debug("Successfully created forecast plot for %s", col)
                 except Exception as e:
-                    print(f"Forecast plot error for {col}: {e}")
+                    app.logger.warning("Forecast plot error for %s: %s", col, e)
                     traceback.print_exc()
             else:
-                print(f"Forecast is None or empty for {col}")
+                app.logger.debug("Forecast is None or empty for %s", col)
 
     # Build HTML report
-    print("[DEBUG] Report generation complete:")
-    print(f"  - Distribution sections: {len(distribution_sections)}")
-    print(f"  - STL sections: {len(stl_sections)}")
-    print(f"  - Forecast sections: {len(forecast_sections)}")
+    app.logger.debug("Report generation complete: distributions=%d, stl=%d, forecasts=%d",
+                      len(distribution_sections), len(stl_sections), len(forecast_sections))
     if len(forecast_sections) == 0:
-        print("  - WARNING: No forecast sections were generated!")
+        app.logger.debug("No forecast sections were generated")
     
     display = request.args.get('display') or filename
     title = f"Analysis Report — {display}"
@@ -6349,10 +6370,6 @@ def _add_cache_and_security_headers(resp):
     return resp
 
 if __name__ == "__main__":
-    pass
-    
-    debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on")
-    
     debug = str(os.getenv("FLASK_DEBUG", "0")).strip().lower() in ("1", "true", "yes", "on")
     host = os.getenv("FLASK_HOST", os.getenv("HOST", "0.0.0.0"))
     try:
