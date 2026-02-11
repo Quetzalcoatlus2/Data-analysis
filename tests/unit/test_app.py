@@ -168,3 +168,144 @@ def test_health_endpoint():
         assert response.status_code == 200
         data = response.get_json()
         assert data["status"] == "ok"
+
+
+def test_forecast_does_not_copy_historical_segments():
+    """Ensure _compute_forecast never returns a subsequence found verbatim in the input."""
+    # Create a distinctive pattern that would be easy to detect if copied
+    rng = np.random.default_rng(42)
+    history = np.cumsum(rng.normal(0, 1, 200)) + 100
+    series = pd.Series(history, index=pd.RangeIndex(200))
+    fc, _ci = _compute_forecast(series, 30)
+    fc_vals = fc.values
+
+    # Slide a window of length 30 over history; none should match the forecast
+    for start in range(len(history) - 30 + 1):
+        segment = history[start:start + 30]
+        # Even with an offset shift (like old code did), the shape shouldn't match
+        # Check normalised correlation: if segment == shifted copy, corr ≈ 1.0
+        seg_centered = segment - segment.mean()
+        fc_centered = fc_vals - fc_vals.mean()
+        seg_std = np.std(seg_centered)
+        fc_std = np.std(fc_centered)
+        if seg_std < 1e-9 or fc_std < 1e-9:
+            continue
+        corr = float(np.dot(seg_centered, fc_centered) / (seg_std * fc_std * len(segment)))
+        assert corr < 0.98, (
+            f"Forecast appears to be a near-copy of history[{start}:{start+30}] (corr={corr:.4f})"
+        )
+
+
+def test_forecast_stays_within_data_bounds():
+    """Ensure forecast values and CI never exceed historical min/max."""
+    rng = np.random.default_rng(7)
+    # Data with clear bounds [20, 80]
+    values = rng.uniform(20, 80, size=150)
+    series = pd.Series(values, index=pd.RangeIndex(150))
+    data_min = float(series.min())
+    data_max = float(series.max())
+
+    fc, ci = _compute_forecast(series, 30)
+
+    # Forecast values must stay within [data_min, data_max]
+    assert fc.min() >= data_min - 1e-9, f"Forecast min {fc.min()} < data_min {data_min}"
+    assert fc.max() <= data_max + 1e-9, f"Forecast max {fc.max()} > data_max {data_max}"
+
+    # CI bounds must also stay within [data_min, data_max]
+    assert ci["lower"].min() >= data_min - 1e-9, f"CI lower min {ci['lower'].min()} < data_min {data_min}"
+    assert ci["upper"].max() <= data_max + 1e-9, f"CI upper max {ci['upper'].max()} > data_max {data_max}"
+
+
+def test_forecast_continuity_with_history():
+    """Ensure the first forecast point is close to the last historical value."""
+    rng = np.random.default_rng(123)
+    values = np.cumsum(rng.normal(0, 0.5, 100)) + 50
+    series = pd.Series(values, index=pd.RangeIndex(100))
+    last_val = float(series.iloc[-1])
+
+    fc, _ci = _compute_forecast(series, 20)
+    first_fc = float(fc.iloc[0])
+
+    # The first forecast point should be very close to the last history point
+    # (within ~5% of data range) for a natural-looking transition
+    data_range = float(series.max() - series.min())
+    gap = abs(first_fc - last_val)
+    assert gap < 0.1 * data_range, (
+        f"First forecast point {first_fc:.2f} is too far from last historical value "
+        f"{last_val:.2f} (gap={gap:.2f}, 10% range={0.1*data_range:.2f})"
+    )
+
+
+def test_forecast_matches_historical_variation():
+    """Verify that the std of forecast differences is within a reasonable
+    range (0.3x to 3x) of the historical data's difference std.
+    This ensures the forecast doesn't become unnaturally flat or wild.
+    """
+    rng = np.random.default_rng(42)
+    values = np.cumsum(rng.normal(0, 1.0, 200)) + 100
+    series = pd.Series(values, index=pd.RangeIndex(200))
+
+    fc, _ci = _compute_forecast(series, 50)
+
+    hist_diffs = np.diff(series.values)
+    fc_diffs = np.diff(fc.values.astype(float))
+    std_hist = float(np.std(hist_diffs, ddof=1))
+    std_fc = float(np.std(fc_diffs, ddof=1))
+
+    assert std_fc > 0, "Forecast is completely flat (zero variation)"
+    ratio = std_fc / std_hist
+    assert 0.3 <= ratio <= 3.0, (
+        f"Forecast variation ratio {ratio:.2f} outside [0.3, 3.0]: "
+        f"std_fc={std_fc:.4f}, std_hist={std_hist:.4f}"
+    )
+
+
+def test_forecast_seasonal_data_preserves_oscillation():
+    """Test with a seasonal series to ensure the forecast exhibits meaningful
+    oscillation and doesn't collapse to a flat line.
+    """
+    n = 120
+    t = np.arange(n, dtype=float)
+    # Clear seasonal pattern with period 12
+    seasonal = 10 * np.sin(2 * np.pi * t / 12)
+    trend = 0.05 * t
+    noise = np.random.default_rng(99).normal(0, 0.5, n)
+    values = 50 + trend + seasonal + noise
+    idx = pd.date_range("2020-01-01", periods=n, freq="MS")
+    series = pd.Series(values, index=idx)
+
+    fc, _ci = _compute_forecast(series, 24)
+    fc_vals = fc.values.astype(float)
+
+    # The forecast should have meaningful variation (not flat)
+    fc_range = float(np.max(fc_vals) - np.min(fc_vals))
+    hist_range = float(np.max(values) - np.min(values))
+
+    assert fc_range > 0.1 * hist_range, (
+        f"Forecast range {fc_range:.2f} is too small compared to historical "
+        f"range {hist_range:.2f} — forecast appears flat"
+    )
+
+
+def test_forecast_mean_matches_recent_history():
+    """Forecast average should be close to the average of recent history,
+    even when the last observations are near the data maximum (saturation guard).
+    """
+    rng = np.random.default_rng(77)
+    values = rng.uniform(30, 70, size=100)
+    # Push the last 5 values near the maximum (common saturation scenario)
+    values[-5:] = values[-5:] + 25
+    series = pd.Series(values, index=pd.RangeIndex(100))
+
+    fc, _ci = _compute_forecast(series, 30)
+
+    recent_mean = float(np.mean(values[-20:]))
+    fc_mean = float(np.mean(fc.values.astype(float)))
+    data_range = float(np.max(values) - np.min(values))
+
+    # The forecast mean should be within 15% of data range from recent mean
+    pct_diff = abs(fc_mean - recent_mean) / data_range * 100
+    assert pct_diff < 15, (
+        f"Forecast mean {fc_mean:.2f} too far from recent mean {recent_mean:.2f}: "
+        f"{pct_diff:.1f}% of range ({data_range:.1f}), expected < 15%"
+    )

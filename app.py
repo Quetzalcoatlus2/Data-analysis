@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import hashlib
 import html as htmllib
 import io
@@ -1886,216 +1886,6 @@ def _infer_seasonal_period(idx, min_seasons=2):
     except Exception:
         return None
 
-def _recent_slope_forecast(series, steps, window=None, damping=None):
-    """
-    Forecast using robust recent slope.
-    - slope blends linear-regression slope with median step
-    - optional damping (None or in (0,1)); default None for clearer trend
-    """
-    y = series.dropna()
-    n = len(y)
-    future_idx = _infer_future_index(series.index, steps)
-
-    if n < 3:
-        fc_mean = pd.Series([y.iloc[-1]] * steps, index=future_idx)
-        ci = pd.concat([fc_mean, fc_mean], axis=1)
-        ci.columns = ['lower', 'upper']
-        return fc_mean, ci
-
-    w = window or min(max(20, n // 5), n)
-    y_win = y.iloc[-w:]
-
-    x = np.arange(len(y_win), dtype=float)
-    slope_lr, intercept = np.polyfit(x, y_win.values, 1)
-    diffs = np.diff(y_win.values)
-    med_diff = float(np.median(diffs)) if len(diffs) else 0.0
-
-    slope = 0.5 * float(slope_lr) + 0.5 * med_diff
-    baseline = max(abs(med_diff), 1e-12)
-    min_mag = 0.25 * baseline
-    if abs(slope) < min_mag:
-        slope = np.sign(med_diff) * min_mag
-
-    k = np.arange(1, steps + 1, dtype=float)
-    if damping is not None and 0 < damping < 1:
-        phi = float(damping)
-        incr = (1 - np.power(phi, k)) / (1 - phi) * slope
-        fc_vals = y.iloc[-1] + incr
-    else:
-        fc_vals = y.iloc[-1] + slope * k
-
-    fc_mean = pd.Series(fc_vals, index=future_idx)
-
-    resid = y_win.values - (slope_lr * x + intercept)
-    resid_std = float(np.nanstd(resid, ddof=1)) if len(resid) > 2 else float(np.nanstd(y_win.values, ddof=1))
-    lower = fc_mean - 1.96 * resid_std
-    upper = fc_mean + 1.96 * resid_std
-    ci = pd.concat([lower, upper], axis=1)
-    ci.columns = ['lower', 'upper']
-    return fc_mean, ci
-
-def _pattern_replay_forecast(series: pd.Series, steps: int, seasonal_period: int, noise_scale: float = 0.15):
-    """Replay the most recent seasonal cycle increments to build a natural forecast.
-    - Use last seasonal_period points as a template; compute cyclic diffs; iterate to build future.
-    - Add light jitter from recent residual distribution to avoid a perfectly repeated path.
-    Returns (forecast_series, conf_df approx) with a simple CI from recent std.
-    """
-    try:
-        y = pd.to_numeric(series, errors='coerce').dropna()
-        n = len(y)
-        sp = int(seasonal_period)
-        if n < max(8, sp + 3) or sp < 2:
-            return _recent_slope_forecast(series, steps, window=None, damping=None)
-        base = y.iloc[-sp:]
-        inc = np.diff(base.values, prepend=base.values[0])  # first diff 0, then increments
-
-        # residuals around a local smoothing to get jitter scale and drift
-        w = max(sp, min(200, n//3))
-        y_win = y.tail(w)
-        x = np.arange(len(y_win), dtype=float)
-        slope_lr, intercept = np.polyfit(x, y_win.values, 1)
-        fit = slope_lr * x + intercept
-        resid = (y_win.values - fit)
-        rs = float(np.nanstd(resid, ddof=1))
-        jitter = rs * float(noise_scale)
-        # light drift to follow recent trend without dominating pattern
-        drift = float(slope_lr) * 0.25
-
-        vals = []
-        cur = y.iloc[-1]
-        _rng = np.random.default_rng(int(abs(hash((float(y.iloc[-1]), float(y.mean()), len(y)))) % (2**31)))
-        for k in range(steps):
-            d = inc[(k + 1) % sp]
-            if np.isfinite(jitter) and jitter > 0:
-                # light jitter from residuals distribution
-                noise = _rng.normal(0.0, jitter)
-            else:
-                noise = 0.0
-            cur = cur + d + drift + noise
-            vals.append(cur)
-        future_idx = _infer_future_index(y.index, steps)
-        fc = pd.Series(vals, index=future_idx)
-        # Simple CI from residual std
-        lower = fc - 1.96 * rs
-        upper = fc + 1.96 * rs
-        ci = pd.concat([lower, upper], axis=1)
-        ci.columns = ['lower', 'upper']
-        return fc, ci
-    except Exception:
-        return _recent_slope_forecast(series, steps, window=None, damping=None)
-
-def _forecast_natural(series: pd.Series, steps: int):
-    """Simple, natural forecast that reuses portions of actual data.
-    Strategy:
-      - Compute recent increments (diffs) from a trailing window.
-      - If a seasonal period is detectable (datetime index), replay the last seasonal increments cyclically.
-        Otherwise, replay the last K increments cyclically.
-      - Add small AR(1) noise proportional to increment volatility to avoid flatlines.
-      - Start from the last observed value (hard continuity).
-      - Apply a light envelope clip based on recent quantiles to avoid extremes.
-      - Build a basic constant-width CI from increment volatility.
-    """
-    try:
-        y = pd.to_numeric(series, errors='coerce').dropna()
-        n = len(y)
-        future_idx = _infer_future_index(series.index, steps)
-        if n < 3:
-            fc_mean = pd.Series([y.iloc[-1] if n else 0.0] * steps, index=future_idx)
-            ci = pd.DataFrame({"lower": fc_mean.copy(), "upper": fc_mean.copy()})
-            return fc_mean, ci
-
-        # Choose a trailing window
-        w = min(n, max(30, n // 3))
-        tail = y.iloc[-w:]
-        diffs = np.diff(tail.values)
-        if diffs.size == 0:
-            fc_mean = pd.Series([y.iloc[-1]] * steps, index=future_idx)
-            ci = pd.DataFrame({"lower": fc_mean.copy(), "upper": fc_mean.copy()})
-            return fc_mean, ci
-
-        # Prefer seasonal template when available
-        sp = _infer_seasonal_period(y.index) if isinstance(y.index, pd.DatetimeIndex) else None
-        if isinstance(sp, int) and sp >= 2 and n >= sp + 3:
-            # last sp+1 points to compute sp increments
-            recent = y.iloc[-(sp + 1):].values.astype(float)
-            template = np.diff(recent)  # length sp
-            if template.size < 2:
-                template = diffs[-min(len(diffs), max(8, steps)):]  # fallback
-        else:
-            K = min(steps, max(8, min(60, len(diffs))))
-            template = diffs[-K:]
-
-        # Build increments by cycling the template
-        incs = np.resize(template, steps).astype(float)
-
-        # AR(1) noise proportional to increment volatility; slightly scale with horizon
-        inc_std = float(np.nanstd(diffs, ddof=1)) if diffs.size else 0.0
-        hf = float(steps) / max(1.0, float(n))
-        sigma = (0.18 + 0.22 * min(1.0, hf)) * inc_std if (np.isfinite(inc_std) and inc_std > 0) else 0.0
-        rho = 0.6
-        if sigma > 0:
-            e = np.zeros(steps, dtype=float)
-            _rng = np.random.default_rng(int(abs(hash((float(y.iloc[-1]), float(y.mean()), n))) % (2**31)))
-            for i in range(steps):
-                shock = _rng.normal(0.0, sigma)
-                e[i] = (rho * (e[i-1] if i > 0 else 0.0)) + shock
-            incs = incs + e
-
-        # Integrate increments starting from last value (continuity)
-        vals = float(y.iloc[-1]) + np.cumsum(incs)
-        fc = pd.Series(vals, index=future_idx)
-        if len(fc) > 0:
-            fc.iloc[0] = float(y.iloc[-1])
-
-        # Light envelope clip based on recent quantiles + pad
-        try:
-            lo, hi = np.quantile(tail.values, [0.02, 0.98])
-        except Exception:
-            lo, hi = float(np.min(tail.values)), float(np.max(tail.values))
-        rng = float(max(1e-9, hi - lo))
-        pad = 0.2 * rng
-        fc_vals = np.minimum(np.maximum(fc.values.astype(float), lo - pad), hi + pad)
-        fc = pd.Series(fc_vals, index=fc.index)
-
-        # Basic CI from increment volatility
-        sigma_ci = float(np.nanstd(diffs, ddof=1)) if diffs.size else 0.0
-        if not np.isfinite(sigma_ci) or sigma_ci <= 0:
-            sigma_ci = float(np.nanstd(tail.values, ddof=1)) if tail.size else 0.0
-        lower = fc.values.astype(float) - 1.96 * sigma_ci
-        upper = fc.values.astype(float) + 1.96 * sigma_ci
-        ci = pd.DataFrame({"lower": lower, "upper": upper}, index=fc.index)
-        return fc, ci
-    except Exception:
-        return _recent_slope_forecast(series, steps, window=None, damping=None)
-def _seasonality_strength(series: pd.Series, seasonal_period: int | None) -> float:
-    """Estimate strength of seasonality (0..1) using STL-like ratio of seasonal var to total var.
-    Returns 0 if not enough data or invalid inputs.
-    """
-    try:
-        if not isinstance(seasonal_period, int) or seasonal_period < 2:
-            return 0.0
-        y = pd.to_numeric(series, errors='coerce').dropna()
-        n = len(y)
-        if n < seasonal_period * 3:
-            return 0.0
-        # compute a simple moving average baseline to approximate trend
-        w = seasonal_period
-        ma = y.rolling(window=w, center=True, min_periods=max(2, w//2)).mean()
-        detr = (y - ma).dropna()
-        if len(detr) < seasonal_period * 2:
-            return 0.0
-        # seasonal component via last one-period template repeated and mean-removed
-        template = detr.iloc[-seasonal_period:]
-        template = template - template.mean()
-        seasonal = pd.Series(np.resize(template.values, len(detr)), index=detr.index)
-        # resid is not used
-        # resid = detr - seasonal
-        var_sea = float(np.nanvar(seasonal.values))
-        var_tot = float(np.nanvar(detr.values)) + 1e-12
-        strength = max(0.0, min(1.0, var_sea / var_tot))
-        return float(strength)
-    except Exception:
-        return 0.0
 def _compute_basic_stats(series: pd.Series) -> dict[str, float]:
     """Compute basic statistics for a series (min, max, mean, median, std)."""
     s = pd.to_numeric(series, errors='coerce').dropna()
@@ -2542,217 +2332,6 @@ def generate_forecast_plot(
     plt.close(fig)
     return img
 
-def _simple_forecast(series: pd.Series, steps: int):
-    """Simple, robust forecast that tends to mimic recent behavior without extremes.
-    - Robust trend: median of last-window diffs
-    - Optional seasonal template: last seasonal_period values (mean-removed), scaled to residual std
-    - Light noise from residuals
-    - Mild clamp to recent quantile envelope
-    Returns (forecast_series, conf_df) with basic CI from residual std.
-    """
-    try:
-        y = pd.to_numeric(series, errors='coerce').dropna()
-        n = len(y)
-        future_idx = _infer_future_index(y.index, steps)
-        if n < 5:
-            fc_mean = pd.Series([y.iloc[-1] if n else 0.0] * steps, index=future_idx)
-            ci = pd.concat([fc_mean.copy(), fc_mean.copy()], axis=1)
-            ci.columns = ['lower', 'upper']
-            return fc_mean, ci
-
-        w = min(max(24, n // 3), n)
-        y_win = y.iloc[-w:]
-        # Robust slope from diffs
-        diffs = np.diff(y_win.values)
-        slope = float(np.median(diffs)) if len(diffs) else 0.0
-        # Residual std around a simple linear fit (captures volatility)
-        x = np.arange(len(y_win), dtype=float)
-        try:
-            slope_lr, intercept = np.polyfit(x, y_win.values, 1)
-            fit = slope_lr * x + intercept
-        except Exception:
-            fit = np.full_like(y_win.values, y_win.values.mean())
-        resid = (y_win.values - fit)
-        rs = float(np.nanstd(resid, ddof=1))
-        # Also capture increment volatility to keep natural variation
-        inc_std = float(np.nanstd(np.diff(y_win.values), ddof=1)) if len(y_win.values) > 2 else rs
-
-        k = np.arange(1, steps + 1, dtype=float)
-        baseline = y.iloc[-1] + slope * k
-
-        # Seasonal template from last detected period
-        seasonal = np.zeros(steps, dtype=float)
-        sp = _infer_seasonal_period(y.index) if isinstance(y.index, pd.DatetimeIndex) else None
-        if isinstance(sp, int) and sp >= 2 and n >= sp * 2:
-            template = y.iloc[-sp:].values.astype(float)
-            template = template - template.mean()
-            tstd = float(np.nanstd(template, ddof=1))
-            if tstd > 0 and rs > 0:
-                scale = float(np.clip(rs / (tstd + 1e-12), 0.5, 2.5))
-            else:
-                scale = 1.0
-            seasonal = np.resize(template, steps) * scale  # only when template exists
-
-        # Add small correlated noise (AR(1)-like) to avoid flatlining
-        # Increase slightly for longer horizons to preserve natural variability
-        hf = float(steps) / max(1.0, float(n))
-        scale_boost = 1.0 + 0.6 * min(1.0, max(0.0, hf))
-        eps_scale = (inc_std * 0.35 if np.isfinite(inc_std) and inc_std > 0 else (rs * 0.25 if np.isfinite(rs) and rs > 0 else 0.0)) * scale_boost
-        rho = 0.6  # persistence for smooth variation
-        eps = np.zeros(steps, dtype=float)
-        # Use local RNG seeded from data for reproducibility without global state mutation
-        _rng = np.random.default_rng(int(abs(hash((float(y.iloc[-1]), float(y.mean()), n))) % (2**31)))
-        if eps_scale > 0:
-            for i in range(steps):
-                shock = _rng.normal(0.0, eps_scale)
-                eps[i] = (rho * (eps[i-1] if i > 0 else 0.0)) + shock
-        # Optional bootstrap of recent increments to mimic natural variability
-        if len(diffs) >= 4:
-            boot = _rng.choice(diffs, size=steps, replace=True).astype(float)
-            # center and shrink
-            boot = (boot - float(np.mean(boot))) * (0.35 * scale_boost)
-            boot_walk = np.cumsum(boot)
-        else:
-            boot_walk = np.zeros(steps, dtype=float)
-        fc_vals = baseline + seasonal + eps + boot_walk
-
-        # Mild clamp to recent envelope to avoid extremes but keep amplitude
-        ql, qh = np.quantile(y_win.values, [0.02, 0.98])
-        rng = float(max(1e-9, qh - ql))
-        lo2 = ql - 0.3 * rng
-        hi2 = qh + 0.3 * rng
-        fc_vals = np.clip(fc_vals, lo2, hi2)
-
-        fc_mean = pd.Series(fc_vals, index=future_idx)
-        # Build CI using combined volatility estimate
-        ci_sigma = max(1e-12, float(np.nanstd(resid, ddof=1)))
-        ci = pd.concat([fc_mean - 1.96 * ci_sigma, fc_mean + 1.96 * ci_sigma], axis=1)
-        ci.columns = ['lower', 'upper']
-        return fc_mean, ci
-    except Exception:
-        # Fallback to simple recent-slope if anything goes wrong
-        return _recent_slope_forecast(series, steps, window=None, damping=None)
-def _naturalize_forecast(history: pd.Series, forecast_series: pd.Series, conf_df: pd.DataFrame | None = None,
-                          q_low: float = 0.02, q_high: float = 0.98, pad: float = 0.2):
-    """Constrain forecast to a plausible envelope derived from history.
-    - Compute low/high quantiles of recent history (last 30-50% window).
-    - Add a proportional pad to allow gentle drift.
-    - Clip forecast to [low - pad*range, high + pad*range].
-    - If conf_df present, clip it too.
-    Returns possibly adjusted (forecast_series, conf_df).
-    """
-    try:
-        y = pd.to_numeric(history, errors='coerce').dropna()
-        if len(y) < 5:
-            return forecast_series, conf_df
-        n = len(y)
-        w = max(50, int(n * 0.3))
-        recent = y.tail(min(n, w))
-        lo = float(np.nanquantile(recent.values, max(0.0, min(q_low, 0.49))))
-        hi = float(np.nanquantile(recent.values, min(1.0, max(q_high, 0.51))))
-
-        rng = max(1e-9, hi - lo)
-        # widen pad dynamically according to recent volatility to preserve amplitude
-        vol = float(np.nanstd(recent.values, ddof=1))
-        dyn_pad = pad + 0.5 * (vol / (rng + 1e-12))
-        lo2 = lo - dyn_pad * rng
-        hi2 = hi + dyn_pad * rng
-
-        fc = forecast_series.copy()
-        v = fc.values.astype(float)
-        # Only apply soft-bound outside the envelope, keep inside untouched to avoid flattening
-        mid = (lo2 + hi2) / 2.0
-        half = max(1e-9, (hi2 - lo2) / 2.0)
-        z = (v - mid) / (half * 0.9)
-        v_adj = v.copy()
-        mask_hi = v > hi2
-        mask_lo = v < lo2
-        v_adj[mask_hi] = mid + half * np.tanh(z[mask_hi])
-        v_adj[mask_lo] = mid + half * np.tanh(z[mask_lo])
-        # Respect absolute min/max from history with a soft barrier and gentle reflection to avoid harsh saturation
-        min_abs = float(np.nanmin(y.values))
-        max_abs = float(np.nanmax(y.values))
-        rng_abs = max(1e-9, max_abs - min_abs)
-        # Iterate with barrier near bounds based on distance from previous value
-        out = np.empty_like(v_adj)
-        prev = float(y.iloc[-1])
-        scale = 0.25 * rng_abs
-        # micro-oscillation to avoid long flat segments; use seasonal period if detectable, else a small fixed period
-        try:
-            osc_period = _infer_seasonal_period(y.index) if isinstance(y.index, pd.DatetimeIndex) else None
-        except Exception:
-            osc_period = None
-        base_period = int(osc_period) if isinstance(osc_period, int) and osc_period >= 3 else 10
-        # Scale oscillation amplitude slightly with horizon fraction to avoid late flatlines
-        try:
-            horizon_frac = float(len(fc)) / max(1.0, float(len(y)))
-        except Exception:
-            horizon_frac = 0.0
-        osc_amp = (0.01 + 0.03 * max(0.0, min(1.0, horizon_frac))) * rng_abs
-        for i in range(len(v_adj)):
-            target = float(v_adj[i])
-            step = target - prev
-            # Soft approach to bounds: as prev nears min/max, step is damped but never zero (less damping to avoid flatlines)
-            if step >= 0:
-                dist = max(0.0, max_abs - prev)
-                factor = 0.92 + 0.08 * float(np.tanh(dist / (scale + 1e-12)))  # always >0.92
-                step *= factor
-            else:
-                dist = max(0.0, prev - min_abs)
-                factor = 0.92 + 0.08 * float(np.tanh(dist / (scale + 1e-12)))
-                step *= factor
-            nxt = prev + step
-            # Gentle mean reversion toward mid when very close to edges to prevent sticking
-            edge_closeness = min(max(0.0, (prev - min_abs) / rng_abs), max(0.0, (max_abs - prev) / rng_abs))
-            # edge_closeness is small near edges; use (1 - edge_closeness)
-            reversion_strength = 0.08 * (1.0 - edge_closeness)
-            nxt += reversion_strength * (mid - nxt)
-            # Add micro oscillation
-            try:
-                phase = (i % max(3, base_period)) / float(max(3, base_period))
-                nxt += osc_amp * math.sin(2.0 * math.pi * phase)
-            except Exception:
-                pass
-            # Gentle reflection if outside
-            if nxt > max_abs:
-                over = nxt - max_abs
-                nxt = max_abs - 0.75 * over
-            if nxt < min_abs:
-                over = min_abs - nxt
-                nxt = min_abs + 0.75 * over
-            # Final guard: allow a tiny epsilon outside, but never saturate noticeably
-            eps = 1e-6 * rng_abs
-            if nxt > max_abs + eps:
-                nxt = max_abs + eps
-            if nxt < min_abs - eps:
-                nxt = min_abs - eps
-            out[i] = nxt
-            prev = nxt
-        fc = pd.Series(out, index=fc.index)
-
-        if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
-            c = conf_df.copy()
-            c0 = c.iloc[:, 0].astype(float).values
-            c1 = c.iloc[:, 1].astype(float).values
-            # First apply the same soft envelope mapping
-            z0 = (c0 - mid) / (half * 0.9)
-            z1 = (c1 - mid) / (half * 0.9)
-            c0_adj = c0.copy()
-            c1_adj = c1.copy()
-            c0_adj[c0 > hi2] = mid + half * np.tanh(z0[c0 > hi2])
-            c0_adj[c0 < lo2] = mid + half * np.tanh(z0[c0 < lo2])
-            c1_adj[c1 > hi2] = mid + half * np.tanh(z1[c1 > hi2])
-            c1_adj[c1 < lo2] = mid + half * np.tanh(z1[c1 < lo2])
-            # Then ensure final CI stays within absolute min/max and around the adjusted forecast
-            c0_adj = np.minimum(np.maximum(c0_adj, min_abs), fc.values)
-            c1_adj = np.maximum(np.minimum(c1_adj, max_abs), fc.values)
-            c.iloc[:, 0] = c0_adj
-            c.iloc[:, 1] = c1_adj
-            return fc, c
-        return fc, conf_df
-    except Exception:
-        return forecast_series, conf_df
-
 def _match_amplitude(history: pd.Series, forecast_series: pd.Series, conf_df: pd.DataFrame | None = None,
                      seasonal_period: int | None = None, min_scale: float = 0.85, max_scale: float = 2.5):
     """Scale forecast deviations to better match recent history amplitude.
@@ -2816,26 +2395,6 @@ def _match_amplitude(history: pd.Series, forecast_series: pd.Series, conf_df: pd
     except Exception:
         return forecast_series, conf_df
 
-def _is_too_quiet(history: pd.Series, forecast: pd.Series, frac: float = 0.5):
-    """True if forecast dynamics (std of diffs) are much smaller than recent history.
-    If std(diff(forecast)) < frac * std(diff(recent history)).
-    """
-    try:
-        h = pd.to_numeric(history, errors='coerce').dropna()
-        f = pd.to_numeric(forecast, errors='coerce').dropna()
-        if len(h) < 6 or len(f) < 3:
-            return False
-        n = len(h)
-        w = max(12, min(200, n // 2))
-        h_win = h.tail(w)
-        std_h = float(np.nanstd(np.diff(h_win.values), ddof=1)) if len(h_win) >= 3 else 0.0
-        std_f = float(np.nanstd(np.diff(f.values), ddof=1)) if len(f) >= 3 else 0.0
-        if not np.isfinite(std_h) or std_h <= 0 or not np.isfinite(std_f):
-            return False
-        return std_f < (frac * std_h)
-    except Exception:
-        return False
-
 def _compute_forecast(series: pd.Series, steps: int):
     """Natural-looking forecast that preserves realistic patterns and variance.
     - Uses historical pattern matching for realistic continuations
@@ -2844,142 +2403,310 @@ def _compute_forecast(series: pd.Series, steps: int):
     Returns (fc_mean, conf_df).
     """
     def _natural_forecast(s: pd.Series, k: int):
-        s = pd.to_numeric(s, errors='coerce').dropna()
-        idx = _infer_future_index(s.index if hasattr(s, 'index') else pd.RangeIndex(0, 1), k)
-        if s.empty or k <= 0:
-            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
-            ci = pd.DataFrame({"lower": zero, "upper": zero})
-            return zero, ci
-        
-        n = len(s)
-        values = s.values.astype(float)
-        last = float(values[-1])
-        
-        # Historical bounds - forecast should stay within reasonable range
-        data_min = float(np.min(values))
-        data_max = float(np.max(values))
-        data_range = data_max - data_min
-        
-        # Use recent window for calculations (adaptive size)
-        window_size = max(20, min(200, n // 2 if n >= 40 else n))
-        recent_data = values[-window_size:]
-        
-        # Calculate simple trend from recent data
-        trend = 0.0
-        if len(recent_data) >= 3:
-            # Use weighted average of recent changes (more weight to recent)
-            changes = np.diff(recent_data)
-            if len(changes) > 0:
-                weights = np.exp(np.linspace(-1, 0, len(changes)))
-                weights = weights / weights.sum()
-                trend = float(np.average(changes, weights=weights))
-        
-        # Calculate historical volatility for realistic variation
-        hist_volatility = 1.0
-        if len(recent_data) >= 3:
-            changes = np.diff(recent_data)
-            hist_volatility = float(np.std(changes, ddof=1))
-        
-        if hist_volatility < 1e-6:
-            hist_volatility = float(np.std(values, ddof=1)) if len(values) > 1 else data_range * 0.1
-        
-        # Create unique seed based on series data for true uniqueness per column
-        series_sum = float(np.sum(values))
-        series_mean = float(np.mean(values))
-        series_std = float(np.std(values))
-        first_val = float(values[0])
-        mid_val = float(values[len(values)//2])
-        series_hash = hash((
-            series_sum, series_mean, series_std, first_val, mid_val,
-            last, trend, len(s), data_min, data_max
-        ))
-        seed_val = int(abs(series_hash) % (2**31))
-        rng = np.random.default_rng(seed_val)
-        
-        # Use actual historical segments to build forecast
-        forecast_vals = np.zeros(k, dtype=float)
-        
-        # Find similar historical patterns to the recent end
-        segment_length = min(k, max(5, len(recent_data) // 10))
-        
-        if len(values) > segment_length * 2:
-            # Find segments in history that are similar to recent data
-            recent_pattern = recent_data[-segment_length:]
-            recent_mean = np.mean(recent_pattern)
-            recent_std = np.std(recent_pattern)
-            
-            # Search for similar segments - FULLY VECTORIZED for speed
-            similar_segments = []
-            search_range = len(values) - segment_length - k
-            max_search = min(search_range, 200)  # Reduced from 300 for speed
-            start_idx = max(0, search_range - max_search)
-            
-            # PERFORMANCE: Fully vectorized segment matching
-            if max_search > 0:
-                # Use pandas rolling for vectorized mean/std computation
-                values_series = pd.Series(values[start_idx:])
-                rolling_mean = values_series.rolling(window=segment_length).mean().values
-                rolling_std = values_series.rolling(window=segment_length).std().values
-                
-                # VECTORIZED: Find all matching indices at once using numpy boolean arrays
-                mean_diff = np.abs(rolling_mean - recent_mean)
-                std_diff = np.abs(rolling_std - recent_std)
-                
-                # Create validity mask: non-NaN values that match thresholds
-                valid_mask = (
-                    ~np.isnan(rolling_mean) & 
-                    ~np.isnan(rolling_std) & 
-                    (mean_diff < data_range * 0.3) & 
-                    (std_diff < hist_volatility * 2)
-                )
-                
-                # Get matching indices
-                matching_indices = np.where(valid_mask)[0]
-                
-                # Take first 20 matches (early exit equivalent)
-                for i in matching_indices[:20]:
-                    actual_idx = start_idx + i - segment_length + 1
-                    if actual_idx + segment_length + k <= len(values):
-                        continuation = values[actual_idx + segment_length:actual_idx + segment_length + k]
-                        if len(continuation) == k:
-                            similar_segments.append(continuation)
 
-            
-            # If we found similar patterns, use them
-            if len(similar_segments) > 0:
-                chosen_continuation = similar_segments[rng.integers(0, len(similar_segments))]
-                offset = last - chosen_continuation[0]
-                forecast_vals = chosen_continuation + offset
-            else:
-                # Fallback: use change sampling with vectorized cumsum
-                historical_changes = np.diff(recent_data)
-                random_changes = rng.choice(historical_changes, size=k, replace=True)
-                forecast_vals = last + np.cumsum(random_changes)
+        """Generate a synthetic forecast that matches the variations and dynamics
+
+        of the historical data.  The forecast is **never** a verbatim copy of any
+
+        past segment – instead it is built from:
+
+          1. A gently damped trend baseline (no mean-reversion to avoid flattening).
+
+          2. An STL-learned seasonal cycle replayed from real data shape (not a
+
+             synthetic sine wave).
+
+          3. AR(1) noise calibrated to the empirical residual variance from STL
+
+             decomposition — matching the actual data's noise amplitude.
+
+          4. Soft clamping to [data_min, data_max] that avoids flatlines near bounds.
+
+        """
+
+        s = pd.to_numeric(s, errors='coerce').dropna()
+
+        idx = _infer_future_index(s.index if hasattr(s, 'index') else pd.RangeIndex(0, 1), k)
+
+        if s.empty or k <= 0:
+
+            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+
+            ci = pd.DataFrame({"lower": zero, "upper": zero})
+
+            return zero, ci
+
+
+
+        n = len(s)
+
+        values = s.values.astype(float)
+
+        last = float(values[-1])
+
+
+
+        # --- Historical statistics (bounds) ---
+
+        data_min = float(np.min(values))
+
+        data_max = float(np.max(values))
+
+        data_range = max(data_max - data_min, 1e-12)
+
+
+
+        window_size = max(20, min(200, n // 2 if n >= 40 else n))
+
+        recent = values[-window_size:]
+
+
+
+        # Weighted trend: exponentially weight recent increments
+
+        changes = np.diff(recent)
+
+        if len(changes) >= 1:
+
+            w = np.exp(np.linspace(-1, 0, len(changes)))
+
+            w /= w.sum()
+
+            trend = float(np.average(changes, weights=w))
+
         else:
-            # Not enough data, use change sampling with vectorized cumsum
-            historical_changes = np.diff(recent_data)
-            random_changes = rng.choice(historical_changes, size=k, replace=True)
-            forecast_vals = last + np.cumsum(random_changes)
-        
-        # Scale forecast to fit within bounds
-        fc_min = float(np.min(forecast_vals))
-        fc_max = float(np.max(forecast_vals))
-        fc_range = fc_max - fc_min
-        
-        if fc_min < data_min or fc_max > data_max:
-            if fc_range > 1e-9:
-                scaled_vals = data_min + (forecast_vals - fc_min) * (data_range / fc_range)
-                forecast_vals = scaled_vals
-        
+
+            trend = 0.0
+
+
+
+        # Increment volatility (σ of diff)
+
+        inc_std = float(np.std(changes, ddof=1)) if len(changes) > 2 else data_range * 0.05
+
+        if inc_std < 1e-9:
+
+            inc_std = data_range * 0.05
+
+
+
+        # --- Deterministic seed from data (reproducible per column) ---
+
+        series_hash = hash((
+
+            float(np.sum(values)), float(np.mean(values)), float(np.std(values)),
+
+            float(values[0]), float(values[len(values) // 2]),
+
+            last, trend, n, data_min, data_max
+
+        ))
+
+        rng = np.random.default_rng(int(abs(series_hash) % (2**31)))
+
+
+
+        # ---- 1. Damped trend baseline anchored on recent mean ----
+        # Anchor on the recent window mean instead of `last` to prevent
+        # the forecast from saturating when the last observed value is
+        # near a data boundary.
+        step_k = np.arange(1, k + 1, dtype=float)
+        damping = 0.97  # per-step decay
+        damped_k = np.cumsum(damping ** np.arange(k))
+        recent_mean = float(np.mean(recent))
+        baseline = recent_mean + trend * damped_k
+
+
+
+        # ---- 2. STL-learned seasonal component ----
+
+        # Extract the ACTUAL seasonal shape from the data via STL decomposition
+
+        # and replay it cyclically, instead of using a synthetic sine wave.
+
+        seasonal = np.zeros(k, dtype=float)
+
+        resid_from_stl = None  # will hold STL residuals if available
+
+        sp = _infer_seasonal_period(s.index) if isinstance(s.index, pd.DatetimeIndex) else None
+
+        if isinstance(sp, int) and sp >= 2 and n >= sp * 2:
+
+            try:
+
+                stl_result = STL(s.astype(float), period=sp, robust=True).fit()
+
+                # Get the learned seasonal pattern from the last full cycle
+
+                stl_seasonal = stl_result.seasonal.values
+
+                resid_from_stl = stl_result.resid.values
+
+
+
+                # Build a single representative cycle by averaging last 2-3 cycles
+
+                n_cycles = min(3, n // sp)
+
+                tail_seasonal = stl_seasonal[-(n_cycles * sp):]
+
+                cycle = np.zeros(sp, dtype=float)
+
+                counts = np.zeros(sp, dtype=float)
+
+                for i, v in enumerate(tail_seasonal):
+
+                    cycle[i % sp] += v
+
+                    counts[i % sp] += 1
+
+                counts[counts == 0] = 1
+
+                cycle /= counts
+
+
+
+                # Replay cycle starting from where history left off
+
+                last_cycle_pos = n % sp
+
+                for i in range(k):
+
+                    seasonal[i] = cycle[(last_cycle_pos + i) % sp]
+
+            except Exception:
+
+                # Fallback: no seasonal component
+
+                seasonal = np.zeros(k, dtype=float)
+
+
+
+        # ---- 3. AR(1) noise calibrated to empirical residuals ----
+
+        # Use STL residuals if available; otherwise fall back to increment std.
+
+        # This ensures the forecast noise amplitude matches the actual data's
+
+        # non-seasonal, non-trend variability.
+
+        if resid_from_stl is not None:
+
+            noise_sigma = float(np.nanstd(resid_from_stl, ddof=1))
+
+            resid_std = noise_sigma  # also use for CI
+
+        else:
+
+            # Residual std around linear fit (fallback)
+
+            x_fit = np.arange(len(recent), dtype=float)
+
+            try:
+
+                slope_lr, intercept = np.polyfit(x_fit, recent, 1)
+
+                residuals = recent - (slope_lr * x_fit + intercept)
+
+                resid_std = float(np.std(residuals, ddof=1))
+
+            except Exception:
+
+                resid_std = inc_std
+
+            noise_sigma = inc_std
+
+
+
+        if not np.isfinite(noise_sigma) or noise_sigma < 1e-9:
+
+            noise_sigma = inc_std
+
+        if not np.isfinite(resid_std) or resid_std < 1e-9:
+
+            resid_std = inc_std
+
+
+
+        rho = 0.6  # AR(1) persistence for smooth variation
+
+        noise_scale = noise_sigma * 0.50  # match ~50% of residual std
+
+        noise = np.zeros(k, dtype=float)
+
+        if noise_scale > 0:
+
+            for i in range(k):
+
+                shock = rng.normal(0.0, noise_scale)
+
+                noise[i] = rho * (noise[i - 1] if i > 0 else 0.0) + shock
+
+
+
+        # ---- Combine components ----
+
+        forecast_vals = baseline + seasonal + noise
+
+        # ---- Mean-matching + soft clamping (iterative) ----
+        # Shift the forecast so its average stays close to the recent history
+        # mean, then clamp.  Clamping can asymmetrically pull the mean toward
+        # bounds, so we iterate: shift → clamp → re-check → shift → …
+        margin = 0.05 * data_range  # soft-clamp transition zone width
+
+        def _soft_clamp(vals):
+            """Sigmoid-based soft clamp to avoid flat segments near bounds."""
+            out = vals.copy()
+            for j in range(len(out)):
+                v = out[j]
+                if v > data_max - margin:
+                    excess = v - (data_max - margin)
+                    out[j] = data_max - margin + margin * (1.0 - np.exp(-excess / max(margin, 1e-12)))
+                elif v < data_min + margin:
+                    deficit = (data_min + margin) - v
+                    out[j] = data_min + margin - margin * (1.0 - np.exp(-deficit / max(margin, 1e-12)))
+            return np.clip(out, data_min, data_max)
+
+        # Iterative mean-matching with clamping (converges in 2-3 passes)
+        for _pass in range(3):
+            fc_mean = float(np.mean(forecast_vals))
+            # Blend: 85% recent history mean, 15% raw forecast mean
+            target_mean = 0.85 * recent_mean + 0.15 * fc_mean
+            shift = target_mean - fc_mean
+            if abs(shift) < 1e-9:
+                break
+            forecast_vals += shift
+            forecast_vals = _soft_clamp(forecast_vals)
+
+        # ---- 5. Smooth junction with history ----
+        # Short blend (2-3 points) so the forecast starts from `last`
+        # for visual continuity, without pulling the whole series to an extreme.
+        blend_len = min(max(2, k // 12), 3)
+        for i in range(blend_len):
+            alpha = (i + 1) / (blend_len + 1)
+            forecast_vals[i] = (1 - alpha) * last + alpha * forecast_vals[i]
+        forecast_vals = np.clip(forecast_vals, data_min, data_max)
+
+
+
         fc = pd.Series(forecast_vals, index=idx)
-        
-        # Build realistic confidence intervals that expand over time
-        expanding_uncertainty = hist_volatility * np.sqrt(np.arange(1, k + 1))
-        lower = forecast_vals - 1.96 * expanding_uncertainty
-        upper = forecast_vals + 1.96 * expanding_uncertainty
+
+
+
+        # --- Expanding confidence interval (clamped to data bounds) ---
+
+        expanding_uncertainty = resid_std * np.sqrt(step_k)
+
+        lower = np.clip(forecast_vals - 1.96 * expanding_uncertainty, data_min, data_max)
+
+        upper = np.clip(forecast_vals + 1.96 * expanding_uncertainty, data_min, data_max)
+
         ci = pd.DataFrame({"lower": lower, "upper": upper}, index=idx)
-        
+
+
+
         return fc, ci
+
 
 
     try:
@@ -3010,6 +2737,17 @@ def _compute_forecast(series: pd.Series, steps: int):
             s = _thin_series(s, max_points=max_in)
         fc, ci = _natural_forecast(s, steps)
         
+        # Post-processing: scale forecast amplitude to match recent history dynamics
+        fc, ci = _match_amplitude(series, fc, conf_df=ci)
+
+        # Re-clamp to historical bounds after amplitude matching
+        data_min = float(s.min())
+        data_max = float(s.max())
+        fc = fc.clip(lower=data_min, upper=data_max)
+        if isinstance(ci, pd.DataFrame) and ci.shape[1] >= 2:
+            ci.iloc[:, 0] = ci.iloc[:, 0].clip(lower=data_min)
+            ci.iloc[:, 1] = ci.iloc[:, 1].clip(upper=data_max)
+
         # Cache the result
         try:
             if cache_key is not None:
@@ -3150,44 +2888,6 @@ def _cleanup_uploads_if_configured():
                     app.logger.warning("Cleanup warning: %s", e)
     except Exception as e:
         app.logger.warning("Cleanup scan failed: %s", e)
-
-def _is_too_linear(series_like):
-    try:
-        y = pd.Series(series_like).astype(float).values
-        x = np.arange(len(y), dtype=float)
-        if len(y) < 3:
-            return False
-        slope, intercept = np.polyfit(x, y, 1)
-        fitted = slope * x + intercept
-        ss_res = float(np.sum((y - fitted) ** 2))
-        ss_tot = float(np.sum((y - y.mean()) ** 2)) + 1e-12
-        r2 = 1.0 - ss_res / ss_tot
-        return r2 > 0.985  
-    except Exception:
-        return False
-
-def _bootstrap_natural_path(series, steps, window=None, base_slope=None, n_samples=200, q_low=0.1, q_high=0.9):
-    """
-    Bootstrap-style natural forecast helper (thin wrapper around _forecast_natural with envelope adjustment).
-    """
-    try:
-        s = pd.to_numeric(series, errors='coerce').dropna()
-        if s.empty:
-            idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
-            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
-            ci = pd.DataFrame({"lower": zero, "upper": zero})
-            return zero, ci
-        max_in = int(app.config.get('FORECAST_MAX_INPUT_POINTS', 4000))
-        if max_in and len(s) > max_in:
-            s = _thin_series(s, max_points=max_in)
-        fc, ci = _forecast_natural(s, steps)
-        try:
-            fc, ci = _naturalize_forecast(s, fc, ci)
-        except Exception:
-            pass
-        return fc, ci
-    except Exception:
-        return _recent_slope_forecast(series, steps, window=None, damping=None)
 
 def _try_parse_numeric_series(s: pd.Series) -> pd.Series:
     """Best-effort conversion of object-like numeric strings to floats.
