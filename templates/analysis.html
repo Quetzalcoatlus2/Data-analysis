@@ -746,7 +746,11 @@
           if (chartDiv) chartDiv.innerHTML = '<div class="skeleton" style="height: 100%"></div>';
           if (distDiv) distDiv.innerHTML = '<div class="skeleton" style="height: 100%"></div>';
 
-          const response = await fetch(apiInteractiveUrl);
+          // Load Plotly in parallel with the data fetch for maximum speed
+          const [response] = await Promise.all([
+            fetch(apiInteractiveUrl),
+            loadPlotly()
+          ]);
           const result = await response.json();
 
           if (result.ok && Array.isArray(result.data)) {
@@ -1582,17 +1586,44 @@
           u.searchParams.set('filename', filename);
           u.searchParams.set('max_points', 'all');
           const res = await fetch(u.toString(), { cache: 'no-store' });
+          if (!res.ok) throw new Error('History endpoint failed: ' + res.status);
           const data = await res.json();
-          const found = (data.series || []).find(s => s.name === column);
-          if (!found) throw new Error('Series not found: ' + column);
+
+          let xAll = [];
+          let yAll = [];
+          let xIsTime = false;
+
+          if (data && data.ok === false) {
+            throw new Error(data.message || 'History endpoint returned an error');
+          }
+
+          if (Array.isArray(data?.series)) {
+            const found = data.series.find(s => s && s.name === column);
+            if (!found) throw new Error('Series not found: ' + column);
+            xAll = Array.isArray(found.x) ? found.x.slice() : [];
+            yAll = Array.isArray(found.y) ? found.y.slice() : [];
+            xIsTime = !!found.x_is_time;
+          } else {
+            const seriesMap = (data && typeof data.series === 'object') ? data.series : {};
+            const selectedSeries = seriesMap ? seriesMap[column] : null;
+            if (!Array.isArray(selectedSeries)) throw new Error('Series not found: ' + column);
+            yAll = selectedSeries.slice();
+            xAll = Array.isArray(data?.x)
+              ? data.x.slice(0, yAll.length)
+              : Array.from({ length: yAll.length }, (_, i) => i);
+            if (yAll.length > xAll.length) {
+              yAll = yAll.slice(0, xAll.length);
+            }
+            xIsTime = !!data?.is_timeseries;
+          }
 
           const t = getThemeVars();
           const colName = (column || 'data').replace(/[^a-zA-Z0-9_-]/g, '_');
 
           // Apply data range filter
           const rangePct = getDataRangePct();
-          let xData = found.x;
-          let yData = found.y;
+          let xData = xAll;
+          let yData = yAll;
           if (rangePct < 1.0 && xData && xData.length > 0) {
             const keepCount = Math.max(1, Math.ceil(xData.length * rangePct));
             xData = xData.slice(-keepCount);
@@ -1608,7 +1639,7 @@
             line: { color: 'rgb(31,119,180)', width: 2 }
           };
           const layout = {
-            xaxis: { title: found.x_is_time ? 'Timestamp' : 'Index', type: found.x_is_time ? 'date' : undefined },
+            xaxis: { title: xIsTime ? 'Timestamp' : 'Index', type: xIsTime ? 'date' : undefined },
             yaxis: { title: column }
           };
           applyThemeLayoutDefaults(layout);
@@ -1622,6 +1653,7 @@
           // Filter vals to match data range
           let vals = (yData || []).filter(v => Number.isFinite(v));
           if (vals.length) {
+            const distEl = document.getElementById('dist');
             Plotly.newPlot('dist', [{
               type: 'histogram', name: column, x: vals, marker: { color: t.accent }, showlegend: true
             }], {
@@ -1874,80 +1906,80 @@
         document.addEventListener('DOMContentLoaded', function () {
           var categoryData = JSON.parse(document.getElementById('category-data').textContent || '{}');
 
-        function initCategoryCharts() {
-          // Get theme colors directly
-          var t = window.getThemeVars ? window.getThemeVars() : {};
-          var textColor = t.text || '#333333';
-          var panelColor = t.panel || '#ffffff';
-          var gridColor = window.isDarkMode && window.isDarkMode() ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
+          function initCategoryCharts() {
+            // Get theme colors directly
+            var t = window.getThemeVars ? window.getThemeVars() : {};
+            var textColor = t.text || '#333333';
+            var panelColor = t.panel || '#ffffff';
+            var gridColor = window.isDarkMode && window.isDarkMode() ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
 
-          var idx = 1;
-          for (var col in categoryData) {
-            if (categoryData.hasOwnProperty(col)) {
-              var data = categoryData[col];
-              var el = document.getElementById('category-chart-' + idx);
-              if (el && data.traces && data.layout) {
-                var layout = Object.assign({}, data.layout);
+            var idx = 1;
+            for (var col in categoryData) {
+              if (categoryData.hasOwnProperty(col)) {
+                var data = categoryData[col];
+                var el = document.getElementById('category-chart-' + idx);
+                if (el && data.traces && data.layout) {
+                  var layout = Object.assign({}, data.layout);
 
-                // Apply theme colors
-                layout.paper_bgcolor = panelColor;
-                layout.plot_bgcolor = panelColor;
-                layout.font = { color: textColor };
+                  // Apply theme colors
+                  layout.paper_bgcolor = panelColor;
+                  layout.plot_bgcolor = panelColor;
+                  layout.font = { color: textColor };
 
-                // Fix axis labels
-                if (layout.xaxis) {
-                  layout.xaxis.tickfont = { color: textColor };
-                  layout.xaxis.titlefont = { color: textColor };
-                  layout.xaxis.gridcolor = gridColor;
+                  // Fix axis labels
+                  if (layout.xaxis) {
+                    layout.xaxis.tickfont = { color: textColor };
+                    layout.xaxis.titlefont = { color: textColor };
+                    layout.xaxis.gridcolor = gridColor;
+                  }
+                  if (layout.yaxis) {
+                    layout.yaxis.tickfont = { color: textColor };
+                    layout.yaxis.titlefont = { color: textColor };
+                    layout.yaxis.gridcolor = gridColor;
+                  }
+
+                  // Fix title 
+                  if (layout.title && typeof layout.title === 'object') {
+                    layout.title.font = { color: textColor };
+                  }
+
+                  // Fix legend text
+                  if (layout.legend) {
+                    layout.legend.font = { color: textColor, size: 10 };
+                  }
+
+                  // Fix hover label
+                  layout.hoverlabel = { bgcolor: panelColor, font: { color: textColor }, bordercolor: t.accent || '#0ea5e9' };
+
+                  Plotly.newPlot(el, data.traces, layout, {
+                    responsive: true,
+                    displaylogo: true,
+                    displayModeBar: true,
+                    modeBarButtonsToRemove: [],
+                    toImageButtonOptions: { format: 'png', filename: 'category_chart_' + col.replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
+                  });
                 }
-                if (layout.yaxis) {
-                  layout.yaxis.tickfont = { color: textColor };
-                  layout.yaxis.titlefont = { color: textColor };
-                  layout.yaxis.gridcolor = gridColor;
-                }
-
-                // Fix title 
-                if (layout.title && typeof layout.title === 'object') {
-                  layout.title.font = { color: textColor };
-                }
-
-                // Fix legend text
-                if (layout.legend) {
-                  layout.legend.font = { color: textColor, size: 10 };
-                }
-
-                // Fix hover label
-                layout.hoverlabel = { bgcolor: panelColor, font: { color: textColor }, bordercolor: t.accent || '#0ea5e9' };
-
-                Plotly.newPlot(el, data.traces, layout, {
-                  responsive: true,
-                  displaylogo: true,
-                  displayModeBar: true,
-                  modeBarButtonsToRemove: [],
-                  toImageButtonOptions: { format: 'png', filename: 'category_chart_' + col.replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
-                });
+                idx++;
               }
-              idx++;
             }
           }
-        }
 
-        // Expose globally for theme toggle
-        window.initCategoryCharts = initCategoryCharts;
+          // Expose globally for theme toggle
+          window.initCategoryCharts = initCategoryCharts;
 
-        // Register theme callback
-        window.themeCallbacks = window.themeCallbacks || [];
-        window.themeCallbacks.push(function () {
-          if (typeof window.initCategoryCharts === 'function') {
-            window.initCategoryCharts();
-          }
+          // Register theme callback
+          window.themeCallbacks = window.themeCallbacks || [];
+          window.themeCallbacks.push(function () {
+            if (typeof window.initCategoryCharts === 'function') {
+              window.initCategoryCharts();
+            }
+          });
+
+          // Initial render
+          loadPlotly().then(function () {
+            initCategoryCharts();
+          });
         });
-
-        // Initial render
-        loadPlotly().then(function () {
-          initCategoryCharts();
-        });
-      });
       </script>
       {% else %}
       <div class="muted">No categorical columns found in this dataset, or all columns are numeric.</div>

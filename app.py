@@ -741,15 +741,6 @@ def sanitize_ai_html(raw: str) -> str:
         s = "<p>" + "</p><p>".join(lines) + "</p>" if lines else "<p></p>"
     return s
 
-def html_to_plain_text(html: str) -> str:
-    """Convert HTML to plain text for PDF output (simple fallback version)."""
-    if not html:
-        return ""
-    s = str(html)
-    # Strip all tags
-    s = re.sub(r'<[^>]+>', ' ', s)
-    s = re.sub(r'\s+', ' ', s)
-    return s.strip()
 
 def convert_html_to_formatted_text(html: str) -> str:
     """Convert HTML to well-formatted plain text for PDF output.
@@ -1107,82 +1098,6 @@ def _get_finish_reason(resp) -> str | None:
     except Exception:
         return None
 
-def html_to_pdf_bytes(html: str) -> bytes:  # noqa: ARG001
-    """Stub — always raises because no PDF renderer is installed."""
-    raise RuntimeError("PDF export is disabled because no renderer (weasyprint/pdfkit/xhtml2pdf) is installed.")
-
-
-def get_ai_summary(dataframe_description):
-    app.logger.debug("Calling get_ai_summary")
-    if not AI_ENABLED or model is None:
-        app.logger.debug("AI disabled; skipping get_ai_summary")
-        return "AI analysis is disabled. Please check your Google API key and terminal for configuration errors."
-    try:
-        app.logger.debug("Preparing to call Google API for summary")
-        prompt = f"""
-You are an expert data analyst. Given the following dataset profile, write a clear, rich, and structured HTML summary...
-{dataframe_description}
-"""
-        response = model.generate_content(prompt)
-        app.logger.debug("AI summary call successful")
-
-        if hasattr(response, "prompt_feedback"):
-            pf = getattr(response, "prompt_feedback", None)
-            if pf and getattr(pf, "block_reason", None):
-                block_reason = getattr(pf, "block_reason", None)
-                app.logger.warning("AI analysis blocked: %s", block_reason)
-                return f"AI analysis was blocked by the content filter. Reason: {block_reason}"
-
-        text = _extract_text_from_gemini_response(response).strip()
-        if not text:
-            fr = None
-            try:
-                cs = getattr(response, "candidates", None) or []
-                if cs:
-                    fr = getattr(cs[0], "finish_reason", None)
-            except Exception:
-                pass
-            raise RuntimeError(f"Empty AI response (finish_reason={fr})")
-
-        app.logger.debug("Successfully got AI summary")
-        return sanitize_ai_html(text)
-    except Exception as e:
-        app.logger.exception("AI summary call failed")
-        return f"An error occurred during AI analysis. Check the terminal for more details. Error: {e}"
-
-def get_ai_answer(dataframe, question):
-    """Generates a specific answer to a user's question about the dataframe."""
-    if not AI_ENABLED or model is None:
-        return "AI analysis is disabled."
-
-    try:
-        df_desc = describe_for_ai(dataframe)
-        prompt = f"""
-You are a senior data scientist. Answer the user's question about the dataset clearly and precisely.
-Respond strictly in HTML (no Markdown), using tags like <p>, <ul><li>, <table><thead><tbody><tr><th><td>, <strong>, and <em>.
-Cite concrete numbers or ranges from the provided context when relevant. If something is uncertain, say so briefly.
-
-Context:
-{df_desc}
-
-Question:
-{question}
-""".strip()
-
-        response = model.generate_content(prompt)
-        text = _extract_text_from_gemini_response(response).strip()
-        if not text:
-            fr = None
-            try:
-                cs = getattr(response, "candidates", None) or []
-                if cs:
-                    fr = getattr(cs[0], "finish_reason", None)
-            except Exception:
-                pass
-            raise RuntimeError(f"Empty AI response (finish_reason={fr})")
-        return sanitize_ai_html(text)
-    except Exception as e:
-        return f"An error occurred while generating the AI answer. Error: {e}"
 
 def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
     if not ensure_ai_ready():
@@ -3671,53 +3586,55 @@ def analyze_file(filename):
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
     used_cols = []
 
-    # Correlation/precompute metrics for heatmap - use cache for performance
-    corr_payload = CORRELATION_CACHE.get(filename)
-    if corr_payload is None:
-        try:
-            num_df = coerce_numeric_df(df).select_dtypes(include='number')
-            if num_df is not None and not num_df.empty:
-                valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
-                num_df = num_df[valid]
-                keep = []
-                for c in num_df.columns:
-                    s = pd.to_numeric(num_df[c], errors='coerce').dropna()
-                    if s.empty:
-                        continue
-                    if float(s.max()) == float(s.min()):
-                        continue
-                    keep.append(c)
-                num_df = num_df[keep] if keep else num_df
-            if num_df is not None and not num_df.empty and len(num_df.columns) >= 2:
-                cols = list(num_df.columns)
-                payload = {}
-                try:
-                    spearman = num_df.corr(method='spearman')
-                except Exception:
-                    spearman = None
-                try:
-                    pearson = num_df.corr(method='pearson')
-                except Exception:
-                    pearson = None
-                if spearman is not None:
-                    payload["x"] = cols
-                    payload["y"] = cols
-                    payload["z"] = [[float(v) if pd.notna(v) else None for v in spearman.loc[r, cols].tolist()] for r in cols]
-                if pearson is not None:
-                    payload["pearson"] = {
-                        "x": cols,
-                        "y": cols,
-                        "z": [[float(v) if pd.notna(v) else None for v in pearson.loc[r, cols].tolist()] for r in cols]
-                    }
-                corr_payload = payload if ("z" in payload or "pearson" in payload) else None
-                # Cache the computed correlation for faster subsequent view loads
-                if corr_payload:
-                    CORRELATION_CACHE.set(filename, corr_payload)
-            else:
+    # Correlation: only compute for views that actually need it (overview & correlation)
+    corr_payload = None
+    if active_view in ('overview', 'correlation'):
+        corr_payload = CORRELATION_CACHE.get(filename)
+        if corr_payload is None:
+            try:
+                num_df = coerce_numeric_df(df).select_dtypes(include='number')
+                if num_df is not None and not num_df.empty:
+                    valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
+                    num_df = num_df[valid]
+                    keep = []
+                    for c in num_df.columns:
+                        s = pd.to_numeric(num_df[c], errors='coerce').dropna()
+                        if s.empty:
+                            continue
+                        if float(s.max()) == float(s.min()):
+                            continue
+                        keep.append(c)
+                    num_df = num_df[keep] if keep else num_df
+                if num_df is not None and not num_df.empty and len(num_df.columns) >= 2:
+                    cols = list(num_df.columns)
+                    payload = {}
+                    try:
+                        spearman = num_df.corr(method='spearman')
+                    except Exception:
+                        spearman = None
+                    try:
+                        pearson = num_df.corr(method='pearson')
+                    except Exception:
+                        pearson = None
+                    if spearman is not None:
+                        payload["x"] = cols
+                        payload["y"] = cols
+                        payload["z"] = [[float(v) if pd.notna(v) else None for v in spearman.loc[r, cols].tolist()] for r in cols]
+                    if pearson is not None:
+                        payload["pearson"] = {
+                            "x": cols,
+                            "y": cols,
+                            "z": [[float(v) if pd.notna(v) else None for v in pearson.loc[r, cols].tolist()] for r in cols]
+                        }
+                    corr_payload = payload if ("z" in payload or "pearson" in payload) else None
+                    # Cache the computed correlation for faster subsequent view loads
+                    if corr_payload:
+                        CORRELATION_CACHE.set(filename, corr_payload)
+                else:
+                    corr_payload = None
+            except Exception as e:
+                app.logger.warning("Correlation computation failed: %s", e)
                 corr_payload = None
-        except Exception as e:
-            app.logger.warning("Correlation computation failed: %s", e)
-            corr_payload = None
 
     interactive = []
 
@@ -3736,18 +3653,21 @@ def analyze_file(filename):
     else:
         effective_steps = max(2, int(user_steps)) if user_steps else 2
 
-    # Determine whether to build static/forecast/interactive content based on active_view.
+    # Determine whether to build forecast/interactive content based on active_view.
     # IMPORTANT: To keep upload/overview fast, run heavy forecasting only in the explicit Forecast view.
-    build_static = False  # Static view removed from application
+    # Note: overview, correlation, and categories all use the fast path above.
     build_forecast = active_view == "forecast"
     build_interactive = active_view == "interactive"
     
     # Initialize timing early (used by both fast path and full path)
     request_start = time.perf_counter()
 
-    # PERFORMANCE OPTIMIZATION: For overview and correlation views, skip expensive column iteration
-    # These views don't need plots, forecasts, or interactive traces
-    if active_view in ("overview", "correlation"):
+    # PERFORMANCE OPTIMIZATION: For views that don't need the heavy column loop
+    # (overview, correlation, categories), use the fast path.
+    # - overview/correlation: skip plots, forecasts, interactive traces entirely
+    # - categories: skip forecasts/anomalies; only compute category charts
+    # Note: interactive & forecast still use the full column loop for server-side data.
+    if active_view in ("overview", "correlation", "categories"):
         # Use cached info for fast response
         cached_info = get_cached_df_info(filename, df)
         
@@ -3777,7 +3697,7 @@ def analyze_file(filename):
             'ai_summary': ai_summary,
             'user_question': user_question,
             'ai_answer': ai_answer,
-            'interactive': [],  # Will be loaded via AJAX if needed
+            'interactive': [],  # Interactive data loaded via AJAX from /api/interactive/
             'columns': used_cols,
             'corr': corr_payload,
             'controls': {
@@ -3788,6 +3708,24 @@ def analyze_file(filename):
                 'contamination': user_contam
             }
         })
+        
+        # Categories view: build category charts (lightweight, no forecasts/anomalies)
+        if active_view == 'categories':
+            category_charts = {}
+            for col in df.columns:
+                try:
+                    s_numeric = pd.to_numeric(df[col], errors='coerce')
+                    if s_numeric.notna().sum() >= 3:
+                        continue  # Skip - numeric column
+                    s_cat = df[col].astype(str).dropna()
+                    if len(s_cat) < 3:
+                        continue
+                    chart_data = _build_category_plotly_chart(s_cat, col)
+                    if chart_data is not None:
+                        category_charts[col] = chart_data
+                except Exception:
+                    pass
+            analysis['category_charts'] = category_charts
         
         total_dt = time.perf_counter() - request_start
         app.logger.info("Analyze FAST PATH done file=%s view=%s elapsed=%.2fs", filename, active_view, total_dt)
@@ -3839,19 +3777,6 @@ def analyze_file(filename):
                      except Exception:
                         pass
 
-            if build_static:
-                title_trend = f"Trend for {column}"
-                s_plot = _thin_series(series, max_points=400)
-                plots.append({
-                    "img": generate_plot(
-                        s_plot,
-                        title_trend,
-                        'Timestamp' if is_timeseries else 'Index',
-                        column,
-                        anomalies_idx=an_idx
-                    ),
-                    "title": title_trend
-                })
 
             # Stop forecasting if time/column limits are exceeded
             # Generate forecasts for any numeric series with sufficient length
@@ -4278,7 +4203,7 @@ def analyze_file(filename):
         'description': cached_info['description'],
         'info': info_string,
         'missing_values': missing_values_html,
-        'plots': _ensure_plot_dicts(plots) if build_static else [],
+        'plots': [],
         'forecast_plots': _ensure_plot_dicts(forecast_plots) if build_forecast else [],
         'forecast_plots_by_column': forecast_plots_by_column if build_forecast else {},
         'anomalies': anomalies_found,
@@ -4297,29 +4222,6 @@ def analyze_file(filename):
         }
     })
     
-    # Generate category charts for categories view
-    if active_view == 'categories':
-        category_charts = {}
-        for col in df.columns:
-            try:
-                # Check if column is non-numeric (categorical)
-                s_numeric = pd.to_numeric(df[col], errors='coerce')
-                if s_numeric.notna().sum() >= 3:
-                    continue  # Skip - numeric column
-                
-                # Process as categorical
-                s_cat = df[col].astype(str).dropna()
-                if len(s_cat) < 3:
-                    continue
-                
-                chart_data = _build_category_plotly_chart(s_cat, col)
-                if chart_data is None:
-                    continue
-                category_charts[col] = chart_data
-            except Exception:
-                pass
-        analysis['category_charts'] = category_charts
-
 
     
     if (
@@ -4365,7 +4267,6 @@ def analyze_file(filename):
     return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name, 
                            ai_model_name=ai_model_display, ai_is_valid=ai_is_valid)
 
-    # If an unexpected error occurs, Flask's error handler will handle it.
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok"}), 200
@@ -4426,7 +4327,18 @@ def api_interactive_data(filename):
     
     # Get parameters - default to 5%
     raw_pct = request.args.get('forecast_pct', '0.05')
-    user_contam = float(request.args.get('contamination', '0.02'))
+    try:
+        user_contam = float(request.args.get('contamination', '0.02'))
+    except Exception:
+        user_contam = 0.02
+    user_contam = max(0.001, min(0.2, user_contam))
+
+    def _safe_number(value):
+        try:
+            out = float(value)
+            return out if math.isfinite(out) else None
+        except Exception:
+            return None
     
     try:
         pct = float(raw_pct) if raw_pct else 0.05
@@ -4473,7 +4385,7 @@ def api_interactive_data(filename):
         
         # Use numeric indices 0, 1, 2... for history
         x_hist_numeric = list(range(n_hist))
-        y_hist = [float(v) for v in s_tail.values]
+        y_hist = [_safe_number(v) for v in s_tail.values]
         
         # Store original labels for hover text
         original_labels = [str(i) for i in s_tail.index]
@@ -4498,7 +4410,7 @@ def api_interactive_data(filename):
             for i, idx in enumerate(s_tail.index):
                 if idx in an_idx:
                     an_positions.append(i)
-                    an_values.append(float(s_tail.iloc[i]))
+                    an_values.append(_safe_number(s_tail.iloc[i]))
                     an_labels.append(str(idx))
             
             if an_positions:
@@ -4526,12 +4438,12 @@ def api_interactive_data(filename):
                 # Forecast uses indices n_hist, n_hist+1, n_hist+2...
                 n_fc = len(fc_mean)
                 fc_x_numeric = list(range(n_hist, n_hist + n_fc))
-                fc_y = [float(v) for v in fc_mean.values]
+                fc_y = [_safe_number(v) for v in fc_mean.values]
                 fc_labels = [str(i) for i in fc_mean.index]
                 
                 if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
-                    ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
-                    ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
+                    ci_lower = [_safe_number(v) for v in conf_df.iloc[:, 0].values]
+                    ci_upper = [_safe_number(v) for v in conf_df.iloc[:, 1].values]
                     
                     # Add CI traces
                     traces.append({
@@ -4548,7 +4460,7 @@ def api_interactive_data(filename):
                 
                 # Forecast line with connection to last history point
                 x_plot = [n_hist - 1] + list(fc_x_numeric)
-                y_plot = [float(series.iloc[-1])] + list(fc_y)
+                y_plot = [_safe_number(series.iloc[-1])] + list(fc_y)
                 text_plot = [original_labels[-1]] + list(fc_labels)
                     
                 traces.append({
@@ -4579,16 +4491,19 @@ def api_interactive_data(filename):
         if is_timeseries:
             layout["xaxis"]["rangeslider"] = {"visible": True}
         
-        dist = {"name": column, "values": [float(v) for v in series.dropna().values[:1000]]}  # Limit distribution points
+        dist = {
+            "name": column,
+            "values": [v for v in (_safe_number(x) for x in series.dropna().values[:1000]) if v is not None]
+        }  # Limit distribution points
         
         # Compute statistics for the column
         try:
             stats = {
-                "min": float(series.min()),
-                "max": float(series.max()),
-                "mean": float(series.mean()),
-                "median": float(series.median()),
-                "std": float(series.std())
+                "min": _safe_number(series.min()),
+                "max": _safe_number(series.max()),
+                "mean": _safe_number(series.mean()),
+                "median": _safe_number(series.median()),
+                "std": _safe_number(series.std())
             }
         except Exception:
             stats = None
