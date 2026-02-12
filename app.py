@@ -21,6 +21,7 @@ import google.generativeai as genai
 import matplotlib
 import numpy as np
 import pandas as pd
+from matplotlib.transforms import blended_transform_factory
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
 from fpdf import FPDF
 from sklearn.ensemble import IsolationForest  # type: ignore[import-untyped]
@@ -1507,22 +1508,45 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         min_color = '#ff3b30'
         max_color = '#00e5ff'
         edge_color = '#0b1220'
+
+        def _annotate_extreme(x_val, y_val, label_text, color, side):
+            # Keep labels horizontally next to symbol at the same y-value.
+            if side == 'left':
+                x_offset_pts = -5
+                horizontal_align = 'right'
+            else:
+                x_offset_pts = 5
+                horizontal_align = 'left'
+
+            ax.annotate(
+                label_text,
+                (x_val, y_val),
+                textcoords='offset points',
+                xytext=(x_offset_pts, 0),
+                ha=horizontal_align,
+                va='center',
+                fontsize=7,
+                color=color,
+                fontweight='bold',
+                annotation_clip=False,
+                clip_on=False,
+                zorder=12
+            )
+
         if is_datetime:
             min_idx = data.idxmin()
             max_idx = data.idxmax()
             ax.scatter([min_idx], [stats_min], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
             ax.scatter([max_idx], [stats_max], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-            # Tags to the RIGHT of symbols
-            ax.annotate(f'{stats_min:.2f}', (min_idx, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=min_color, fontweight='bold')
-            ax.annotate(f'{stats_max:.2f}', (max_idx, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=max_color, fontweight='bold')
+            _annotate_extreme(min_idx, stats_min, f'{stats_min:.2f}', min_color, 'left')
+            _annotate_extreme(max_idx, stats_max, f'{stats_max:.2f}', max_color, 'right')
         else:
             min_pos = data.values.argmin()
             max_pos = data.values.argmax()
             ax.scatter([min_pos], [stats_min], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
             ax.scatter([max_pos], [stats_max], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-            # Tags to the RIGHT of symbols
-            ax.annotate(f'{stats_min:.2f}', (min_pos, stats_min), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=min_color, fontweight='bold')
-            ax.annotate(f'{stats_max:.2f}', (max_pos, stats_max), textcoords='offset points', xytext=(10, 0), ha='left', fontsize=7, color=max_color, fontweight='bold')
+            _annotate_extreme(min_pos, stats_min, f'{stats_min:.2f}', min_color, 'left')
+            _annotate_extreme(max_pos, stats_max, f'{stats_max:.2f}', max_color, 'right')
         
         # Std legend entry
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
@@ -1626,6 +1650,29 @@ def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
         return s
     except Exception:
         return s
+
+def _thin_series_keep_extrema(s: pd.Series, max_points: int) -> pd.Series:
+    """Thin a series while always keeping min/max and last points in original order."""
+    try:
+        if not isinstance(s, pd.Series):
+            return s
+        n = len(s)
+        if not max_points or max_points <= 0 or n <= max_points:
+            return s
+
+        step = max(1, n // max_points)
+        keep_pos = list(range(0, n, step))
+        keep_pos.append(n - 1)
+
+        vals = s.values
+        min_pos = int(np.argmin(vals))
+        max_pos = int(np.argmax(vals))
+        keep_pos.extend([min_pos, max_pos])
+
+        keep_pos = sorted(set(keep_pos))
+        return s.iloc[keep_pos]
+    except Exception:
+        return _thin_series(s, max_points)
 
 def _ensure_plot_dicts(items):
     """
@@ -2053,6 +2100,19 @@ def generate_forecast_plot(
             if has_forecast:
                 all_y += list(fc_y)
             y_min, y_max = min(all_y), max(all_y)
+
+            # Keep full-series extrema visible when stats are provided.
+            if isinstance(stats, dict):
+                try:
+                    smin = float(stats.get('min', np.nan))
+                    smax = float(stats.get('max', np.nan))
+                    if np.isfinite(smin):
+                        y_min = min(y_min, smin)
+                    if np.isfinite(smax):
+                        y_max = max(y_max, smax)
+                except Exception:
+                    pass
+
             if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
                 pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
                 ax.set_ylim(y_min - pad, y_max + pad)
@@ -2135,6 +2195,19 @@ def generate_forecast_plot(
                 y_stack = history_tail_series.astype(float)
             y_min = float(np.nanmin(y_stack.values))
             y_max = float(np.nanmax(y_stack.values))
+
+            # Keep full-series extrema visible when stats are provided.
+            if isinstance(stats, dict):
+                try:
+                    smin = float(stats.get('min', np.nan))
+                    smax = float(stats.get('max', np.nan))
+                    if np.isfinite(smin):
+                        y_min = min(y_min, smin)
+                    if np.isfinite(smax):
+                        y_max = max(y_max, smax)
+                except Exception:
+                    pass
+
             if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
                 pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
                 ax.set_ylim(y_min - pad, y_max + pad)
@@ -2155,6 +2228,12 @@ def generate_forecast_plot(
     ax.set_ylabel(ylabel)
     ax.legend()
     ax.grid(True, alpha=0.3)
+
+    # Keep headroom/side room so value tags can stay fully visible.
+    try:
+        ax.margins(x=0.06)
+    except Exception:
+        pass
     
     # Improve X-axis readability
     try:
@@ -2190,16 +2269,20 @@ def generate_forecast_plot(
         ax.axhline(y=hist_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.7, label=f'Avg: {hist_mean:.2f}')
         ax.axhline(y=hist_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.6, label=f'Median: {hist_median:.2f}')
         
-        # Add value tags - place labels consistent with line ordering
-        xlim = ax.get_xlim()
+        # Put Avg/Med labels next to their horizontal lines (line-relative placement).
         ylim = ax.get_ylim()
-        y_offset = (ylim[1] - ylim[0]) * 0.004  # 0.4% offset for tighter Avg/Med tags
+        y_offset = (ylim[1] - ylim[0]) * 0.004
+        yaxis_transform = blended_transform_factory(ax.transAxes, ax.transData)
         if hist_mean >= hist_median:
-            ax.text(xlim[1], hist_mean + y_offset, f' Avg: {hist_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
-            ax.text(xlim[1], hist_median - y_offset, f' Med: {hist_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+            ax.text(1.01, hist_mean + y_offset, f'Avg: {hist_mean:.2f}', transform=yaxis_transform,
+                va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold', clip_on=False)
+            ax.text(1.01, hist_median - y_offset, f'Med: {hist_median:.2f}', transform=yaxis_transform,
+                va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold', clip_on=False)
         else:
-            ax.text(xlim[1], hist_mean - y_offset, f' Avg: {hist_mean:.2f}', va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
-            ax.text(xlim[1], hist_median + y_offset, f' Med: {hist_median:.2f}', va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+            ax.text(1.01, hist_mean - y_offset, f'Avg: {hist_mean:.2f}', transform=yaxis_transform,
+                va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold', clip_on=False)
+            ax.text(1.01, hist_median + y_offset, f'Med: {hist_median:.2f}', transform=yaxis_transform,
+                va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold', clip_on=False)
         
         # Add Min/Max markers - find positions in visible data closest to the global min/max
         # Use FULL HISTORY stats (hist_min, hist_max) for consistency with distribution
@@ -2212,7 +2295,31 @@ def generate_forecast_plot(
         else:
             tail_min_pos = tail_vals.idxmin()
             tail_max_pos = tail_vals.idxmax()
-        
+
+        def _annotate_extreme(x_val, y_val, label_text, color, side):
+            # Keep labels horizontally next to symbol at the same y-value.
+            if side == 'left':
+                x_offset_pts = -5
+                horizontal_align = 'right'
+            else:
+                x_offset_pts = 5
+                horizontal_align = 'left'
+
+            ax.annotate(
+                label_text,
+                (x_val, y_val),
+                textcoords='offset points',
+                xytext=(x_offset_pts, 0),
+                ha=horizontal_align,
+                va='center',
+                fontsize=7,
+                color=color,
+                fontweight='bold',
+                annotation_clip=False,
+                clip_on=False,
+                zorder=12
+            )
+
         # Use global min/max values (from full history) for markers and annotations
         min_color = '#ff3b30'
         max_color = '#00BCD4'  # Cyan - works on both light and dark backgrounds
@@ -2220,17 +2327,21 @@ def generate_forecast_plot(
         # Plot Min marker
         ax.scatter([tail_min_pos], [hist_min], color=min_color, s=80, zorder=10, marker='v', 
                edgecolors=edge_color, linewidths=1.5, label=f'Min: {hist_min:.2f}')
-        ax.annotate(f'{hist_min:.2f}', (tail_min_pos, hist_min), textcoords='offset points', 
-                xytext=(5, -8), ha='left', fontsize=7, color=min_color, fontweight='bold')  # Lower-right of marker
+        _annotate_extreme(tail_min_pos, hist_min, f'{hist_min:.2f}', min_color, 'left')
         
         # Plot Max marker
         ax.scatter([tail_max_pos], [hist_max], color=max_color, s=80, zorder=10, marker='^', 
                edgecolors=edge_color, linewidths=1.5, label=f'Max: {hist_max:.2f}')
-        ax.annotate(f'{hist_max:.2f}', (tail_max_pos, hist_max), textcoords='offset points', 
-                xytext=(5, 2), ha='left', fontsize=7, color=max_color, fontweight='bold')  # Upper-right, close to marker
+        _annotate_extreme(tail_max_pos, hist_max, f'{hist_max:.2f}', max_color, 'right')
         
         # Std legend entry
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {hist_std:.2f}')
+
+        # Reserve space for the right-side Avg/Med label lane.
+        try:
+            fig.subplots_adjust(right=0.84)
+        except Exception:
+            pass
 
         # Legend on single line - below x-axis title (Index)
         legend_anchor = -0.30 if legend_y is None else legend_y
@@ -2241,7 +2352,7 @@ def generate_forecast_plot(
         pass  # Skip stats if calculation fails
 
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight')
+    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2)
     buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
@@ -2692,6 +2803,44 @@ def _compute_forecast(series: pd.Series, steps: int):
             idx = _infer_future_index(pd.RangeIndex(0, 1), steps)
             zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
             return zero, pd.DataFrame({"lower": zero, "upper": zero})
+
+def _recent_slope_forecast(series: pd.Series, steps: int = 10, lookback: int = 20):
+    """Fallback forecast based on recent average slope.
+
+    Returns:
+      - forecast mean series
+      - confidence interval DataFrame with columns: lower, upper
+    """
+    try:
+        s = pd.to_numeric(series, errors='coerce').dropna()
+        idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
+
+        if len(s) == 0:
+            zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+            return zero, pd.DataFrame({"lower": zero, "upper": zero}, index=idx)
+
+        if len(s) >= 2:
+            recent = s.values[-min(int(lookback), len(s)):]
+            diffs = np.diff(recent)
+            slope = float(np.mean(diffs)) if len(diffs) else 0.0
+        else:
+            slope = 0.0
+
+        last = float(s.iloc[-1])
+        fc_vals = [last + slope * (i + 1) for i in range(int(steps))]
+        fc = pd.Series(fc_vals, index=idx)
+
+        base_std = float(np.std(np.diff(s.values), ddof=1)) if len(s) > 2 else float(np.std(s.values, ddof=1)) if len(s) > 1 else 1.0
+        if not np.isfinite(base_std) or base_std <= 0:
+            base_std = 1.0
+        horizon = np.sqrt(np.arange(1, int(steps) + 1, dtype=float))
+        width = 1.96 * base_std * horizon
+        ci = pd.DataFrame({"lower": fc.values - width, "upper": fc.values + width}, index=idx)
+        return fc, ci
+    except Exception:
+        idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
+        zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
+        return zero, pd.DataFrame({"lower": zero, "upper": zero}, index=idx)
 
 def get_cached_column_forecast(filename: str, column: str, series: pd.Series, steps: int):
     """Get forecast from cache or compute and cache it.
@@ -3793,7 +3942,7 @@ def analyze_file(filename):
                     
                     # Thin history for display
                     max_hist_points = 600
-                    s_hist = _thin_series(series, max_points=max_hist_points)
+                    s_hist = _thin_series_keep_extrema(series, max_points=max_hist_points)
                     
                     # PROPORTIONAL THINNING: Thin forecast by same ratio as history
                     # This maintains correct visual proportions
@@ -3881,39 +4030,68 @@ def analyze_file(filename):
                     # Avg and Median vertical lines
                     ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
                     ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {stats_median:.2f}')
-                    
-                    # Avg/Median value tags - position based on which is actually left vs right
-                    ylim = ax.get_ylim()
+
+                    # Avg/Med labels next to their lines (like before), but with a mixed transform
+                    # to avoid altering y-axis scale.
+                    xaxis_transform = blended_transform_factory(ax.transData, ax.transAxes)
                     xlim = ax.get_xlim()
-                    # Whichever is LEFT gets ha='right' (tag extends left), whichever is RIGHT gets ha='left' (tag extends right)
+                    x_offset = (xlim[1] - xlim[0]) * 0.01
+                    top_lane = 0.985
                     if stats_mean <= stats_median:
-                        # Mean is on the left, Median is on the right - add x_offset for spacing
-                        x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset
-                        ax.text(stats_mean - x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
-                        ax.text(stats_median + x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean - x_offset, top_lane, f'Avg: {stats_mean:.2f}', transform=xaxis_transform,
+                                va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
+                        ax.text(stats_median + x_offset, top_lane, f'Med: {stats_median:.2f}', transform=xaxis_transform,
+                                va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
                     else:
-                        # Median is on the left, Mean is on the right - add x_offset for spacing
-                        x_offset = (xlim[1] - xlim[0]) * 0.02  # 2% offset
-                        ax.text(stats_median - x_offset, ylim[1] * 0.99, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
-                        ax.text(stats_mean + x_offset, ylim[1] * 0.99, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median - x_offset, top_lane, f'Med: {stats_median:.2f}', transform=xaxis_transform,
+                                va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
+                        ax.text(stats_mean + x_offset, top_lane, f'Avg: {stats_mean:.2f}', transform=xaxis_transform,
+                                va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
+
+                    ylim = ax.get_ylim()
                     
                     # Min/Max markers at bottom - BOTH tags ABOVE their symbols
                     marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
                     min_color = '#ff3b30'
                     max_color = '#00e5ff'
                     edge_color = '#0b1220'
+
+                    # Add horizontal room and keep labels inside plot bounds.
+                    xlim = ax.get_xlim()
+                    x_range = max(xlim[1] - xlim[0], 1e-9)
+                    ax.set_xlim(xlim[0] - x_range * 0.04, xlim[1] + x_range * 0.04)
+                    xlim = ax.get_xlim()
+
+                    def _dist_label_pos(x_val):
+                        right_threshold = xlim[1] - 0.10 * (xlim[1] - xlim[0])
+                        left_threshold = xlim[0] + 0.10 * (xlim[1] - xlim[0])
+                        if x_val >= right_threshold:
+                            return (-4, 12), 'right'
+                        if x_val <= left_threshold:
+                            return (4, 12), 'left'
+                        return (0, 12), 'center'
+
+                    # Requirement: min tag on the LEFT, max tag on the RIGHT, but slightly closer to center.
+                    min_xytext, min_ha = (-3, 12), 'right'
+                    max_xytext, max_ha = (3, 12), 'left'
+
+                    # If min/max are close on x-axis, separate vertically to avoid overlap.
+                    if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
+                        min_xytext = (min_xytext[0], 12)
+                        max_xytext = (max_xytext[0], 22)
+
                     ax.scatter([stats_min], [marker_y], color=min_color, s=100, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
                     ax.scatter([stats_max], [marker_y], color=max_color, s=100, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=min_color, fontweight='bold')
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=max_color, fontweight='bold')
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
                     
                     # Std in legend only, single-line legend
                     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.34), ncol=6, frameon=False, columnspacing=0.5)
-                    fig.subplots_adjust(bottom=0.28)
+                    fig.subplots_adjust(bottom=0.28, right=0.84)
                     
                     buf = io.BytesIO()
-                    fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
                     plt.close(fig)
                     buf.seek(0)
                     dist_img = base64.b64encode(buf.read()).decode('utf-8')
@@ -4110,7 +4288,7 @@ def analyze_file(filename):
                     steps = effective_steps
                     fc_mean, conf_df = _compute_forecast(series, steps)
                     title_fc = f"Forecast for {column}"
-                    s_hist = _thin_series(series, max_points=600)
+                    s_hist = _thin_series_keep_extrema(series, max_points=600)
                     forecast_plots.append({
                         "img": generate_forecast_plot(
                             s_hist,
@@ -4703,10 +4881,17 @@ def download_static_plots_zip(filename):
                     edge_color = '#0b1220'
                     ax.scatter([stats_min], [marker_y], color=min_color, s=100, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
                     ax.scatter([stats_max], [marker_y], color=max_color, s=100, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-                    
-                    # Both annotations ABOVE the markers
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=min_color, fontweight='bold')
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=max_color, fontweight='bold')
+
+                    # Match Detailed Analysis: min tag slightly left, max tag slightly right.
+                    xlim = ax.get_xlim()
+                    min_xytext, min_ha = (-3, 12), 'right'
+                    max_xytext, max_ha = (3, 12), 'left'
+                    if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
+                        min_xytext = (min_xytext[0], 12)
+                        max_xytext = (max_xytext[0], 22)
+
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
                     
                     # Std in legend only
                     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
@@ -4834,10 +5019,10 @@ def download_static_plots_zip(filename):
                 # Add text labels for avg/med lines next to the chart
                 ylim = ax.get_ylim()
                 y_range = ylim[1] - ylim[0]
-                threshold = y_range * 0.06  # 6% threshold for close values
+                threshold = y_range * 0.03  # keep labels closer to their lines
 
                 if abs(avg_count - med_count) < threshold:
-                    offset = threshold * 0.8
+                    offset = threshold * 0.4
                     if avg_count >= med_count:
                         avg_y = avg_count + offset
                         med_y = med_count - offset
@@ -4848,8 +5033,8 @@ def download_static_plots_zip(filename):
                     avg_y = avg_count
                     med_y = med_count
 
-                ax.text(1.02, avg_y, f'Avg: {avg_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
-                ax.text(1.02, med_y, f'Med: {med_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
+                ax.text(1.005, avg_y, f'Avg: {avg_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
+                ax.text(1.005, med_y, f'Med: {med_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                 
                 # Get least frequent item name
                 least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
@@ -5467,9 +5652,15 @@ def download_full_report_pdf(filename):
                     edge_color = '#0b1220'
                     ax.scatter([stats_min], [marker_y], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
                     ax.scatter([stats_max], [marker_y], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-                    # Min/Max annotations above markers
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=min_color, fontweight='bold')
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=(0, 12), ha='center', fontsize=7, color=max_color, fontweight='bold')
+
+                    # Match Detailed Analysis: min tag slightly left, max tag slightly right.
+                    min_xytext, min_ha = (-3, 12), 'right'
+                    max_xytext, max_ha = (3, 12), 'left'
+                    if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
+                        min_xytext = (min_xytext[0], 12)
+                        max_xytext = (max_xytext[0], 22)
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
                     
                     # Avg/Med tags
                     x_offset = (xlim[1] - xlim[0]) * 0.02
@@ -5732,10 +5923,21 @@ def download_full_report_html(filename):
                 app.logger.debug("Forecast result for %s: fc_mean is %s", col, 'None' if fc_mean is None else f'{len(fc_mean)} points')
             except Exception as e:
                 app.logger.warning("Forecast error for %s (_compute_forecast): %s", col, e)
+                # Fallback: simple linear trend forecast
                 try:
-                    fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
+                    idx = _infer_future_index(s.index, forecast_steps)
+                    if len(s) >= 2:
+                        trend = float(np.mean(np.diff(s.values[-min(20, len(s)):])))
+                        last = float(s.iloc[-1])
+                        vals = [last + trend * (i + 1) for i in range(forecast_steps)]
+                    else:
+                        last = float(s.iloc[-1]) if len(s) else 0.0
+                        vals = [last] * forecast_steps
+                    fc_mean = pd.Series(vals, index=idx)
+                    std = float(np.std(s.values, ddof=1)) if len(s) > 1 else 1.0
+                    ci = pd.DataFrame({"lower": fc_mean.values - 1.96 * std, "upper": fc_mean.values + 1.96 * std}, index=idx)
                 except Exception as e2:
-                    app.logger.warning("Forecast error for %s (_recent_slope_forecast): %s", col, e2)
+                    app.logger.warning("Forecast fallback error for %s: %s", col, e2)
                     fc_mean, ci = None, None
             
             if fc_mean is not None and len(fc_mean) > 0:
