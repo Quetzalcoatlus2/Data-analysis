@@ -129,8 +129,7 @@ if "UPLOAD_RETENTION_DAYS" in os.environ:
 app.config.setdefault('MAX_CACHE_ITEMS', int(os.getenv("MAX_CACHE_ITEMS", "6")))
 app.config.setdefault('DEFAULT_FORECAST_STEPS', int(os.getenv("DEFAULT_FORECAST_STEPS", "30")))
 
-# PERFORMANCE: Reduce interactive chart data points for faster rendering
-app.config.setdefault('PLOTLY_TAIL', int(os.getenv("PLOTLY_TAIL", "600")))  # Reduced from 800
+app.config.setdefault('INTERACTIVE_CACHE_MAX_MB', int(os.getenv("INTERACTIVE_CACHE_MAX_MB", "80")))
 app.config.setdefault('AI_TIMEOUT_SECONDS', int(os.getenv("AI_TIMEOUT_SECONDS", "30")))
 app.config.setdefault('AI_RETRY_ATTEMPTS', int(os.getenv("AI_RETRY_ATTEMPTS", "2")))
 app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACKOFF_SECONDS", "2.0")))
@@ -561,8 +560,9 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
             is_rate = ('429' in msg) or ('rate limit' in msg.lower()) or ('quota' in msg.lower())
             if is_rate:
                 try:
-                    # Attempt to switch to a known free-tier model
-                    free_model = 'gemini-1.5-flash'
+                    # Attempt to switch to the configured default flash family model.
+                    # get_or_create_model will automatically try aliases/fallbacks.
+                    free_model = DEFAULT_AI_MODEL
                     def _strip_models_prefix(x: str) -> str:
                         return x[7:] if isinstance(x, str) and x.startswith('models/') else x
                     current_eq_free = (
@@ -631,6 +631,17 @@ class TinyLRU(OrderedDict):
                 return int(len(value))
             if isinstance(value, str):
                 return int(len(value.encode('utf-8', errors='ignore')))
+            if isinstance(value, dict):
+                total = int(sys.getsizeof(value))
+                for k, v in value.items():
+                    total += self._estimate_size_bytes(k)
+                    total += self._estimate_size_bytes(v)
+                return total
+            if isinstance(value, (list, tuple, set)):
+                total = int(sys.getsizeof(value))
+                for item in value:
+                    total += self._estimate_size_bytes(item)
+                return total
             return int(sys.getsizeof(value))
         except Exception:
             try:
@@ -690,7 +701,10 @@ CORRELATION_CACHE = TinyLRU(max_items=20)  # Cache correlation matrices per data
 DESCRIPTION_CACHE = TinyLRU(max_items=20)  # Cache describe() and info() per dataset
 # NEW: Complete analysis cache - stores all computed data per dataset for instant view switching
 ANALYSIS_CACHE = TinyLRU(max_items=10)  # Cache full analysis results (plots, forecasts, interactive data)
-INTERACTIVE_DATA_CACHE = TinyLRU(max_items=10)  # Cache interactive chart JSON data for AJAX loading
+INTERACTIVE_DATA_CACHE = TinyLRU(
+    max_items=10,
+    max_size_mb=int(app.config.get('INTERACTIVE_CACHE_MAX_MB', 80)),
+)  # Cache interactive chart JSON data for AJAX loading
 ANOMALY_CACHE = TinyLRU(max_items=20)  # Cache anomaly detection results per column
 # PERFORMANCE: Per-column forecast cache with (filename, column, steps) key
 # This ensures forecasts are computed once and reused across Forecast/Interactive/PDF views
@@ -737,13 +751,16 @@ def _log_cache_stats_if_needed(context: str):
     except Exception:
         pass
 
-if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
-    app.logger.addHandler(file_handler)
-
-werk = logging.getLogger("werkzeug")
-werk.setLevel(log_level)
-if not any(isinstance(h, RotatingFileHandler) for h in werk.handlers):
-    werk.addHandler(file_handler)
+def _build_interactive_cache_key(filename: str, forecast_pct: float, contamination: float) -> tuple[str, float, float]:
+    try:
+        pct_key = round(float(forecast_pct), 6)
+    except Exception:
+        pct_key = 0.05
+    try:
+        contam_key = round(float(contamination), 6)
+    except Exception:
+        contam_key = 0.02
+    return (str(filename), pct_key, contam_key)
 
 def _load_name_map():
     global ORIGINAL_NAME_MAP
@@ -825,64 +842,6 @@ def sanitize_ai_html(raw: str) -> str:
     return s
 
 
-def convert_html_to_formatted_text(html: str) -> str:
-    """Convert HTML to well-formatted plain text for PDF output.
-    Preserves structure: headers become UPPERCASE with separators,
-    lists become bullet points, paragraphs are separated by blank lines.
-    """
-    if not html:
-        return ""
-    
-    s = str(html)
-    
-    # Handle HTML entities first
-    s = s.replace('&nbsp;', ' ')
-    s = s.replace('&amp;', '&')
-    s = s.replace('&lt;', '<')
-    s = s.replace('&gt;', '>')
-    s = s.replace('&quot;', '"')
-    s = s.replace('&#39;', "'")
-    
-    # Convert headers to UPPERCASE with separators
-    def header_replace(m):
-        text = re.sub(r'<[^>]+>', '', m.group(2)).strip()
-        separator = '=' * min(len(text), 50)
-        return f"\n\n{separator}\n{text.upper()}\n{separator}\n"
-    s = re.sub(r'<h([1-6])[^>]*>(.*?)</h\1>', header_replace, s, flags=re.I | re.S)
-    
-    # Convert <br> to newlines
-    s = re.sub(r'<br\s*/?>', '\n', s, flags=re.I)
-    
-    # Convert </p> to double newline (paragraph break)
-    s = re.sub(r'</p>', '\n\n', s, flags=re.I)
-    
-    # Convert list items to bullet points
-    s = re.sub(r'<li[^>]*>(.*?)</li>', lambda m: '  - ' + re.sub(r'<[^>]+>', '', m.group(1)).strip() + '\n', s, flags=re.I | re.S)
-    
-    # Convert <strong> and <b> content - preserve the text with ** markers
-    s = re.sub(r'<(strong|b)[^>]*>(.*?)</\1>', lambda m: '**' + re.sub(r'<[^>]+>', '', m.group(2)).strip() + '**', s, flags=re.I | re.S)
-    
-    # Convert <em> and <i> content - preserve the text with * markers
-    s = re.sub(r'<(em|i)[^>]*>(.*?)</\1>', lambda m: '*' + re.sub(r'<[^>]+>', '', m.group(2)).strip() + '*', s, flags=re.I | re.S)
-    
-    # Handle tables - simple text representation
-    s = re.sub(r'<table[^>]*>', '\n', s, flags=re.I)
-    s = re.sub(r'</table>', '\n', s, flags=re.I)
-    s = re.sub(r'<tr[^>]*>', '', s, flags=re.I)
-    s = re.sub(r'</tr>', '\n', s, flags=re.I)
-    s = re.sub(r'<t[hd][^>]*>(.*?)</t[hd]>', lambda m: re.sub(r'<[^>]+>', '', m.group(1)).strip() + '  |  ', s, flags=re.I | re.S)
-    
-    # Remove all remaining HTML tags
-    s = re.sub(r'<[^>]+>', '', s)
-    
-    # Clean up whitespace
-    s = re.sub(r'[ \t]+', ' ', s)  # Multiple spaces to single
-    s = re.sub(r'\n[ \t]+', '\n', s)  # Remove leading whitespace on lines
-    s = re.sub(r'[ \t]+\n', '\n', s)  # Remove trailing whitespace on lines
-    s = re.sub(r'\n{4,}', '\n\n\n', s)  # Max 3 consecutive newlines
-    
-    return s.strip()
-
 # Emoji to text replacements for PDF (since most PDF fonts don't support emojis)
 EMOJI_REPLACEMENTS = {
     '📊': '[CHART]',
@@ -928,194 +887,6 @@ def replace_emojis_for_pdf(text: str) -> str:
     # Clean up any double spaces left behind
     result = re.sub(r'  +', ' ', result)
     return result
-
-class PDFStyledText:
-    """Helper class to render styled HTML content to PDF with bold/italic support."""
-    
-    def __init__(self, pdf, font_family="helvetica", base_size=10):
-        self.pdf = pdf
-        self.font_family = font_family
-        self.base_size = base_size
-    
-    def render_html(self, html: str):
-        """Parse HTML and render with proper formatting to PDF."""
-        if not html:
-            return
-        
-        # Replace emojis first
-        html = replace_emojis_for_pdf(html)
-        
-        # Handle HTML entities
-        html = html.replace('&nbsp;', ' ')
-        html = html.replace('&amp;', '&')
-        html = html.replace('&lt;', '<')
-        html = html.replace('&gt;', '>')
-        html = html.replace('&quot;', '"')
-        html = html.replace('&#39;', "'")
-        
-        # Process content by sections
-        # Split by headers first
-        sections = re.split(r'(<h[1-6][^>]*>.*?</h[1-6]>)', html, flags=re.I | re.S)
-        
-        for section in sections:
-            if not section.strip():
-                continue
-            
-            # Check if this is a header
-            header_match = re.match(r'<h([1-6])[^>]*>(.*?)</h\1>', section, re.I | re.S)
-            if header_match:
-                level = int(header_match.group(1))
-                header_text = self._strip_tags(header_match.group(2))
-                self._render_header(header_text, level)
-            else:
-                # Process regular content
-                self._render_content(section)
-    
-    def _strip_tags(self, text: str) -> str:
-        """Remove all HTML tags from text."""
-        return re.sub(r'<[^>]+>', '', text).strip()
-    
-    def _render_header(self, text: str, level: int):
-        """Render a header with appropriate styling."""
-        # Font sizes based on header level
-        sizes = {1: 16, 2: 14, 3: 13, 4: 12, 5: 11, 6: 10}
-        size = sizes.get(level, 12)
-        
-        self.pdf.ln(4)
-        self.pdf.set_font(self.font_family, 'B', size)
-        self.pdf.set_fill_color(240, 240, 240)
-        
-        # Encode for latin-1 if needed
-        safe_text = self._safe_encode(text)
-        self.pdf.multi_cell(0, 6, safe_text, fill=True)
-        self.pdf.ln(2)
-        self.pdf.set_font(self.font_family, '', self.base_size)
-    
-    def _render_content(self, content: str):
-        """Render content with inline styling (bold, italic, lists)."""
-        if not content or not content.strip():
-            return
-            
-        # Handle lists
-        if '<ul' in content.lower() or '<ol' in content.lower():
-            self._render_list(content)
-            # Also render any content outside the list
-            outside_list = re.sub(r'<[uo]l[^>]*>.*?</[uo]l>', '', content, flags=re.I | re.S)
-            if outside_list.strip():
-                self._render_content(outside_list)
-            return
-        
-        # Handle paragraphs and inline content
-        # Split by closing tags and line breaks
-        paragraphs = re.split(r'</p>|<br\s*/?>|\n', content, flags=re.I)
-        
-        rendered_anything = False
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
-                continue
-            
-            # Remove opening <p> tags and any other block-level opening tags
-            para = re.sub(r'<p[^>]*>', '', para, flags=re.I)
-            para = re.sub(r'<div[^>]*>', '', para, flags=re.I)
-            para = re.sub(r'</div>', '', para, flags=re.I)
-            
-            para = para.strip()
-            if not para:
-                continue
-            
-            self._render_styled_paragraph(para)
-            self.pdf.ln(3)
-            rendered_anything = True
-        
-        # Fallback: if nothing was rendered, render the whole content as plain text
-        if not rendered_anything:
-            plain_text = self._strip_tags(content)
-            if plain_text:
-                self.pdf.set_font(self.font_family, '', self.base_size)
-                safe_text = self._safe_encode(plain_text)
-                self.pdf.multi_cell(0, 5, safe_text)
-                self.pdf.ln(3)
-    
-    def _render_list(self, content: str):
-        """Render a list with bullet points."""
-        items = re.findall(r'<li[^>]*>(.*?)</li>', content, re.I | re.S)
-        
-        for item in items:
-            item_text = self._strip_tags(item).strip()
-            if not item_text:
-                continue
-            
-            self.pdf.set_font(self.font_family, '', self.base_size)
-            safe_text = self._safe_encode(f"  - {item_text}")
-            self.pdf.multi_cell(0, 5, safe_text)
-        
-        self.pdf.ln(2)
-    
-    def _render_styled_paragraph(self, para: str):
-        """Render a paragraph with bold/italic inline styling."""
-        # Parse inline styles and render them
-        # We'll use a simple approach: find styled segments and render them
-        
-        # Pattern to find bold/italic segments
-        segments = []
-        pos = 0
-        
-        # Combined pattern for bold and italic
-        pattern = re.compile(r'<(strong|b|em|i)[^>]*>(.*?)</\1>', re.I | re.S)
-        
-        for match in pattern.finditer(para):
-            # Add text before the match as normal
-            if match.start() > pos:
-                before_text = self._strip_tags(para[pos:match.start()])
-                if before_text:
-                    segments.append(('', before_text))
-            
-            # Add the styled segment
-            tag = match.group(1).lower()
-            style = 'B' if tag in ('strong', 'b') else 'I'
-            styled_text = self._strip_tags(match.group(2))
-            if styled_text:
-                segments.append((style, styled_text))
-            
-            pos = match.end()
-        
-        # Add remaining text
-        if pos < len(para):
-            remaining = self._strip_tags(para[pos:])
-            if remaining:
-                segments.append(('', remaining))
-        
-        # If no segments found, just render plain text
-        if not segments:
-            plain = self._strip_tags(para)
-            if plain:
-                self.pdf.set_font(self.font_family, '', self.base_size)
-                safe_text = self._safe_encode(plain)
-                self.pdf.multi_cell(0, 5, safe_text)
-            return
-        
-        # Render segments - combine into single text and use multi_cell
-        # Since fpdf2's write() has issues, we'll render each styled segment separately
-        for style, text in segments:
-            if not text:
-                continue
-            self.pdf.set_font(self.font_family, style, self.base_size)
-            safe_text = self._safe_encode(text)
-            # Use multi_cell with no width limit for safety
-            self.pdf.multi_cell(0, 5, safe_text, new_x="LMARGIN", new_y="NEXT")
-    
-    def _safe_encode(self, text: str) -> str:
-        """Safely encode text for PDF output."""
-        if not text:
-            return ""
-        # Replace emojis again just in case
-        text = replace_emojis_for_pdf(text)
-        # Encode to latin-1, replacing unsupported chars
-        try:
-            return text.encode('latin-1', 'replace').decode('latin-1')
-        except Exception:
-            return text
 
 def _is_offline_html(s: str) -> bool:
     try:
@@ -1470,18 +1241,7 @@ Question:
             app.logger.info("Q&A continuation check skipped: %s", ce)
 
         html = sanitize_ai_html(text)
-        
-        # Add model attribution footer
-        try:
-            model_name = CURRENT_MODEL_NAME or AI_STATUS.get("model") or "AI"
-            # Strip 'models/' prefix if present
-            if isinstance(model_name, str) and model_name.startswith("models/"):
-                model_name = model_name[7:]
-            attribution = f'<p style="font-size:0.8em;color:#888;margin-top:10px;"><em>Generated by {model_name}</em></p>'
-            html = html + attribution
-        except Exception:
-            pass
-        
+
         try:
             if cache_key and not _is_offline_html(html):
                 QNA_CACHE.set(cache_key, html)
@@ -2519,7 +2279,7 @@ def _compute_forecast(series: pd.Series, steps: int):
     """Natural-looking forecast that preserves realistic patterns and variance.
     - Uses historical pattern matching for realistic continuations
     - Adds realistic noise based on historical volatility
-    - Respects historical min/max bounds
+    - Keeps forecast and CI within historical min/max by construction
     Returns (fc_mean, conf_df).
     """
     def _natural_forecast(s: pd.Series, k: int):
@@ -2540,7 +2300,7 @@ def _compute_forecast(series: pd.Series, steps: int):
 
              decomposition — matching the actual data's noise amplitude.
 
-          4. Soft clamping to [data_min, data_max] that avoids flatlines near bounds.
+          4. Soft boundary compression near historical extremes (no hard flatline clipping).
 
         """
 
@@ -2768,24 +2528,44 @@ def _compute_forecast(series: pd.Series, steps: int):
 
         forecast_vals = baseline + seasonal + noise
 
-        # ---- Mean-matching + soft clamping (iterative) ----
+        # ---- Mean-matching + bounded transform ----
         # Shift the forecast so its average stays close to the recent history
         # mean, then clamp.  Clamping can asymmetrically pull the mean toward
         # bounds, so we iterate: shift → clamp → re-check → shift → …
-        margin = 0.05 * data_range  # soft-clamp transition zone width
+        edge_eps = max(1e-9, data_range * 0.005)
+        low_inner = data_min + edge_eps
+        high_inner = data_max - edge_eps
 
-        def _soft_clamp(vals):
-            """Sigmoid-based soft clamp to avoid flat segments near bounds."""
-            out = vals.copy()
-            for j in range(len(out)):
-                v = out[j]
-                if v > data_max - margin:
-                    excess = v - (data_max - margin)
-                    out[j] = data_max - margin + margin * (1.0 - np.exp(-excess / max(margin, 1e-12)))
-                elif v < data_min + margin:
-                    deficit = (data_min + margin) - v
-                    out[j] = data_min + margin - margin * (1.0 - np.exp(-deficit / max(margin, 1e-12)))
-            return np.clip(out, data_min, data_max)
+        if high_inner <= low_inner:
+            low_inner = data_min
+            high_inner = data_max
+
+        def _bound_inside(vals):
+            """Affinely fit values inside (data_min, data_max) while preserving variation."""
+            out = np.asarray(vals, dtype=float).copy()
+            if out.size == 0:
+                return out
+            if high_inner <= low_inner:
+                anchor = float(np.clip(np.mean(out), data_min, data_max))
+                return np.full_like(out, fill_value=anchor, dtype=float)
+
+            out_min = float(np.min(out))
+            out_max = float(np.max(out))
+            if out_max - out_min < 1e-12:
+                anchor = float(np.clip(float(np.mean(out)), low_inner, high_inner))
+                return np.full_like(out, fill_value=anchor, dtype=float)
+
+            target_span = max(high_inner - low_inner, 1e-12)
+            current_span = max(out_max - out_min, 1e-12)
+            scale = min(1.0, target_span / current_span)
+            mean_val = float(np.mean(out))
+            out = (out - mean_val) * scale + mean_val
+
+            if float(np.min(out)) < low_inner:
+                out += (low_inner - float(np.min(out)))
+            if float(np.max(out)) > high_inner:
+                out -= (float(np.max(out)) - high_inner)
+            return out
 
         # Iterative mean-matching with clamping (converges in 2-3 passes)
         for _pass in range(3):
@@ -2796,16 +2576,17 @@ def _compute_forecast(series: pd.Series, steps: int):
             if abs(shift) < 1e-9:
                 break
             forecast_vals += shift
-            forecast_vals = _soft_clamp(forecast_vals)
+            forecast_vals = _bound_inside(forecast_vals)
 
         # ---- 5. Smooth junction with history ----
         # Short blend (2-3 points) so the forecast starts from `last`
         # for visual continuity, without pulling the whole series to an extreme.
         blend_len = min(max(2, k // 12), 3)
+        blend_anchor = float(np.clip(last, low_inner, high_inner))
         for i in range(blend_len):
             alpha = (i + 1) / (blend_len + 1)
-            forecast_vals[i] = (1 - alpha) * last + alpha * forecast_vals[i]
-        forecast_vals = np.clip(forecast_vals, data_min, data_max)
+            forecast_vals[i] = (1 - alpha) * blend_anchor + alpha * forecast_vals[i]
+        forecast_vals = _bound_inside(forecast_vals)
 
 
 
@@ -2813,13 +2594,18 @@ def _compute_forecast(series: pd.Series, steps: int):
 
 
 
-        # --- Expanding confidence interval (clamped to data bounds) ---
+        # --- Expanding confidence interval (bounded by construction) ---
 
         expanding_uncertainty = resid_std * np.sqrt(step_k)
+        ci_target = 1.96 * expanding_uncertainty
 
-        lower = np.clip(forecast_vals - 1.96 * expanding_uncertainty, data_min, data_max)
+        down_room = np.maximum(forecast_vals - data_min, 0.0)
+        up_room = np.maximum(data_max - forecast_vals, 0.0)
+        lower = forecast_vals - np.minimum(ci_target, down_room * 0.98)
+        upper = forecast_vals + np.minimum(ci_target, up_room * 0.98)
 
-        upper = np.clip(forecast_vals + 1.96 * expanding_uncertainty, data_min, data_max)
+        lower = np.minimum(lower, forecast_vals)
+        upper = np.maximum(upper, forecast_vals)
 
         ci = pd.DataFrame({"lower": lower, "upper": upper}, index=idx)
 
@@ -2860,13 +2646,42 @@ def _compute_forecast(series: pd.Series, steps: int):
         # Post-processing: scale forecast amplitude to match recent history dynamics
         fc, ci = _match_amplitude(series, fc, conf_df=ci)
 
-        # Re-clamp to historical bounds after amplitude matching
         data_min = float(s.min())
         data_max = float(s.max())
-        fc = fc.clip(lower=data_min, upper=data_max)
-        if isinstance(ci, pd.DataFrame) and ci.shape[1] >= 2:
-            ci.iloc[:, 0] = ci.iloc[:, 0].clip(lower=data_min)
-            ci.iloc[:, 1] = ci.iloc[:, 1].clip(upper=data_max)
+        data_range = max(data_max - data_min, 1e-12)
+        edge_eps = max(1e-9, data_range * 0.005)
+        low_inner = data_min + edge_eps
+        high_inner = data_max - edge_eps
+
+        if high_inner > low_inner and len(fc) > 0:
+            fc_vals = fc.values.astype(float)
+            fc_min = float(np.min(fc_vals))
+            fc_max = float(np.max(fc_vals))
+            if fc_max - fc_min < 1e-12:
+                anchor = float(np.clip(np.mean(fc_vals), low_inner, high_inner))
+                fc_vals = np.full_like(fc_vals, fill_value=anchor, dtype=float)
+            else:
+                target_span = max(high_inner - low_inner, 1e-12)
+                current_span = max(fc_max - fc_min, 1e-12)
+                scale = min(1.0, target_span / current_span)
+                mean_val = float(np.mean(fc_vals))
+                fc_vals = (fc_vals - mean_val) * scale + mean_val
+                if float(np.min(fc_vals)) < low_inner:
+                    fc_vals += (low_inner - float(np.min(fc_vals)))
+                if float(np.max(fc_vals)) > high_inner:
+                    fc_vals -= (float(np.max(fc_vals)) - high_inner)
+            fc = pd.Series(fc_vals, index=fc.index)
+
+        if isinstance(ci, pd.DataFrame) and ci.shape[1] >= 2 and len(fc) > 0:
+            lower_raw = ci.iloc[:, 0].values.astype(float)
+            upper_raw = ci.iloc[:, 1].values.astype(float)
+            down_width = np.maximum(fc.values.astype(float) - lower_raw, 0.0)
+            up_width = np.maximum(upper_raw - fc.values.astype(float), 0.0)
+            down_cap = np.maximum(fc.values.astype(float) - data_min, 0.0) * 0.98
+            up_cap = np.maximum(data_max - fc.values.astype(float), 0.0) * 0.98
+            lower_new = fc.values.astype(float) - np.minimum(down_width, down_cap)
+            upper_new = fc.values.astype(float) + np.minimum(up_width, up_cap)
+            ci = pd.DataFrame({"lower": lower_new, "upper": upper_new}, index=ci.index)
 
         # Cache the result
         try:
@@ -3761,6 +3576,7 @@ def analyze_file(filename):
             pct = 0.05
     except Exception:
         pct = 0.05  # Default to 5%
+    raw_data_range = request.args.get("data_range") or request.form.get("data_range")
     user_steps = _get_arg_int("forecast_horizon", default_steps)  # legacy param support
     user_contam = _get_arg_float("contamination", default_contam)
     # Validate contamination is in valid range for IsolationForest
@@ -3883,10 +3699,43 @@ def analyze_file(filename):
 
     interactive = []
 
-    raw_tail = (os.getenv("PLOTLY_TAIL", "all") or "all").strip().lower()
-
     # Apply percentage-based forecast horizon early (if provided) so all downstream forecast logic uses updated user_steps.
     total_rows = int(getattr(df, 'shape', (0,))[0]) if hasattr(df, 'shape') else 0
+    data_range_ratio = 1.0
+    data_range_rows = 0
+    try:
+        if raw_data_range not in (None, ""):
+            dr = float(raw_data_range)
+            if dr <= 0:
+                data_range_ratio = 1.0
+                data_range_rows = 0
+            elif dr <= 1.0:
+                data_range_ratio = dr
+                if total_rows > 0:
+                    rows = int(math.ceil(total_rows * dr))
+                    data_range_rows = max(1, min(rows, total_rows))
+                    if data_range_rows >= total_rows:
+                        data_range_rows = 0
+                        data_range_ratio = 1.0
+            else:
+                rows = int(dr)
+                if rows <= 0:
+                    data_range_ratio = 1.0
+                    data_range_rows = 0
+                elif total_rows > 0:
+                    rows = min(rows, total_rows)
+                    if rows >= total_rows:
+                        data_range_ratio = 1.0
+                        data_range_rows = 0
+                    else:
+                        data_range_rows = rows
+                        data_range_ratio = rows / total_rows
+                else:
+                    data_range_ratio = 1.0
+                    data_range_rows = 0
+    except Exception:
+        data_range_ratio = 1.0
+        data_range_rows = 0
     
     # pct is always defined now (defaulting to 0.05)
     if pct == 0:
@@ -3950,7 +3799,9 @@ def analyze_file(filename):
                 'effective_steps': effective_steps,
                 'forecast_pct': pct if pct is not None else None,
                 'total_rows': total_rows,
-                'contamination': user_contam
+                'contamination': user_contam,
+                'data_range': data_range_ratio,
+                'data_range_rows': data_range_rows
             }
         })
         
@@ -4008,6 +3859,8 @@ def analyze_file(filename):
                 series = numeric_df_cached[column].dropna()
             except Exception:
                 series = pd.Series(dtype=float)
+            if build_forecast and data_range_rows > 0:
+                series = series.tail(data_range_rows)
             if series.empty:
                 continue
             used_cols.append(column)
@@ -4199,14 +4052,9 @@ def analyze_file(filename):
                 except Exception:
                     pass
 
-                if raw_tail in ("all", "", "0", "-1", "none", "false"):
-                    s_tail = series
-                else:
-                    try:
-                        tail_n = int(raw_tail)
-                        s_tail = series.tail(max(1, tail_n))
-                    except Exception:
-                        s_tail = series
+                # Always provide full series to interactive view.
+                # Data-range filtering is handled client-side by the Data Range selector.
+                s_tail = series
 
                 # Use NUMERIC X-axis for proportional display (like in PDF)
                 n_hist = len(s_tail)
@@ -4346,7 +4194,7 @@ def analyze_file(filename):
                         }
                     })
 
-                dist = {"name": column, "values": [float(v) for v in series.dropna().values[:2000]]}
+                dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
                 
                 # Compute statistics for the column
                 try:
@@ -4370,6 +4218,8 @@ def analyze_file(filename):
                 if column not in numeric_df_cached.columns:
                     continue
                 series = numeric_df_cached[column].dropna()
+                if data_range_rows > 0:
+                    series = series.tail(data_range_rows)
                 if len(series) >= 5:
                     # Detect anomalies for fallback forecast
                     an_idx_fb, _ = get_cached_anomalies(filename, column, series, user_contam)
@@ -4484,7 +4334,9 @@ def analyze_file(filename):
             'effective_steps': effective_steps,
             'forecast_pct': pct if pct is not None else None,
             'total_rows': total_rows,
-            'contamination': user_contam
+            'contamination': user_contam,
+            'data_range': data_range_ratio,
+            'data_range_rows': data_range_rows
         }
     })
     
@@ -4580,19 +4432,8 @@ def api_interactive_data(filename):
     """
     if not HASHED_UPLOAD_RE.match(filename):
         return jsonify({"ok": False, "error": "Invalid filename"}), 400
-    
-    # Check cache first for instant response
-    cache_key = filename
-    cached = INTERACTIVE_DATA_CACHE.get(cache_key)
-    if cached is not None:
-        _log_cache_stats_if_needed("interactive-cached")
-        return jsonify({"ok": True, "data": cached, "cached": True})
-    
-    # Load DataFrame
-    df = get_dataframe_for(filename)
-    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
-        return jsonify({"ok": False, "error": "Dataset not found"}), 404
-    
+    request_start = time.perf_counter()
+
     # Get parameters - default to 5%
     raw_pct = request.args.get('forecast_pct', '0.05')
     try:
@@ -4614,6 +4455,24 @@ def api_interactive_data(filename):
         pct = max(0, min(0.5, pct))
     except Exception:
         pct = 0.05
+
+    # Check cache first for instant response (keyed by request parameters)
+    cache_key = _build_interactive_cache_key(filename, pct, user_contam)
+    cached = INTERACTIVE_DATA_CACHE.get(cache_key)
+    if cached is None:
+        # Backward compatibility with legacy filename-only key for default params
+        if abs(pct - 0.05) < 1e-9 and abs(user_contam - 0.02) < 1e-9:
+            cached = INTERACTIVE_DATA_CACHE.get(filename)
+    if cached is not None:
+        _log_cache_stats_if_needed("interactive-cached")
+        elapsed = time.perf_counter() - request_start
+        app.logger.info("Interactive API cache HIT file=%s pct=%.4f contam=%.4f elapsed=%.3fs", filename, pct, user_contam, elapsed)
+        return jsonify({"ok": True, "data": cached, "cached": True})
+
+    # Load DataFrame
+    df = get_dataframe_for(filename)
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        return jsonify({"ok": False, "error": "Dataset not found"}), 404
     
     total_rows = len(df)
     # 0% means no forecast
@@ -4642,6 +4501,8 @@ def api_interactive_data(filename):
         
         # Build traces using NUMERIC indices for proportional X-axis display
         # This ensures forecast (e.g. 20%) takes proportionally 20% of chart width
+        # Always provide full series to interactive API.
+        # The UI Data Range control applies any user-requested reduction.
         s_tail = series
         n_hist = len(s_tail)
         
@@ -4756,8 +4617,8 @@ def api_interactive_data(filename):
         
         dist = {
             "name": column,
-            "values": [v for v in (_safe_number(x) for x in series.dropna().values[:1000]) if v is not None]
-        }  # Limit distribution points
+            "values": [v for v in (_safe_number(x) for x in series.dropna().values) if v is not None]
+        }
         
         # Compute statistics for the column
         try:
@@ -4776,6 +4637,8 @@ def api_interactive_data(filename):
     # Cache the result
     INTERACTIVE_DATA_CACHE.set(cache_key, interactive)
     _log_cache_stats_if_needed("interactive")
+    elapsed = time.perf_counter() - request_start
+    app.logger.info("Interactive API cache MISS file=%s pct=%.4f contam=%.4f cols=%d elapsed=%.3fs", filename, pct, user_contam, cols_processed, elapsed)
     
     return jsonify({"ok": True, "data": interactive, "cached": False})
 
@@ -4868,6 +4731,8 @@ def download_static_plots_zip(filename):
     if not HASHED_UPLOAD_RE.match(filename):
         return ("Not found", 404)
 
+    request_start = time.perf_counter()
+
     df = get_dataframe_for(filename)
     if df is None or df.empty:
         return ("Not found", 404)
@@ -4880,14 +4745,15 @@ def download_static_plots_zip(filename):
     }
     bio = io.BytesIO()
     
-    # Calculate forecast steps as 10% of dataset size
+    # Calculate forecast steps as 10% of dataset size with a safety cap
     total_rows = len(df)
-    forecast_steps = max(10, int(total_rows * 0.1))
+    static_zip_max_forecast_steps = int(os.getenv("STATIC_ZIP_MAX_FORECAST_STEPS", "120"))
+    forecast_steps = min(static_zip_max_forecast_steps, max(10, int(total_rows * 0.1)))
     
     with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
         # Generate correlation heatmaps
         try:
-            spearman_heatmap = generate_correlation_heatmap(df, method='spearman', title='Spearman Correlation Heatmap')
+            spearman_heatmap = get_cached_heatmap(filename, df, method='spearman')
             if spearman_heatmap:
                 raw = base64.b64decode(spearman_heatmap.encode('utf-8'))
                 zf.writestr("correlation_spearman.png", raw)
@@ -4895,7 +4761,7 @@ def download_static_plots_zip(filename):
             pass
         
         try:
-            pearson_heatmap = generate_correlation_heatmap(df, method='pearson', title='Pearson Correlation Heatmap')
+            pearson_heatmap = get_cached_heatmap(filename, df, method='pearson')
             if pearson_heatmap:
                 raw = base64.b64decode(pearson_heatmap.encode('utf-8'))
                 zf.writestr("correlation_pearson.png", raw)
@@ -5014,7 +4880,7 @@ def download_static_plots_zip(filename):
                     s_norm = normalize_timeseries(s)
                     sp = _infer_seasonal_period(s_norm.index)
                     if sp and isinstance(sp, int) and sp >= 2 and len(s_norm) >= sp * 2:
-                        stl_img = generate_stl_plot(s_norm, f"STL Decomposition: {col}", seasonal_period=sp)
+                        stl_img = get_cached_stl_plot(filename, col, s_norm, sp)
                         if stl_img:
                             raw = base64.b64decode(stl_img.encode('utf-8'))
                             zf.writestr(f"{secure_filename(str(col))}_stl.png", raw)
@@ -5158,6 +5024,8 @@ def download_static_plots_zip(filename):
     resp = make_response(bio.read())
     resp.headers['Content-Type'] = 'application/zip'
     resp.headers['Content-Disposition'] = f'attachment; filename="{out_name}"'
+    elapsed = time.perf_counter() - request_start
+    app.logger.info("Static plots ZIP ready file=%s rows=%d forecast_steps=%d elapsed=%.2fs", filename, total_rows, forecast_steps, elapsed)
     return resp
 
 

@@ -394,33 +394,35 @@
       <div class="title">Analysis: {{ display_name }}</div>
       <nav class="nav">
         {% set pct = request.args.get('forecast_pct', analysis.controls.get('forecast_pct', 0.05)) %}
+        {% set data_range = request.args.get('data_range', '1.0') %}
+        {% set selected_col = request.args.get('selected_col', '') %}
         <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}"
-          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct) }}">Overview</a>
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct, data_range=data_range, selected_col=selected_col) }}">Overview</a>
         <a title="Explore interactively with zoom & hover"
           class="pill {{ 'active' if active_view == 'interactive' else '' }}"
-          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive', forecast_pct=pct) }}">Interactive</a>
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='interactive', forecast_pct=pct, data_range=data_range, selected_col=selected_col) }}">Interactive</a>
         <a title="View detailed analysis with forecasts, distributions, and statistics by column"
           class="pill {{ 'active' if active_view == 'forecast' else '' }}"
-          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct) }}">Detailed
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='forecast', forecast_pct=pct, data_range=data_range, selected_col=selected_col) }}">Detailed
           Analysis</a>
         <a title="View correlation heatmaps" class="pill {{ 'active' if active_view == 'correlation' else '' }}"
-          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct) }}">Correlation</a>
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='correlation', forecast_pct=pct, data_range=data_range, selected_col=selected_col) }}">Correlation</a>
         <a title="View top categories for non-numeric columns"
           class="pill {{ 'active' if active_view == 'categories' else '' }}"
-          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='categories', forecast_pct=pct) }}">Categories</a>
+          href="{{ url_for('analyze_file', filename=filename, display=display_name, view='categories', forecast_pct=pct, data_range=data_range, selected_col=selected_col) }}">Categories</a>
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
       <div class="actions">
         <a class="pill" title="Download all static plots as ZIP"
-          href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name) }}">Images ZIP</a>
+          href="{{ url_for('download_static_plots_zip', filename=filename, display=display_name, data_range=data_range, selected_col=selected_col) }}">Images ZIP</a>
         <a class="pill" title="Download AI summary (HTML)"
-          href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name) }}">AI summary</a>
+          href="{{ url_for('download_ai_summary_html', filename=filename, display=display_name, data_range=data_range, selected_col=selected_col) }}">AI summary</a>
         <a class="pill" title="Download full combined report (PDF)"
-          href="{{ url_for('download_full_report_pdf', filename=filename, display=display_name, forecast_pct=pct) }}">Full
+          href="{{ url_for('download_full_report_pdf', filename=filename, display=display_name, forecast_pct=pct, data_range=data_range, selected_col=selected_col) }}">Full
           report
           (PDF)</a>
         <a class="pill" title="Download cleaned CSV file"
-          href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name) }}">Cleaned CSV</a>
+          href="{{ url_for('download_cleaned_csv', filename=filename, display=display_name, data_range=data_range, selected_col=selected_col) }}">Cleaned CSV</a>
         <a class="pill" title="Upload a new dataset (opens file picker)" href="{{ url_for('upload_file') }}?auto=1">New
           dataset</a>
         <button id="themeToggle" title="Toggle light / dark theme" class="btn" type="button" onclick="toggleTheme()"
@@ -513,7 +515,7 @@
 
       <h3 style="margin-top:16px;">Ask the AI about this dataset</h3>
       <form id="qaForm" method="POST"
-        action="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview') }}"
+        action="{{ url_for('analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct, data_range=data_range, selected_col=selected_col) }}"
         style="display:flex; gap:8px; align-items:center;">
         <input id="questionInput" type="text" name="question" value=""
           placeholder="e.g., What drives the recent spikes?"
@@ -621,18 +623,43 @@
         <span class="muted">= {{ analysis.controls.effective_steps }} steps of {{ analysis.controls.total_rows }}
           rows</span>
       </div>
+      <div class="row" style="margin-bottom:8px">
+        <label for="dataRangeForecast">Data Range</label>
+        {% set forecast_data_range = analysis.controls.get('data_range', 1.0) %}
+        <select id="dataRangeForecast" title="Limit detailed analysis to latest X% of rows (reloads page)">
+          {% for val,label in [(1.00,'All data (100%)'),(0.50,'Latest 50%'),(0.30,'Latest 30%'),(0.15,'Latest 15%'),(0.10,'Latest 10%'),(0.05,'Latest 5%'),(0.03,'Latest 3%'),(0.01,'Latest 1%')]
+          %}
+          <option value="{{ '%.2f'|format(val) }}" {% if (forecast_data_range|float)==val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <span class="muted">Applies to forecast, distribution, and STL plots.</span>
+      </div>
       <script>
         (function () {
           const el = document.getElementById('forecastPctSelectTop');
+          const rangeEl = document.getElementById('dataRangeForecast');
           if (!el) return;
           el.addEventListener('change', function () {
             try {
               const url = new URL(window.location.href);
               url.searchParams.set('forecast_pct', this.value);
               url.searchParams.set('view', 'forecast');
+              if (rangeEl) {
+                url.searchParams.set('data_range', rangeEl.value);
+              }
               window.location.href = url.toString();
             } catch (e) { /* no-op */ }
           });
+          if (rangeEl) {
+            rangeEl.addEventListener('change', function () {
+              try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('data_range', this.value);
+                url.searchParams.set('view', 'forecast');
+                window.location.href = url.toString();
+              } catch (e) { /* no-op */ }
+            });
+          }
         })();
       </script>
       {% if analysis.forecast_plots_by_column %}
@@ -768,12 +795,13 @@
                 opt.textContent = item.column;
                 colPick.appendChild(opt);
               }
+              applySelectedColFromUrl(colPick);
               // Bind column picker change event
               colPick.addEventListener('change', onPickChange);
               // Bind data range selector to re-render on change
               const dataRangeSel = document.getElementById('dataRangePick');
               if (dataRangeSel) {
-                dataRangeSel.addEventListener('change', onPickChange);
+                dataRangeSel.addEventListener('change', onDataRangeChange);
               }
               // Render the first column
               onPickChange();
@@ -855,6 +883,83 @@
       function getDataRangePct() {
         const el = document.getElementById('dataRangePick');
         return el ? parseFloat(el.value) || 1.0 : 1.0;
+      }
+
+      function applyDataRangeFromUrl() {
+        const el = document.getElementById('dataRangePick');
+        if (!el) return;
+        const urlParams = new URLSearchParams(window.location.search);
+        const raw = urlParams.get('data_range');
+        if (!raw) return;
+        const parsed = parseFloat(raw);
+        if (!Number.isFinite(parsed)) return;
+
+        const options = Array.from(el.options || [])
+          .map(o => ({ value: parseFloat(o.value), raw: o.value }))
+          .filter(o => Number.isFinite(o.value));
+        if (!options.length) return;
+
+        let closest = options[0];
+        for (const opt of options) {
+          if (Math.abs(opt.value - parsed) < Math.abs(closest.value - parsed)) {
+            closest = opt;
+          }
+        }
+        el.value = closest.raw;
+      }
+
+      function persistDataRangeToUrl() {
+        const pct = getDataRangePct();
+        const url = new URL(window.location.href);
+        url.searchParams.set('data_range', String(pct));
+        window.history.replaceState({}, '', url.toString());
+      }
+
+      function getSelectedColFromUrl() {
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          return urlParams.get('selected_col') || '';
+        } catch (e) {
+          return '';
+        }
+      }
+
+      function applySelectedColFromUrl(selectEl) {
+        const target = getSelectedColFromUrl();
+        if (!target || !selectEl) return false;
+        const opt = Array.from(selectEl.options || []).find(o => o.value === target);
+        if (!opt) return false;
+        selectEl.value = target;
+        return true;
+      }
+
+      function onDataRangeChange() {
+        persistDataRangeToUrl();
+        onPickChange();
+      }
+
+      function syncHeaderLinksWithState() {
+        const selectedColEl = document.getElementById('colPick');
+        const selectedCol = selectedColEl ? selectedColEl.value : '';
+        const dataRange = String(getDataRangePct());
+
+        const links = document.querySelectorAll('header a[href]');
+        links.forEach((link) => {
+          try {
+            const url = new URL(link.getAttribute('href'), window.location.origin);
+            // Only patch in-app analyze/download links.
+            if (!/^\/analyze\//.test(url.pathname) && !/^\/download\//.test(url.pathname)) {
+              return;
+            }
+            if (selectedCol) {
+              url.searchParams.set('selected_col', selectedCol);
+            }
+            url.searchParams.set('data_range', dataRange);
+            link.setAttribute('href', `${url.pathname}${url.search}${url.hash}`);
+          } catch (e) {
+            // ignore malformed links
+          }
+        });
       }
 
       // Helper to filter traces to only show the latest X% of data
@@ -1680,6 +1785,13 @@
 
       function onPickChange() {
         const col = document.getElementById('colPick').value;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('selected_col', col);
+          url.searchParams.set('data_range', String(getDataRangePct()));
+          window.history.replaceState({}, '', url.toString());
+        } catch (e) { }
+        syncHeaderLinksWithState();
         if (interactiveMap[col]) renderFromPayload(interactiveMap[col]);
         else renderByFetch(col);
       }
@@ -1715,6 +1827,10 @@
 
       window.addEventListener('DOMContentLoaded', () => {
         const sel = document.getElementById('colPick');
+        applyDataRangeFromUrl();
+        if (sel) {
+          applySelectedColFromUrl(sel);
+        }
 
         // If interactive payload is empty, fetch via AJAX (fast-path optimization)
         if (interactivePayload.length === 0 && apiInteractiveUrl) {
@@ -1725,7 +1841,7 @@
           // Bind data range selector to re-render on change
           const dataRangeSel = document.getElementById('dataRangePick');
           if (dataRangeSel) {
-            dataRangeSel.addEventListener('change', onPickChange);
+            dataRangeSel.addEventListener('change', onDataRangeChange);
           }
         } else {
           document.getElementById('chart').innerHTML = '<div class="muted">Loading chart data...</div>';
@@ -1743,6 +1859,8 @@
             if (colPick && colPick.value) {
               url.searchParams.set('selected_col', colPick.value);
             }
+            const dataRange = getDataRangePct();
+            url.searchParams.set('data_range', String(dataRange));
             window.location.href = url.toString();
           });
         }
@@ -1750,8 +1868,7 @@
         bindPct('forecastPctSelectTop');
 
         // Restore selected column from URL parameter (for persistence across forecast % changes)
-        const urlParams = new URLSearchParams(window.location.search);
-        const savedCol = urlParams.get('selected_col');
+        const savedCol = getSelectedColFromUrl();
         if (savedCol && sel) {
           const opt = Array.from(sel.options).find(o => o.value === savedCol);
           if (opt) {

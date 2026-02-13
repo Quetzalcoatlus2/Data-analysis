@@ -15,10 +15,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from app import (
     AI_DESCRIBE_CACHE,
+    DATAFRAME_CACHE,
     INTERACTIVE_DATA_CACHE,
     NUMERIC_DF_CACHE,
     TinyLRU,
     _build_category_plotly_chart,
+    _build_interactive_cache_key,
     _compute_basic_stats,
     _compute_forecast,
     _thin_series_keep_extrema,
@@ -233,8 +235,8 @@ def test_forecast_does_not_copy_historical_segments():
         )
 
 
-def test_forecast_stays_within_data_bounds():
-    """Ensure forecast values and CI never exceed historical min/max."""
+def test_forecast_stays_within_data_bounds_without_edge_saturation():
+    """Forecast and CI should stay inside historical bounds without pegging exact edges."""
     rng = np.random.default_rng(7)
     # Data with clear bounds [20, 80]
     values = rng.uniform(20, 80, size=150)
@@ -244,13 +246,52 @@ def test_forecast_stays_within_data_bounds():
 
     fc, ci = _compute_forecast(series, 30)
 
-    # Forecast values must stay within [data_min, data_max]
     assert fc.min() >= data_min - 1e-9, f"Forecast min {fc.min()} < data_min {data_min}"
     assert fc.max() <= data_max + 1e-9, f"Forecast max {fc.max()} > data_max {data_max}"
-
-    # CI bounds must also stay within [data_min, data_max]
     assert ci["lower"].min() >= data_min - 1e-9, f"CI lower min {ci['lower'].min()} < data_min {data_min}"
     assert ci["upper"].max() <= data_max + 1e-9, f"CI upper max {ci['upper'].max()} > data_max {data_max}"
+
+    # Values should not sit exactly on boundaries (no saturation by clipping).
+    assert not np.isclose(fc.values, data_min, atol=1e-9).any()
+    assert not np.isclose(fc.values, data_max, atol=1e-9).any()
+
+
+def test_analyze_forecast_data_range_parsing_ratio_and_rows(monkeypatch):
+    """Detailed Analysis should parse data_range both as ratio and explicit row count."""
+    filename = "f" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(100, dtype=float)})
+    DATAFRAME_CACHE.set(filename, df)
+
+    captured = {}
+
+    def fake_render_template(_template, **kwargs):
+        captured["analysis"] = kwargs.get("analysis", {})
+        return "ok"
+
+    monkeypatch.setattr(app_module, "render_template", fake_render_template)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "generate_forecast_plot", lambda *_args, **_kwargs: "x")
+
+    def fake_get_cached_column_forecast(_filename, _column, _series, steps):
+        idx = pd.RangeIndex(int(steps))
+        return pd.Series(np.zeros(int(steps), dtype=float), index=idx), None
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+
+    with app.test_client() as client:
+        response_ratio = client.get(f"/analyze/{filename}?view=forecast&forecast_pct=0.05&data_range=0.50")
+        assert response_ratio.status_code == 200
+        controls_ratio = captured["analysis"]["controls"]
+        assert controls_ratio["data_range"] == pytest.approx(0.5)
+        assert controls_ratio["data_range_rows"] == 50
+
+        response_rows = client.get(f"/analyze/{filename}?view=forecast&forecast_pct=0.05&data_range=25")
+        assert response_rows.status_code == 200
+        controls_rows = captured["analysis"]["controls"]
+        assert controls_rows["data_range"] == pytest.approx(0.25)
+        assert controls_rows["data_range_rows"] == 25
 
 
 def test_forecast_continuity_with_history():
@@ -421,6 +462,105 @@ def test_api_interactive_returns_cached_payload_when_available():
         assert payload["ok"] is True
         assert payload["cached"] is True
         assert payload["data"] == cached_payload
+
+
+def test_api_interactive_returns_full_history_and_distribution(monkeypatch):
+    """Interactive API should return full data; range reduction is client-side."""
+    filename = "d" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.arange(0, 250, dtype=float)})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/api/interactive/{filename}?forecast_pct=0.1&contamination=0.02")
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["ok"] is True
+        assert payload["data"]
+
+        first = payload["data"][0]
+        history_trace = first["traces"][0]
+        assert len(history_trace["x"]) == 250
+        assert len(history_trace["y"]) == 250
+        assert len(first["distribution"]["values"]) == 250
+
+
+def test_api_interactive_cache_key_includes_request_params(monkeypatch):
+    """Different request params should not reuse the same interactive cached response."""
+    filename = "e" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.arange(1, 101, dtype=float)})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    def fake_get_cached_column_forecast(_f, _c, _s, steps):
+        idx = pd.RangeIndex(int(steps))
+        return pd.Series(np.full(int(steps), float(steps)), index=idx), None
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+
+    with app.test_client() as client:
+        r1 = client.get(f"/api/interactive/{filename}?forecast_pct=0.05&contamination=0.02")
+        r2 = client.get(f"/api/interactive/{filename}?forecast_pct=0.2&contamination=0.02")
+
+    p1 = r1.get_json()
+    p2 = r2.get_json()
+    assert p1["ok"] is True and p2["ok"] is True
+
+    t1 = p1["data"][0]["traces"][-1]["y"][-1]
+    t2 = p2["data"][0]["traces"][-1]["y"][-1]
+    assert t1 != t2
+
+
+def test_interactive_cache_key_varies_by_params():
+    """Interactive cache key should isolate forecast/contamination variants."""
+    filename = "a" * 40 + ".csv"
+    k1 = _build_interactive_cache_key(filename, 0.05, 0.02)
+    k2 = _build_interactive_cache_key(filename, 0.10, 0.02)
+    k3 = _build_interactive_cache_key(filename, 0.05, 0.05)
+    assert k1 != k2
+    assert k1 != k3
+
+
+def test_static_plots_zip_caps_forecast_steps(monkeypatch):
+    """ZIP export should cap forecast horizon to avoid excessive compute."""
+    filename = "c" * 40 + ".csv"
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.linspace(1, 100, 5000)})
+    captured: dict[str, int] = {}
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    def fake_get_cached_column_forecast(_filename, _column, _series, steps):
+        captured["steps"] = int(steps)
+        idx = pd.RangeIndex(int(steps))
+        return pd.Series(np.zeros(int(steps)), index=idx), None
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+    monkeypatch.setattr(
+        app_module,
+        "generate_forecast_plot",
+        lambda *_args, **_kwargs: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII=",
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip")
+        assert response.status_code == 200
+
+    assert captured.get("steps") == 120
 
 
 def test_static_plots_zip_includes_category_images(monkeypatch):
