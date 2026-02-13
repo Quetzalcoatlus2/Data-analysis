@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import re
+import sys
 import time
 import traceback
 import uuid
@@ -17,32 +18,39 @@ from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from typing import Any
 
-import google.generativeai as genai
 import matplotlib
 import numpy as np
 import pandas as pd
 from matplotlib.transforms import blended_transform_factory
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
-from fpdf import FPDF
 from sklearn.ensemble import IsolationForest  # type: ignore[import-untyped]
 from statsmodels.tsa.seasonal import STL  # type: ignore[import-untyped]
 from werkzeug.utils import secure_filename
 
-warnings.filterwarnings(
-    "ignore",
-    category=FutureWarning,
-    message=r".*google\.generativeai.*",
-)
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        category=FutureWarning,
+        module=r"google\.generativeai.*",
+    )
+    warnings.filterwarnings(
+        "ignore",
+        category=FutureWarning,
+        message=r".*google\.generativeai.*",
+    )
+    warnings.filterwarnings(
+        "ignore",
+        message=r"You have both PyFPDF & fpdf2 installed\..*",
+        category=UserWarning,
+        module=r"fpdf",
+    )
+    import google.generativeai as genai
+    from fpdf import FPDF
+
 warnings.filterwarnings(
     "ignore",
     category=FutureWarning,
     module=r"app",
-)
-warnings.filterwarnings(
-    "ignore",
-    message=r"You have both PyFPDF & fpdf2 installed\..*",
-    category=UserWarning,
-    module=r"fpdf",
 )
 
 # Optional / Feature Flag Imports
@@ -128,6 +136,7 @@ app.config.setdefault('AI_RETRY_ATTEMPTS', int(os.getenv("AI_RETRY_ATTEMPTS", "2
 app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACKOFF_SECONDS", "2.0")))
 app.config.setdefault('FORECAST_MAX_INPUT_POINTS', int(os.getenv('FORECAST_MAX_INPUT_POINTS', '4000')))
 app.config.setdefault('FORECAST_BOOTSTRAP_SAMPLES', int(os.getenv('FORECAST_BOOTSTRAP_SAMPLES', '60')))
+app.config.setdefault('CACHE_STATS_LOG_EVERY', int(os.getenv('CACHE_STATS_LOG_EVERY', '0')))
 # PERFORMANCE: Browser caching for static files (CSS, JS) - 1 hour
 app.config.setdefault('SEND_FILE_MAX_AGE_DEFAULT', int(os.getenv('SEND_FILE_MAX_AGE', '3600')))
 
@@ -603,29 +612,69 @@ class TinyLRU(OrderedDict):
         super().__init__()
         self.max_items = max_items
         self.max_size_mb = max_size_mb  # optional size limit in MB
+        self.hits = 0
+        self.misses = 0
+        self.sets = 0
+        self.evictions = 0
+
+    def _estimate_size_bytes(self, value) -> int:
+        try:
+            if value is None:
+                return 0
+            if isinstance(value, pd.DataFrame):
+                return int(value.memory_usage(deep=True).sum())
+            if isinstance(value, pd.Series):
+                return int(value.memory_usage(deep=True))
+            if isinstance(value, np.ndarray):
+                return int(value.nbytes)
+            if isinstance(value, (bytes, bytearray)):
+                return int(len(value))
+            if isinstance(value, str):
+                return int(len(value.encode('utf-8', errors='ignore')))
+            return int(sys.getsizeof(value))
+        except Exception:
+            try:
+                return int(sys.getsizeof(value))
+            except Exception:
+                return 0
+
     def get(self, key, default=None):
         if key in self:
+            self.hits += 1
             val = super().pop(key)
             super().__setitem__(key, val)  
             return val
+        self.misses += 1
         return default
     def set(self, key, value):
+        self.sets += 1
         if key in self:
             super().pop(key)
         super().__setitem__(key, value)
         # Evict based on item count
         while len(self) > self.max_items:
+            self.evictions += 1
             self.popitem(last=False)
         # Evict based on size (for DataFrames)
         if self.max_size_mb:
             try:
-                import sys
-                total_bytes = sum(sys.getsizeof(v) for v in self.values() if v is not None)
+                total_bytes = sum(self._estimate_size_bytes(v) for v in self.values())
                 while total_bytes > (self.max_size_mb * 1024 * 1024) and len(self) > 1:
+                    self.evictions += 1
                     self.popitem(last=False)
-                    total_bytes = sum(sys.getsizeof(v) for v in self.values() if v is not None)
+                    total_bytes = sum(self._estimate_size_bytes(v) for v in self.values())
             except Exception:
                 pass  # If size calculation fails, rely on item count limit only
+
+    def stats(self) -> dict[str, int]:
+        return {
+            "size": len(self),
+            "max_items": int(self.max_items),
+            "hits": int(self.hits),
+            "misses": int(self.misses),
+            "sets": int(self.sets),
+            "evictions": int(self.evictions),
+        }
 
 DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'], max_size_mb=int(os.getenv('DATAFRAME_CACHE_MAX_MB', '200')))
 NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  
@@ -654,6 +703,39 @@ HEATMAP_CACHE = TinyLRU(max_items=20)
 NUMERIC_DF_CACHE = TinyLRU(max_items=10)
 # PERFORMANCE: Cache describe_for_ai output - expensive string building with sorts
 AI_DESCRIBE_CACHE = TinyLRU(max_items=20)
+
+_CACHE_LOG_COUNTER = 0
+
+def _log_cache_stats_if_needed(context: str):
+    """Periodically log cache hit/miss stats for request-time observability."""
+    global _CACHE_LOG_COUNTER
+    try:
+        every_n = int(app.config.get('CACHE_STATS_LOG_EVERY', 0) or 0)
+    except Exception:
+        every_n = 0
+    if every_n <= 0:
+        return
+
+    _CACHE_LOG_COUNTER += 1
+    if _CACHE_LOG_COUNTER % every_n != 0:
+        return
+
+    try:
+        watched = {
+            "DF": DATAFRAME_CACHE,
+            "NUM": NUMERIC_DF_CACHE,
+            "ANOM": ANOMALY_CACHE,
+            "FC": COLUMN_FORECAST_CACHE,
+            "INT": INTERACTIVE_DATA_CACHE,
+            "CORR": CORRELATION_CACHE,
+        }
+        parts = []
+        for name, cache in watched.items():
+            st = cache.stats()
+            parts.append(f"{name}({st['size']}/{st['max_items']} h={st['hits']} m={st['misses']} e={st['evictions']})")
+        app.logger.info("CacheStats[%s]: %s", context, " | ".join(parts))
+    except Exception:
+        pass
 
 if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
     app.logger.addHandler(file_handler)
@@ -1462,10 +1544,10 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         if anomalies_idx is not None and len(anomalies_idx):
             an_positions = []
             an_values = []
-            index_list = list(data.index)
+            idx_to_pos = {idx: pos for pos, idx in enumerate(data.index)}
             for idx in anomalies_idx:
-                if idx in index_list:
-                    pos = index_list.index(idx)
+                pos = idx_to_pos.get(idx)
+                if pos is not None:
                     an_positions.append(pos)
                     an_values.append(float(data.iloc[pos]))
             if an_positions:
@@ -2079,12 +2161,11 @@ def generate_forecast_plot(
                 # Find numeric positions for anomalies in the history tail
                 an_positions = []
                 an_values = []
+                idx_to_pos = {idx: pos for pos, idx in enumerate(history_tail_series.index)}
                 for idx in anomalies_idx:
-                    if idx in history_tail_series.index:
-                        pos = list(history_tail_series.index).index(idx)
-                        val = history_tail_series.loc[idx]
-                        if isinstance(val, pd.Series):
-                            val = val.iloc[0]
+                    pos = idx_to_pos.get(idx)
+                    if pos is not None:
+                        val = history_tail_series.iloc[pos]
                         an_positions.append(pos)
                         an_values.append(float(val))
                 
@@ -3729,11 +3810,13 @@ def analyze_file(filename):
         ai_answer = ai_answer_html  
 
     analysis = {}
-    plots = []
     forecast_plots = []
     anomalies_found = {}
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
     used_cols = []
+
+    # Reuse cached numeric coercion once per request to avoid repeated pd.to_numeric work.
+    numeric_df_cached = get_cached_numeric_df(filename, df)
 
     # Correlation: only compute for views that actually need it (overview & correlation)
     corr_payload = None
@@ -3741,13 +3824,13 @@ def analyze_file(filename):
         corr_payload = CORRELATION_CACHE.get(filename)
         if corr_payload is None:
             try:
-                num_df = coerce_numeric_df(df).select_dtypes(include='number')
+                num_df = numeric_df_cached
                 if num_df is not None and not num_df.empty:
                     valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
                     num_df = num_df[valid]
                     keep = []
                     for c in num_df.columns:
-                        s = pd.to_numeric(num_df[c], errors='coerce').dropna()
+                        s = num_df[c].dropna()
                         if s.empty:
                             continue
                         if float(s.max()) == float(s.min()):
@@ -3821,7 +3904,7 @@ def analyze_file(filename):
         cached_info = get_cached_df_info(filename, df)
         
         # Use cached numeric DF to avoid per-column pd.to_numeric calls
-        _num_df = get_cached_numeric_df(filename, df)
+        _num_df = numeric_df_cached
         used_cols = list(_num_df.columns)[:20] if _num_df is not None and not _num_df.empty else list(df.columns)[:20]
         
         # Build minimal AI context without expensive operations
@@ -3878,6 +3961,7 @@ def analyze_file(filename):
         
         total_dt = time.perf_counter() - request_start
         app.logger.info("Analyze FAST PATH done file=%s view=%s elapsed=%.2fs", filename, active_view, total_dt)
+        _log_cache_stats_if_needed("analyze-fast")
         
         # Compute AI model attribution for template (same logic as full path)
         _ai_model_name = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
@@ -3904,10 +3988,11 @@ def analyze_file(filename):
     skip_forecasts = False
 
     for column in df.columns:
-            
-            series_raw = df[column]
+            if column not in numeric_df_cached.columns:
+                continue
+
             try:
-                series = pd.to_numeric(series_raw, errors='coerce').dropna()
+                series = numeric_df_cached[column].dropna()
             except Exception:
                 series = pd.Series(dtype=float)
             if series.empty:
@@ -3951,7 +4036,7 @@ def analyze_file(filename):
                         thin_fc_points = max(2, int(len(fc_mean) * thinning_ratio))
                         fc_mean_thin = _thin_series(fc_mean, max_points=thin_fc_points)
                         if conf_df is not None and isinstance(conf_df, pd.DataFrame):
-                            conf_df_thin = conf_df.loc[fc_mean_thin.index] if all(idx in conf_df.index for idx in fc_mean_thin.index) else None
+                            conf_df_thin = conf_df.reindex(fc_mean_thin.index)
                         else:
                             conf_df_thin = None
                     else:
@@ -4061,15 +4146,6 @@ def analyze_file(filename):
                     x_range = max(xlim[1] - xlim[0], 1e-9)
                     ax.set_xlim(xlim[0] - x_range * 0.04, xlim[1] + x_range * 0.04)
                     xlim = ax.get_xlim()
-
-                    def _dist_label_pos(x_val):
-                        right_threshold = xlim[1] - 0.10 * (xlim[1] - xlim[0])
-                        left_threshold = xlim[0] + 0.10 * (xlim[1] - xlim[0])
-                        if x_val >= right_threshold:
-                            return (-4, 12), 'right'
-                        if x_val <= left_threshold:
-                            return (4, 12), 'left'
-                        return (0, 12), 'center'
 
                     # Requirement: min tag on the LEFT, max tag on the RIGHT, but slightly closer to center.
                     min_xytext, min_ha = (-3, 12), 'right'
@@ -4278,15 +4354,14 @@ def analyze_file(filename):
     try:
         if build_forecast and not forecast_plots:
             for column in df.columns:
-                try:
-                    series = pd.to_numeric(df[column], errors='coerce').dropna()
-                except Exception:
+                if column not in numeric_df_cached.columns:
                     continue
+                series = numeric_df_cached[column].dropna()
                 if len(series) >= 5:
                     # Detect anomalies for fallback forecast
-                    an_idx_fb, _ = detect_anomalies(series, contamination=user_contam)
+                    an_idx_fb, _ = get_cached_anomalies(filename, column, series, user_contam)
                     steps = effective_steps
-                    fc_mean, conf_df = _compute_forecast(series, steps)
+                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
                     title_fc = f"Forecast for {column}"
                     s_hist = _thin_series_keep_extrema(series, max_points=600)
                     forecast_plots.append({
@@ -4442,6 +4517,7 @@ def analyze_file(filename):
     app.logger.debug("AI model attribution: CURRENT_MODEL_NAME=%s, AI_STATUS.model=%s, DEFAULT=%s, display=%s, valid=%s",
                      CURRENT_MODEL_NAME, AI_STATUS.get('model'), DEFAULT_AI_MODEL, ai_model_display, ai_is_valid)
     
+    _log_cache_stats_if_needed("analyze")
     return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name, 
                            ai_model_name=ai_model_display, ai_is_valid=ai_is_valid)
 
@@ -4496,6 +4572,7 @@ def api_interactive_data(filename):
     cache_key = filename
     cached = INTERACTIVE_DATA_CACHE.get(cache_key)
     if cached is not None:
+        _log_cache_stats_if_needed("interactive-cached")
         return jsonify({"ok": True, "data": cached, "cached": True})
     
     # Load DataFrame
@@ -4529,6 +4606,7 @@ def api_interactive_data(filename):
     # 0% means no forecast
     effective_steps = 0 if pct == 0 else max(2, int(math.ceil(total_rows * pct)))
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
+    numeric_df_cached = get_cached_numeric_df(filename, df)
     
     interactive = []
     cols_processed = 0
@@ -4537,24 +4615,17 @@ def api_interactive_data(filename):
     for column in df.columns:
         if cols_processed >= max_cols:
             break
-            
-        try:
-            series = pd.to_numeric(df[column], errors='coerce').dropna()
-        except Exception:
+
+        if column not in numeric_df_cached.columns:
             continue
+        series = numeric_df_cached[column].dropna()
         if series.empty or len(series) < 5:
             continue
         
         cols_processed += 1
         
-        # Check anomaly cache
-        anomaly_key = (filename, str(column), user_contam)
-        cached_anomalies = ANOMALY_CACHE.get(anomaly_key)
-        if cached_anomalies is not None:
-            an_idx = cached_anomalies
-        else:
-            an_idx, _ = detect_anomalies(series, contamination=user_contam)
-            ANOMALY_CACHE.set(anomaly_key, an_idx)
+        # Reuse shared anomaly cache helper.
+        an_idx, _ = get_cached_anomalies(filename, column, series, user_contam)
         
         # Build traces using NUMERIC indices for proportional X-axis display
         # This ensures forecast (e.g. 20%) takes proportionally 20% of chart width
@@ -4585,8 +4656,9 @@ def api_interactive_data(filename):
             an_positions = []
             an_values = []
             an_labels = []
+            an_idx_set = set(an_idx)
             for i, idx in enumerate(s_tail.index):
-                if idx in an_idx:
+                if idx in an_idx_set:
                     an_positions.append(i)
                     an_values.append(_safe_number(s_tail.iloc[i]))
                     an_labels.append(str(idx))
@@ -4690,6 +4762,7 @@ def api_interactive_data(filename):
     
     # Cache the result
     INTERACTIVE_DATA_CACHE.set(cache_key, interactive)
+    _log_cache_stats_if_needed("interactive")
     
     return jsonify({"ok": True, "data": interactive, "cached": False})
 
@@ -4787,6 +4860,8 @@ def download_static_plots_zip(filename):
         return ("Not found", 404)
 
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
+    numeric_df_cached = get_cached_numeric_df(filename, df)
+    numeric_cols = {col for col in numeric_df_cached.columns}
     bio = io.BytesIO()
     
     # Calculate forecast steps as 10% of dataset size
@@ -4813,15 +4888,17 @@ def download_static_plots_zip(filename):
         
         # Generate plots for each numeric column
         for col in df.columns:
+            if col not in numeric_cols:
+                continue
             try:
-                s = pd.to_numeric(df[col], errors='coerce').dropna()
+                s = numeric_df_cached[col].dropna()
             except Exception:
                 s = pd.Series(dtype=float)
             if s.empty or len(s) < 3:
                 continue
             
             # Detect anomalies for this column
-            an_idx, an_score = detect_anomalies(s, contamination=0.02)
+            an_idx, an_score = get_cached_anomalies(filename, col, s, 0.02)
             
             # Trend plot with anomalies
             try:
@@ -4963,9 +5040,8 @@ def download_static_plots_zip(filename):
         # Generate Categories bar charts for non-numeric columns (top 50)
         for col in df.columns:
             try:
-                # Check if column is non-numeric (categorical)
-                s_numeric = pd.to_numeric(df[col], errors='coerce')
-                if s_numeric.notna().sum() >= 3:
+                # Skip numeric columns already processed above
+                if col in numeric_cols:
                     continue  # Skip - already processed as numeric
                 
                 # Process as categorical
@@ -5507,11 +5583,16 @@ def download_full_report_pdf(filename):
         pdf.ln(2)
         
         is_ts = isinstance(df.index, pd.DatetimeIndex)
+        numeric_df_cached = get_cached_numeric_df(filename, df)
+        numeric_cols = {col for col in numeric_df_cached.columns}
         first_col = True
         
         for col in df.columns:
             is_numeric = False
-            s = pd.to_numeric(df[col], errors='coerce').dropna()
+            if col in numeric_cols:
+                s = numeric_df_cached[col].dropna()
+            else:
+                s = pd.Series(dtype=float)
             
             # Check if valid numeric column (enough data)
             if len(s) >= 3:
@@ -5522,14 +5603,6 @@ def download_full_report_pdf(filename):
                 # Skip if empty
                 if s.empty:
                     continue
-
-            # Ensure series has proper index logic if it switched type
-            if is_numeric and not isinstance(s.index, type(df.index)):
-                 try:
-                     s_temp = df[col].copy()
-                     s = pd.to_numeric(s_temp, errors='coerce').dropna()
-                 except Exception:
-                     pass
 
             # Force new page for EACH column to ensure clean layout
             # We don't use add_section_title here because we want a specific format
@@ -5567,7 +5640,7 @@ def download_full_report_pdf(filename):
             if is_numeric and len(s) >= 10:
                 try:
                     # Detect anomalies
-                    an_idx, _ = detect_anomalies(s, contamination=0.02)
+                    an_idx, _ = get_cached_anomalies(filename, col, s, 0.02)
                     
                     # Generate trend plot (no forecast, just history + anomalies)
                     trend_title = f"Trend: {col}"

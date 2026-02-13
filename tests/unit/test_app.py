@@ -11,9 +11,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from app import (
     AI_DESCRIBE_CACHE,
+    INTERACTIVE_DATA_CACHE,
+    NUMERIC_DF_CACHE,
+    TinyLRU,
     _build_category_plotly_chart,
     _compute_basic_stats,
     _compute_forecast,
+    _thin_series_keep_extrema,
     allowed_file,
     app,
     describe_for_ai,
@@ -21,6 +25,7 @@ from app import (
     generate_forecast_plot,
     generate_plot,
     get_cached_anomalies,
+    get_cached_numeric_df,
 )
 
 def test_allowed_file():
@@ -309,3 +314,78 @@ def test_forecast_mean_matches_recent_history():
         f"Forecast mean {fc_mean:.2f} too far from recent mean {recent_mean:.2f}: "
         f"{pct_diff:.1f}% of range ({data_range:.1f}), expected < 15%"
     )
+
+
+def test_tinylru_hit_miss_and_eviction_stats():
+    """TinyLRU should track hits/misses and evict by max_items."""
+    cache = TinyLRU(max_items=2)
+    assert cache.get("missing") is None
+    cache.set("a", 1)
+    cache.set("b", 2)
+    assert cache.get("a") == 1  # hit
+    cache.set("c", 3)  # evicts one key
+    st = cache.stats()
+    assert st["hits"] >= 1
+    assert st["misses"] >= 1
+    assert st["evictions"] >= 1
+    assert st["size"] <= 2
+
+
+def test_tinylru_size_based_eviction_for_large_values():
+    """TinyLRU should evict when max_size_mb is exceeded."""
+    cache = TinyLRU(max_items=10, max_size_mb=0.0001)
+    cache.set("a", "x" * 200_000)
+    cache.set("b", "y" * 200_000)
+    st = cache.stats()
+    assert st["evictions"] >= 1
+    assert st["size"] == 1
+
+
+def test_thin_series_keep_extrema_includes_min_max_and_last():
+    """Extrema-preserving thinning must retain min/max and final point."""
+    s = pd.Series([10, 11, 12, -5, 13, 14, 99, 15, 16, 17], index=pd.RangeIndex(10))
+    thinned = _thin_series_keep_extrema(s, max_points=4)
+
+    assert s.idxmin() in thinned.index
+    assert s.idxmax() in thinned.index
+    assert s.index[-1] in thinned.index
+    assert thinned.index.is_monotonic_increasing
+
+
+def test_get_cached_numeric_df_reuses_cache_entry():
+    """get_cached_numeric_df should return cached object for same filename."""
+    NUMERIC_DF_CACHE.clear()
+    df = pd.DataFrame({"a": ["1", "2", "3"], "b": ["x", "y", "z"]})
+
+    r1 = get_cached_numeric_df("numeric_cache_case.csv", df)
+    r2 = get_cached_numeric_df("numeric_cache_case.csv", df)
+
+    assert isinstance(r1, pd.DataFrame)
+    assert r1 is r2
+    assert "a" in r1.columns
+    assert r1["a"].dtype.kind in ("f", "i")
+
+
+def test_api_interactive_invalid_filename_rejected():
+    """Interactive API should reject invalid filename format."""
+    with app.test_client() as client:
+        response = client.get('/api/interactive/not-a-valid-name.csv')
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload["ok"] is False
+
+
+def test_api_interactive_returns_cached_payload_when_available():
+    """Interactive API should return cached data without recomputing when cache is warm."""
+    filename = "a" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    cached_payload = [{"column": "x", "traces": [], "layout": {}, "distribution": {"name": "x", "values": []}, "stats": None}]
+    INTERACTIVE_DATA_CACHE.set(filename, cached_payload)
+
+    with app.test_client() as client:
+        response = client.get(f'/api/interactive/{filename}')
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["ok"] is True
+        assert payload["cached"] is True
+        assert payload["data"] == cached_payload
