@@ -1531,14 +1531,14 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         # Map index labels to positions for tick labels
         if len(data) > 20:
             # Show fewer tick labels if many points
-            step = max(1, len(data) // 10)
+            step = max(1, len(data) // 8)
             tick_positions = list(range(0, len(data), step))
             tick_labels = [str(data.index[i])[:15] for i in tick_positions]  # Truncate long labels
         else:
             tick_positions = list(x_positions)
             tick_labels = [str(idx)[:15] for idx in data.index]
         ax.set_xticks(tick_positions)
-        ax.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=7)
+        ax.set_xticklabels(tick_labels, rotation=35, ha='right', fontsize=7)
         
         # Plot anomalies at correct numeric positions
         if anomalies_idx is not None and len(anomalies_idx):
@@ -1634,7 +1634,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
 
         # Legend on single line - at the lowest position below x-axis label
-        ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.30), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
+        ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.6, handletextpad=0.3)
 
         # Std appears in legend only
     except Exception:
@@ -1977,12 +1977,15 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
     else:
         chart_title = f"Categories: {col} ({total_unique} unique)"
 
+    x_values = [str(x) for x in top_counts.index.tolist()]
+    y_values = [int(y) for y in top_counts.values.tolist()]
+
     bar_trace = {
         "type": "bar",
         "name": "Count",
-        "x": [str(x) for x in top_counts.index.tolist()],
-        "y": [int(y) for y in top_counts.values.tolist()],
-        "text": [int(y) for y in top_counts.values.tolist()],
+        "x": x_values,
+        "y": y_values,
+        "text": y_values,
         "textposition": "outside",
         "textfont": {"size": 9},
         "cliponaxis": False,
@@ -1990,7 +1993,31 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
         "hovertemplate": "%{x}<br>Count: %{y}<extra></extra>"
     }
 
-    traces = [bar_trace]
+    avg_trace = {
+        "type": "scatter",
+        "mode": "lines",
+        "name": f"Avg: {avg_count:.1f}",
+        "x": [None],
+        "y": [None],
+        "line": {"color": "#f39c12", "width": 2, "dash": "dot"},
+        "showlegend": True,
+        "meta": "avg-control",
+        "hoverinfo": "skip"
+    }
+
+    med_trace = {
+        "type": "scatter",
+        "mode": "lines",
+        "name": f"Med: {med_count:.1f}",
+        "x": [None],
+        "y": [None],
+        "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"},
+        "showlegend": True,
+        "meta": "med-control",
+        "hoverinfo": "skip"
+    }
+
+    traces = [bar_trace, avg_trace, med_trace]
 
     layout = {
         "title": {"text": chart_title, "x": 0.5, "xanchor": "center", "font": {"color": "#e0e0e0"}},
@@ -2019,7 +2046,8 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
                 "x1": 1,
                 "y0": avg_count,
                 "y1": avg_count,
-                "line": {"color": "#f39c12", "width": 2, "dash": "dot"}
+                "line": {"color": "#f39c12", "width": 2, "dash": "dot"},
+                "name": "avg-shape"
             },
             {
                 "type": "line",
@@ -2029,7 +2057,8 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
                 "x1": 1,
                 "y0": med_count,
                 "y1": med_count,
-                "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"}
+                "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"},
+                "name": "med-shape"
             }
         ],
         "annotations": [
@@ -2041,7 +2070,8 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
                 "text": f"Avg: {avg_count:.1f}",
                 "showarrow": False,
                 "font": {"size": 10, "color": "#f39c12"},
-                "xanchor": "left"
+                "xanchor": "left",
+                "name": "avg-annot"
             },
             {
                 "x": 1.01,
@@ -2051,29 +2081,12 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
                 "text": f"Med: {med_count:.1f}",
                 "showarrow": False,
                 "font": {"size": 10, "color": "#9b59b6"},
-                "xanchor": "left"
+                "xanchor": "left",
+                "name": "med-annot"
             }
         ]
     }
 
-    traces.append({
-        "type": "scatter",
-        "mode": "lines",
-        "name": f"Avg: {avg_count:.1f}",
-        "x": [None],
-        "y": [None],
-        "line": {"color": "#f39c12", "width": 2, "dash": "dot"},
-        "showlegend": True
-    })
-    traces.append({
-        "type": "scatter",
-        "mode": "lines",
-        "name": f"Med: {med_count:.1f}",
-        "x": [None],
-        "y": [None],
-        "line": {"color": "#9b59b6", "width": 2, "dash": "dashdot"},
-        "showlegend": True
-    })
     traces.append({
         "type": "scatter",
         "mode": "markers",
@@ -4861,7 +4874,10 @@ def download_static_plots_zip(filename):
 
     is_timeseries = isinstance(df.index, pd.DatetimeIndex)
     numeric_df_cached = get_cached_numeric_df(filename, df)
-    numeric_cols = {col for col in numeric_df_cached.columns}
+    numeric_cols = {
+        col for col in numeric_df_cached.columns
+        if numeric_df_cached[col].notna().sum() >= 3
+    }
     bio = io.BytesIO()
     
     # Calculate forecast steps as 10% of dataset size
@@ -4903,12 +4919,17 @@ def download_static_plots_zip(filename):
             # Trend plot with anomalies
             try:
                 title = f"Trend for {col}"
-                img_b64 = generate_plot(
+                img_b64 = generate_forecast_plot(
                     s,
+                    None,
                     title,
                     'Timestamp' if is_timeseries else 'Index',
                     col,
-                    anomalies_idx=an_idx
+                    conf_int=None,
+                    history_tail=None,
+                    anomalies_idx=an_idx,
+                    legend_y=-0.18,
+                    xlabel_labelpad=6
                 )
                 raw = base64.b64decode(img_b64.encode('utf-8'))
                 zf.writestr(f"{secure_filename(str(col))}_trend.png", raw)
@@ -5385,7 +5406,22 @@ def download_full_report_pdf(filename):
                     chunks = re.split(r'(?=<(?:p|ul|ol|h[1-6]|table)[^>]*>)', html_text, flags=re.I)
                     chunks = [c.strip() for c in chunks if c.strip()]
                     
-                    for chunk in chunks:
+                    for idx, chunk in enumerate(chunks):
+                        # Keep PDF summary strictly formatted: skip non-HTML/plain chunks.
+                        if not re.match(r'^<(?:p|ul|ol|h[1-6]|table)\b', chunk, flags=re.I):
+                            continue
+
+                        is_heading = bool(re.match(r'^<h[1-6]\b', chunk, flags=re.I))
+                        next_chunk = chunks[idx + 1] if idx + 1 < len(chunks) else ""
+                        next_is_block = bool(re.match(r'^<(?:p|ul|ol|table)\b', next_chunk, flags=re.I))
+
+                        # Avoid orphan headings at page bottom: force page break earlier for titles.
+                        # Keep room for heading plus at least one following block.
+                        if is_heading and pdf.get_y() > 222:
+                            pdf.add_page()
+                        elif is_heading and next_is_block and pdf.get_y() > 214:
+                            pdf.add_page()
+
                         # Check if we need a new page before rendering this chunk
                         # If near bottom, start fresh to keep content together
                         if pdf.get_y() > 240:  # 240mm leaves ~57mm for content (roughly 8-10 lines)
@@ -5394,19 +5430,19 @@ def download_full_report_pdf(filename):
                         # Render this chunk
                         try:
                             pdf.write_html(chunk)
-                        except Exception:
-                            # Fallback to plain text for this chunk
-                            plain = re.sub(r'<[^>]+>', ' ', chunk)
-                            pdf.multi_cell(0, 5, plain.strip())
+                        except Exception as chunk_err:
+                            app.logger.warning("Skipping unrenderable HTML chunk in PDF summary: %s", chunk_err)
                     
                     pdf.ln(5)
                     pdf.set_font(font_family, size=10)
                     return
                 except Exception as e:
-                    app.logger.warning(f"write_html failed: {e}, falling back to plain text")
-                    # Fall back to plain text conversion
-                    text = convert_html_to_formatted_text(text)
-                    text = replace_emojis_for_pdf(text)
+                    app.logger.warning("write_html failed for PDF summary: %s", e)
+                    # For HTML summary blocks, do not fall back to unformatted text.
+                    # This prevents duplicate/formatted+plain rendering.
+                    pdf.ln(5)
+                    pdf.set_font(font_family, size=10)
+                    return
             
             # Standard text rendering
             if courier:
@@ -5523,6 +5559,22 @@ def download_full_report_pdf(filename):
             add_section_title("2. AI Analysis Summary")
             # Use write_html to preserve formatting
             add_text_block(ai_html, is_html=True)
+
+            # Always include model attribution at the bottom of the summary section.
+            try:
+                model_name = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+                if isinstance(model_name, str) and model_name.startswith('models/'):
+                    model_name = model_name[7:]
+                is_valid_summary = not _is_offline_html(ai_html)
+                label = "Model used for AI summary" if is_valid_summary else "Configured AI model"
+                pdf.set_font(font_family, 'I', 9)
+                pdf.set_text_color(120, 120, 120)
+                pdf.cell(0, 6, f"{label}: {model_name}", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_text_color(0, 0, 0)
+                pdf.set_font(font_family, size=10)
+                pdf.ln(2)
+            except Exception:
+                pass
 
         # Correlation Heatmaps
         try:

@@ -1,6 +1,10 @@
 
 import sys
 import os
+import io
+import zipfile
+
+import app as app_module
 
 import numpy as np
 import pandas as pd
@@ -99,6 +103,34 @@ def test_build_category_plotly_chart_has_bar_labels():
     assert bar.get("type") == "bar"
     assert bar.get("textposition") == "outside"
     assert len(bar.get("text", [])) == len(bar.get("x", []))
+
+
+def test_build_category_plotly_chart_avg_med_are_toggleable_traces():
+    """Avg/Med should be legend-controlled traces and full-width layout shapes."""
+    series = pd.Series(["A", "A", "A", "B", "B", "C", "D", "D"])
+    chart = _build_category_plotly_chart(series, "Category")
+    assert chart is not None
+
+    traces = chart.get("traces") or []
+    layout = chart.get("layout") or {}
+    shapes = layout.get("shapes") or []
+
+    avg_trace = next((t for t in traces if t.get("meta") == "avg-control"), None)
+    med_trace = next((t for t in traces if t.get("meta") == "med-control"), None)
+
+    assert avg_trace is not None
+    assert med_trace is not None
+    assert avg_trace.get("type") == "scatter"
+    assert med_trace.get("type") == "scatter"
+    assert avg_trace.get("mode") == "lines"
+    assert med_trace.get("mode") == "lines"
+    assert len(shapes) >= 2
+    assert shapes[0].get("xref") == "paper"
+    assert shapes[0].get("x0") == 0
+    assert shapes[0].get("x1") == 1
+    assert shapes[1].get("xref") == "paper"
+    assert shapes[1].get("x0") == 0
+    assert shapes[1].get("x1") == 1
 
 
 def test_compute_forecast_reproducible():
@@ -389,3 +421,57 @@ def test_api_interactive_returns_cached_payload_when_available():
         assert payload["ok"] is True
         assert payload["cached"] is True
         assert payload["data"] == cached_payload
+
+
+def test_static_plots_zip_includes_category_images(monkeypatch):
+    """ZIP export should include *_categories.png files for true categorical columns."""
+    filename = "a" * 40 + ".csv"
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({
+        "city": ["Iasi", "Iasi", "Cluj", "Bucharest", "Cluj", "Iasi"],
+        "segment": ["A", "B", "A", "B", "A", "C"],
+    })
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "generate_correlation_heatmap", lambda *_args, **_kwargs: None)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip")
+        assert response.status_code == 200
+        assert response.headers.get("Content-Type") == "application/zip"
+
+        with zipfile.ZipFile(io.BytesIO(response.data), "r") as zf:
+            names = zf.namelist()
+
+    assert any(name.endswith("_categories.png") for name in names)
+
+
+def test_static_plots_zip_trend_uses_forecast_renderer(monkeypatch):
+    """ZIP trend images should use generate_forecast_plot for consistent rendering."""
+    filename = "b" * 40 + ".csv"
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"year": np.linspace(2000, 2010, 60), "city": ["A"] * 60})
+
+    calls = {"forecast": 0, "trend": 0}
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "generate_correlation_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "generate_plot", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("generate_plot should not be used for ZIP trend")))
+
+    def fake_generate_forecast_plot(*_args, **_kwargs):
+        calls["forecast"] += 1
+        # 1x1 transparent PNG
+        return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII="
+
+    monkeypatch.setattr(app_module, "generate_forecast_plot", fake_generate_forecast_plot)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip")
+        assert response.status_code == 200
+        with zipfile.ZipFile(io.BytesIO(response.data), "r") as zf:
+            names = zf.namelist()
+
+    assert any(name.endswith("_trend.png") for name in names)
+    assert calls["forecast"] >= 1

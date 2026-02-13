@@ -1958,6 +1958,55 @@
                     modeBarButtonsToRemove: [],
                     toImageButtonOptions: { format: 'png', filename: 'category_chart_' + col.replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
                   });
+
+                  if (typeof el.removeAllListeners === 'function') {
+                    el.removeAllListeners('plotly_legendclick');
+                  }
+
+                  el.on('plotly_legendclick', function (evt) {
+                    var clickedTrace = (el.data && el.data[evt.curveNumber]) ? el.data[evt.curveNumber] : {};
+                    var traceName = String(clickedTrace.name || '').toLowerCase();
+                    var traceMeta = String(clickedTrace.meta || '').toLowerCase();
+                    var isAvg = traceMeta === 'avg-control' || traceName.indexOf('avg') !== -1;
+                    var isMed = traceMeta === 'med-control' || traceName.indexOf('med') !== -1;
+
+                    if (!isAvg && !isMed) {
+                      return true;
+                    }
+
+                    var isVisible = clickedTrace.visible === undefined || clickedTrace.visible === true;
+                    var nextVisible = isVisible ? 'legendonly' : true;
+                    Plotly.restyle(el, { visible: nextVisible }, [evt.curveNumber]);
+
+                    var shapes = (el.layout && el.layout.shapes ? el.layout.shapes : []).map(function (s) {
+                      return Object.assign({}, s);
+                    });
+
+                    if (isAvg && shapes[0]) {
+                      shapes[0].visible = nextVisible === true;
+                    }
+                    if (isMed && shapes[1]) {
+                      shapes[1].visible = nextVisible === true;
+                    }
+
+                    var annotations = (el.layout && el.layout.annotations ? el.layout.annotations : []).map(function (a) {
+                      return Object.assign({}, a);
+                    });
+
+                    annotations.forEach(function (a) {
+                      var text = String(a.text || '');
+                      var name = String(a.name || '');
+                      if (isAvg && (name === 'avg-annot' || text.indexOf('Avg:') !== -1)) {
+                        a.visible = nextVisible === true;
+                      }
+                      if (isMed && (name === 'med-annot' || text.indexOf('Med:') !== -1)) {
+                        a.visible = nextVisible === true;
+                      }
+                    });
+
+                    Plotly.relayout(el, { shapes: shapes, annotations: annotations });
+                    return false;
+                  });
                 }
                 idx++;
               }
