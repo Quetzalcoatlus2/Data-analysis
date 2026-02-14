@@ -161,11 +161,43 @@ Then open the printed local URL (typically `http://127.0.0.1:5000`).
 |--------|---------|
 | `check_models.py` | Lists free‑tier Gemini models, strength‑sorted, with rate limit snapshot |
 
-## 10. Environment & Configuration Notes
+## 10. VS Code Workflow (Rules + Hooks + Plans)
+
+This repository now includes a lightweight VS Code workflow to improve consistency and task context.
+
+- Rules/context for Copilot:
+  - `.github/copilot-instructions.md`
+- Reusable planning prompt:
+  - `.github/prompts/plan-and-execute.prompt.md`
+- VS Code tasks/debug profiles:
+  - `.vscode/tasks.json`
+  - `.vscode/launch.json`
+  - `.vscode/settings.json`
+- Git quality hooks:
+  - `.githooks/pre-commit`
+  - `.githooks/pre-push`
+
+### Enable hooks once per clone
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+Or run VS Code task: **Install Git Hooks**.
+
+### Common VS Code tasks
+
+- **Lint (ruff)**
+- **Type Check (mypy)**
+- **Test (pytest)**
+- **Validate Project** (runs lint + types + tests in order)
+- **Run Flask App**
+
+## 11. Environment & Configuration Notes
 - Don’t expose the API key in `.env.public` – keep it only in `.env` / deployment secret store.
 - Adjust rate limit strategies (window sizes) via environment if needed (future enhancement).
 
-## 11. Logging & Troubleshooting
+## 12. Logging & Troubleshooting
 - Runtime logs: `app.log`
 - AI issues: look for lines containing `AI status`, `rate limit`, or `Empty AI response`
 - Common scenarios:
@@ -173,35 +205,35 @@ Then open the printed local URL (typically `http://127.0.0.1:5000`).
 	- `429 ... no free quota tier`: Model not available on free tier – auto fallback should occur
 	- `Unsupported MIME type`: Resolved by coercing to `text/plain`
 
-## 12. Testing (Initial)
+## 13. Testing (Initial)
 Minimal automated tests exist; expansion planned. Suggested next steps:
 - Add unit tests for model fallback decision logic
 - Add prompt size regulator tests
 - Add regression tests for large CSV ingestion
 
-## 13. Security Considerations
+## 14. Security Considerations
 - HTTP security headers via Talisman (CSP etc.)
 - Rate limiting reduces brute force / abuse surface
 - No file persistence beyond in‑memory caches (ephemeral session state)
 - Future: file type stricter validation & sandboxing for untrusted content
 
-## 14. Roadmap (Condensed)
+## 15. Roadmap (Condensed)
 - Robust prompt size manager (token budgeting)
 - Optional job queue for long-running decomposition/forecast tasks
 - Export to structured Markdown/JSON summaries
 - Incremental analysis refresh instead of full recompute
 - Dark mode & lightweight front-end enhancements
 
-## 15. Contributing
+## 16. Contributing
 Currently focused on rapid iteration. If you want to contribute:
 1. Fork & branch
 2. Keep changes focused
 3. Open a PR with a short rationale & before/after impact
 
-## 16. License
+## 17. License
 License not yet specified (TBD). Add a `LICENSE` file before wider distribution.
 
-## 17. Disclaimer
+## 18. Disclaimer
 AI output is heuristic and may contain inaccuracies. Validate critical insights with domain/statistical review.
 
 ---

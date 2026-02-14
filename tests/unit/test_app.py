@@ -9,6 +9,7 @@ import app as app_module
 import numpy as np
 import pandas as pd
 import pytest
+from matplotlib.axes import Axes
 
 # Add project root to sys.path to ensure app can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -92,6 +93,40 @@ def test_generate_forecast_plot_returns_base64():
     img = generate_forecast_plot(history, forecast, "Forecast", "Timestamp", "Value")
     assert isinstance(img, str)
     assert len(img) > 0
+
+
+def test_generate_forecast_plot_anomaly_positions_with_duplicate_index(monkeypatch):
+    """Anomaly markers should be placed at every matching duplicate index position."""
+    history = pd.Series([10.0, 20.0, 30.0, 40.0], index=pd.Index(["A", "B", "A", "C"]))
+    forecast = pd.Series([41.0, 42.0], index=pd.Index(["D", "E"]))
+    anomalies_idx = pd.Index(["A"])
+
+    captured: list[tuple[list[float], list[float]]] = []
+    original_scatter = Axes.scatter
+
+    def _scatter_spy(self, x, y, *args, **kwargs):
+        if kwargs.get("label") == "Anomaly":
+            x_vals = np.asarray(x).astype(float).tolist()
+            y_vals = np.asarray(y).astype(float).tolist()
+            captured.append((x_vals, y_vals))
+        return original_scatter(self, x, y, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "scatter", _scatter_spy)
+
+    img = generate_forecast_plot(
+        history,
+        forecast,
+        "Forecast",
+        "Index",
+        "Value",
+        anomalies_idx=anomalies_idx,
+    )
+
+    assert isinstance(img, str)
+    assert len(img) > 0
+    assert captured, "Expected at least one anomaly scatter call"
+    assert captured[0][0] == [0.0, 2.0]
+    assert captured[0][1] == [10.0, 30.0]
 
 
 def test_build_category_plotly_chart_has_bar_labels():
@@ -292,6 +327,58 @@ def test_analyze_forecast_data_range_parsing_ratio_and_rows(monkeypatch):
         controls_rows = captured["analysis"]["controls"]
         assert controls_rows["data_range"] == pytest.approx(0.25)
         assert controls_rows["data_range_rows"] == 25
+
+
+def test_upload_redirect_keeps_contamination_param():
+    """Upload form settings should propagate contamination into analyze redirect URL."""
+    payload = {
+        "file": (io.BytesIO(b"x,y\n1,2\n3,4\n"), "sample.csv"),
+        "forecast_pct": "0.10",
+        "contamination": "0.07",
+        "view": "interactive",
+    }
+
+    with app.test_client() as client:
+        response = client.post("/", data=payload, content_type="multipart/form-data", follow_redirects=False)
+
+    assert response.status_code in (302, 303)
+    location = response.headers.get("Location", "")
+    assert "contamination=0.07" in location
+    assert "forecast_pct=0.10" in location
+    assert "view=interactive" in location
+
+
+@pytest.mark.parametrize(
+    ("view", "control_id"),
+    [
+        ("interactive", "contaminationInteractive"),
+        ("forecast", "contaminationForecast"),
+    ],
+)
+def test_analysis_view_preserves_contamination_in_links_and_controls(monkeypatch, view, control_id):
+    """Detailed and interactive pages should keep contamination in links and render contamination controls."""
+    filename = "h" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(30, dtype=float)})
+    DATAFRAME_CACHE.set(filename, df)
+
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "generate_forecast_plot", lambda *_args, **_kwargs: "x")
+
+    def fake_get_cached_column_forecast(_filename, _column, _series, steps):
+        idx = pd.RangeIndex(int(steps))
+        return pd.Series(np.zeros(int(steps), dtype=float), index=idx), None
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view={view}&forecast_pct=0.05&contamination=0.07")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "contamination=0.07" in html
+    assert f'id="{control_id}"' in html
 
 
 def test_forecast_continuity_with_history():

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+  PYTHON=".venv/Scripts/python.exe"
+elif [ -x "venv/Scripts/python.exe" ]; then
+  PYTHON="venv/Scripts/python.exe"
+else
+  PYTHON="python"
+fi
+
+echo "[pre-commit] Running ruff..."
+"$PYTHON" -m ruff check .
+
+echo "[pre-commit] Running targeted tests..."
+"$PYTHON" -m pytest -q tests/unit

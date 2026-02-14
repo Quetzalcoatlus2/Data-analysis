@@ -16,14 +16,14 @@ import zipfile
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
-from typing import Any
+from typing import Any, Literal, cast
 
 import matplotlib
 import numpy as np
 import pandas as pd
+from matplotlib.container import BarContainer
 from matplotlib.transforms import blended_transform_factory
 from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
-from sklearn.ensemble import IsolationForest  # type: ignore[import-untyped]
 from statsmodels.tsa.seasonal import STL  # type: ignore[import-untyped]
 from werkzeug.utils import secure_filename
 
@@ -316,7 +316,8 @@ def _extract_text_from_gemini_response(resp) -> str:
     return ""
 
 def _make_model(name: str):
-    m = genai.GenerativeModel(name)
+    model_ctor = getattr(genai, "GenerativeModel")
+    m = model_ctor(name)
     
     resp = m.generate_content("OK", request_options={"timeout": 15}, generation_config={"response_mime_type": "text/plain"})
     _ = _extract_text_from_gemini_response(resp)  
@@ -409,11 +410,11 @@ def configure_ai():
         if api_key:
             # Clear any previous configuration
             try:
-                genai.configure(api_key=api_key)
+                getattr(genai, "configure")(api_key=api_key)
             except Exception as e:
                 app.logger.warning("First configure attempt failed, retrying: %s", e)
                 # Sometimes SDK has stale state - try again
-                genai.configure(api_key=api_key)
+                getattr(genai, "configure")(api_key=api_key)
             
             AI_ENABLED = True
             model = None
@@ -448,7 +449,7 @@ def configure_ai():
                 credentials = service_account.Credentials.from_service_account_file(
                     credentials_path, scopes=scopes
                 )
-                genai.configure(credentials=credentials)
+                getattr(genai, "configure")(credentials=credentials)
                 AI_ENABLED = True
                 model = None
                 app.logger.info("AI configured successfully using service account credentials.")
@@ -540,7 +541,10 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
                         gc_effective['response_mime_type'] = 'text/plain'
             except Exception:
                 pass
-            resp = model.generate_content(
+            active_model = model
+            if active_model is None:
+                raise RuntimeError("AI model is not initialized")
+            resp = active_model.generate_content(
                 content,
                 request_options={"timeout": timeout},
                 generation_config=gc_effective
@@ -1281,8 +1285,13 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         # For datetime index, use the index directly
         ax.plot(data.index, data.values, label='History', color='tab:blue', lw=1.0)
         if anomalies_idx is not None and len(anomalies_idx):
-            aligned = data.loc[data.index.intersection(anomalies_idx)]
-            ax.scatter(aligned.index, aligned.values, color='red', s=14, zorder=5, label='Anomaly')
+            try:
+                an_mask = data.index.isin(pd.Index(anomalies_idx))
+                if np.any(an_mask):
+                    aligned = data.loc[an_mask]
+                    ax.scatter(aligned.index, aligned.values, color='red', s=14, zorder=5, label='Anomaly')
+            except Exception:
+                pass
     else:
         # For non-datetime index (e.g., country names), use numeric positions
         x_positions = range(len(data))
@@ -1302,16 +1311,14 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         
         # Plot anomalies at correct numeric positions
         if anomalies_idx is not None and len(anomalies_idx):
-            an_positions = []
-            an_values = []
-            idx_to_pos = {idx: pos for pos, idx in enumerate(data.index)}
-            for idx in anomalies_idx:
-                pos = idx_to_pos.get(idx)
-                if pos is not None:
-                    an_positions.append(pos)
-                    an_values.append(float(data.iloc[pos]))
-            if an_positions:
-                ax.scatter(an_positions, an_values, color='red', s=14, zorder=5, label='Anomaly')
+            try:
+                an_mask = data.index.isin(pd.Index(anomalies_idx))
+                if np.any(an_mask):
+                    an_positions = np.flatnonzero(an_mask)
+                    an_values = data.iloc[an_positions].astype(float).values
+                    ax.scatter(an_positions, an_values, color='red', s=14, zorder=5, label='Anomaly')
+            except Exception:
+                pass
     
     ax.set_title(title, fontsize=10)
     ax.set_xlabel(xlabel, fontsize=9, labelpad=4)
@@ -1432,7 +1439,12 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
             return None
         
         # Compute correlation
-        corr = sel.corr(method=method)
+        corr_method: Literal['pearson', 'kendall', 'spearman']
+        if method in ('pearson', 'kendall', 'spearman'):
+            corr_method = cast(Literal['pearson', 'kendall', 'spearman'], method)
+        else:
+            corr_method = 'spearman'
+        corr = sel.corr(method=corr_method)
         n_cols = len(corr.columns)
         
         # Dynamic sizing
@@ -1485,7 +1497,7 @@ def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
             # Ensure the last point is included for continuity
             try:
                 if out.index[-1] != s.index[-1]:
-                    out = pd.concat([out, s.iloc[[-1]]])
+                    out = pd.concat([out, s.iloc[np.array([-1], dtype=int)]])
             except Exception:
                 pass
             return out
@@ -1506,13 +1518,13 @@ def _thin_series_keep_extrema(s: pd.Series, max_points: int) -> pd.Series:
         keep_pos = list(range(0, n, step))
         keep_pos.append(n - 1)
 
-        vals = s.values
+        vals = np.asarray(s.to_numpy(dtype=float), dtype=float)
         min_pos = int(np.argmin(vals))
         max_pos = int(np.argmax(vals))
         keep_pos.extend([min_pos, max_pos])
 
         keep_pos = sorted(set(keep_pos))
-        return s.iloc[keep_pos]
+        return s.iloc[np.array(keep_pos, dtype=int)]
     except Exception:
         return _thin_series(s, max_points)
 
@@ -1738,7 +1750,7 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
         chart_title = f"Categories: {col} ({total_unique} unique)"
 
     x_values = [str(x) for x in top_counts.index.tolist()]
-    y_values = [int(y) for y in top_counts.values.tolist()]
+    y_values = [int(float(y)) for y in top_counts.to_numpy(dtype=float).tolist()]
 
     bar_trace = {
         "type": "bar",
@@ -1931,18 +1943,10 @@ def generate_forecast_plot(
         # Anomaly markers (shown regardless of forecast)
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                # Find numeric positions for anomalies in the history tail
-                an_positions = []
-                an_values = []
-                idx_to_pos = {idx: pos for pos, idx in enumerate(history_tail_series.index)}
-                for idx in anomalies_idx:
-                    pos = idx_to_pos.get(idx)
-                    if pos is not None:
-                        val = history_tail_series.iloc[pos]
-                        an_positions.append(pos)
-                        an_values.append(float(val))
-                
-                if an_positions:
+                an_mask = history_tail_series.index.isin(pd.Index(anomalies_idx))
+                if np.any(an_mask):
+                    an_positions = np.flatnonzero(an_mask)
+                    an_values = history_tail_series.iloc[an_positions].astype(float).values
                     ax.scatter(an_positions, an_values, color='red', s=40, zorder=5,
                               label='Anomaly', marker='o', edgecolors='darkred', linewidths=1.5)
             except Exception as e:
@@ -2035,8 +2039,9 @@ def generate_forecast_plot(
         # Add anomaly markers if provided (shown regardless of forecast)
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                aligned_anomalies = history_tail_series.loc[history_tail_series.index.intersection(anomalies_idx)]
-                if len(aligned_anomalies) > 0:
+                an_mask = history_tail_series.index.isin(pd.Index(anomalies_idx))
+                if np.any(an_mask):
+                    aligned_anomalies = history_tail_series.loc[an_mask]
                     ax.scatter(aligned_anomalies.index, aligned_anomalies.values, color='red', s=40, zorder=5,
                               label='Anomaly', marker='o', edgecolors='darkred', linewidths=1.5)
             except Exception as e:
@@ -2228,8 +2233,10 @@ def _match_amplitude(history: pd.Series, forecast_series: pd.Series, conf_df: pd
         n = len(y)
         w = seasonal_period if (isinstance(seasonal_period, int) and seasonal_period >= 2) else max(12, n // 4)
         y_win = y.tail(min(n, int(w)))
-        hist_diffs = np.diff(y_win.values)
-        fc_diffs = np.diff(fc.values.astype(float))
+        y_win_arr = np.asarray(y_win.to_numpy(dtype=float), dtype=float)
+        fc_arr = np.asarray(fc.to_numpy(dtype=float), dtype=float)
+        hist_diffs = np.diff(y_win_arr)
+        fc_diffs = np.diff(fc_arr)
         std_hist = float(np.nanstd(hist_diffs, ddof=1)) if len(hist_diffs) else 0.0
         std_fc = float(np.nanstd(fc_diffs, ddof=1)) if len(fc_diffs) else 0.0
         if not np.isfinite(std_hist) or not np.isfinite(std_fc) or std_hist <= 0:
@@ -2241,7 +2248,7 @@ def _match_amplitude(history: pd.Series, forecast_series: pd.Series, conf_df: pd
             incs = incs - np.median(hist_diffs)
             dev = np.cumsum(incs)
             x = np.arange(len(fc), dtype=float)
-            slope, intercept = np.polyfit(x, fc.values.astype(float), 1)
+            slope, intercept = np.polyfit(x, fc_arr, 1)
             baseline = slope * x + intercept
             fc2_vals = baseline + dev
             fc2 = pd.Series(fc2_vals, index=fc.index)
@@ -2256,20 +2263,21 @@ def _match_amplitude(history: pd.Series, forecast_series: pd.Series, conf_df: pd
         scale = float(np.clip(ratio, min_scale, max_scale))
         # Build linear baseline for forecast
         x = np.arange(len(fc), dtype=float)
-        slope, intercept = np.polyfit(x, fc.values.astype(float), 1)
+        slope, intercept = np.polyfit(x, fc_arr, 1)
         baseline = slope * x + intercept
-        deviations = fc.values.astype(float) - baseline
+        deviations = fc_arr - baseline
         fc_scaled = baseline + scale * deviations
         fc2 = pd.Series(fc_scaled, index=fc.index)
         c2 = None
         if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
             # Scale CI bounds relative to new center
-            lower = conf_df.iloc[:, 0].values.astype(float)
-            upper = conf_df.iloc[:, 1].values.astype(float)
-            lower_dev = lower - fc.values.astype(float)
-            upper_dev = upper - fc.values.astype(float)
-            lower2 = fc2.values + scale * lower_dev
-            upper2 = fc2.values + scale * upper_dev
+            lower = np.asarray(conf_df.iloc[:, 0].to_numpy(dtype=float), dtype=float)
+            upper = np.asarray(conf_df.iloc[:, 1].to_numpy(dtype=float), dtype=float)
+            lower_dev = lower - fc_arr
+            upper_dev = upper - fc_arr
+            fc2_arr = np.asarray(fc2.to_numpy(dtype=float), dtype=float)
+            lower2 = fc2_arr + scale * lower_dev
+            upper2 = fc2_arr + scale * upper_dev
             c2 = pd.DataFrame({"lower": lower2, "upper": upper2}, index=fc.index)
         return fc2, (c2 if c2 is not None else conf_df)
     except Exception:
@@ -2320,7 +2328,7 @@ def _compute_forecast(series: pd.Series, steps: int):
 
         n = len(s)
 
-        values = s.values.astype(float)
+        values = np.asarray(s.to_numpy(dtype=float), dtype=float)
 
         last = float(values[-1])
 
@@ -2338,7 +2346,7 @@ def _compute_forecast(series: pd.Series, steps: int):
 
         window_size = max(20, min(200, n // 2 if n >= 40 else n))
 
-        recent = values[-window_size:]
+        recent = np.asarray(values[-window_size:], dtype=float)
 
 
 
@@ -2484,7 +2492,7 @@ def _compute_forecast(series: pd.Series, steps: int):
 
             try:
 
-                slope_lr, intercept = np.polyfit(x_fit, recent, 1)
+                slope_lr, intercept = np.polyfit(x_fit, np.asarray(recent, dtype=float), 1)
 
                 residuals = recent - (slope_lr * x_fit + intercept)
 
@@ -2654,7 +2662,7 @@ def _compute_forecast(series: pd.Series, steps: int):
         high_inner = data_max - edge_eps
 
         if high_inner > low_inner and len(fc) > 0:
-            fc_vals = fc.values.astype(float)
+            fc_vals = np.asarray(fc.to_numpy(dtype=float), dtype=float)
             fc_min = float(np.min(fc_vals))
             fc_max = float(np.max(fc_vals))
             if fc_max - fc_min < 1e-12:
@@ -2673,14 +2681,15 @@ def _compute_forecast(series: pd.Series, steps: int):
             fc = pd.Series(fc_vals, index=fc.index)
 
         if isinstance(ci, pd.DataFrame) and ci.shape[1] >= 2 and len(fc) > 0:
-            lower_raw = ci.iloc[:, 0].values.astype(float)
-            upper_raw = ci.iloc[:, 1].values.astype(float)
-            down_width = np.maximum(fc.values.astype(float) - lower_raw, 0.0)
-            up_width = np.maximum(upper_raw - fc.values.astype(float), 0.0)
-            down_cap = np.maximum(fc.values.astype(float) - data_min, 0.0) * 0.98
-            up_cap = np.maximum(data_max - fc.values.astype(float), 0.0) * 0.98
-            lower_new = fc.values.astype(float) - np.minimum(down_width, down_cap)
-            upper_new = fc.values.astype(float) + np.minimum(up_width, up_cap)
+            lower_raw = np.asarray(ci.iloc[:, 0].to_numpy(dtype=float), dtype=float)
+            upper_raw = np.asarray(ci.iloc[:, 1].to_numpy(dtype=float), dtype=float)
+            fc_arr = np.asarray(fc.to_numpy(dtype=float), dtype=float)
+            down_width = np.maximum(fc_arr - lower_raw, 0.0)
+            up_width = np.maximum(upper_raw - fc_arr, 0.0)
+            down_cap = np.maximum(fc_arr - data_min, 0.0) * 0.98
+            up_cap = np.maximum(data_max - fc_arr, 0.0) * 0.98
+            lower_new = fc_arr - np.minimum(down_width, down_cap)
+            upper_new = fc_arr + np.minimum(up_width, up_cap)
             ci = pd.DataFrame({"lower": lower_new, "upper": upper_new}, index=ci.index)
 
         # Cache the result
@@ -2698,15 +2707,18 @@ def _compute_forecast(series: pd.Series, steps: int):
             idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
             if len(s) >= 2:
                 # Simple linear trend fallback
-                trend = float(np.mean(np.diff(s.values[-min(20, len(s)):])))
+                s_arr = np.asarray(s.to_numpy(dtype=float), dtype=float)
+                trend = float(np.mean(np.diff(s_arr[-min(20, len(s_arr)): ])))
                 last = float(s.iloc[-1])
                 vals = [last + trend * (i + 1) for i in range(steps)]
             else:
                 last = float(s.iloc[-1]) if len(s) else 0.0
                 vals = [last] * steps
             fc = pd.Series(vals, index=idx)
-            std = float(np.std(s.values, ddof=1)) if len(s) > 1 else 1.0
-            ci = pd.DataFrame({"lower": fc.values - 1.96 * std, "upper": fc.values + 1.96 * std}, index=idx)
+            s_arr = np.asarray(s.to_numpy(dtype=float), dtype=float)
+            std = float(np.std(s_arr, ddof=1)) if len(s_arr) > 1 else 1.0
+            fc_arr = np.asarray(fc.to_numpy(dtype=float), dtype=float)
+            ci = pd.DataFrame({"lower": fc_arr - 1.96 * std, "upper": fc_arr + 1.96 * std}, index=idx)
             return fc, ci
         except Exception:
             idx = _infer_future_index(pd.RangeIndex(0, 1), steps)
@@ -2729,7 +2741,7 @@ def _recent_slope_forecast(series: pd.Series, steps: int = 10, lookback: int = 2
             return zero, pd.DataFrame({"lower": zero, "upper": zero}, index=idx)
 
         if len(s) >= 2:
-            recent = s.values[-min(int(lookback), len(s)):]
+            recent = np.asarray(s.to_numpy(dtype=float), dtype=float)[-min(int(lookback), len(s)):]
             diffs = np.diff(recent)
             slope = float(np.mean(diffs)) if len(diffs) else 0.0
         else:
@@ -2739,12 +2751,14 @@ def _recent_slope_forecast(series: pd.Series, steps: int = 10, lookback: int = 2
         fc_vals = [last + slope * (i + 1) for i in range(int(steps))]
         fc = pd.Series(fc_vals, index=idx)
 
-        base_std = float(np.std(np.diff(s.values), ddof=1)) if len(s) > 2 else float(np.std(s.values, ddof=1)) if len(s) > 1 else 1.0
+        s_arr = np.asarray(s.to_numpy(dtype=float), dtype=float)
+        base_std = float(np.std(np.diff(s_arr), ddof=1)) if len(s_arr) > 2 else float(np.std(s_arr, ddof=1)) if len(s_arr) > 1 else 1.0
         if not np.isfinite(base_std) or base_std <= 0:
             base_std = 1.0
         horizon = np.sqrt(np.arange(1, int(steps) + 1, dtype=float))
         width = 1.96 * base_std * horizon
-        ci = pd.DataFrame({"lower": fc.values - width, "upper": fc.values + width}, index=idx)
+        fc_arr = np.asarray(fc.to_numpy(dtype=float), dtype=float)
+        ci = pd.DataFrame({"lower": fc_arr - width, "upper": fc_arr + width}, index=idx)
         return fc, ci
     except Exception:
         idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
@@ -2934,10 +2948,13 @@ def get_cached_numeric_df(filename: str, df: pd.DataFrame) -> pd.DataFrame:
 
 def detect_anomalies(series: pd.Series, contamination: float = 0.02):
     """
-    Detect anomalies in a numeric series using IsolationForest.
+        Detect anomalies using robust z-score distance from the median (MAD-based).
+        This is deterministic and easier to explain to users:
+        - score = 0.6745 * (x - median) / MAD
+        - select strongest outliers by absolute score, bounded by contamination
     Returns:
       - an_idx: index of detected anomalies (pd.Index)
-      - an_score: anomaly scores as a Series indexed by anomaly index (higher = more anomalous)
+            - an_score: signed robust z-score as a Series indexed by anomaly index
     """
     try:
         s = pd.to_numeric(series, errors='coerce').dropna()
@@ -2955,13 +2972,41 @@ def detect_anomalies(series: pd.Series, contamination: float = 0.02):
         cont = 0.02
 
     try:
-        X = s.values.reshape(-1, 1)
-        model = IsolationForest(contamination=cont, random_state=42)
-        preds = model.fit_predict(X)  # -1 = anomaly, 1 = normal
-        scores = -model.decision_function(X)  # higher means more anomalous
-        mask = preds == -1
-        an_idx = s.index[mask]
-        an_score = pd.Series(scores[mask], index=an_idx)
+        vals = np.asarray(s.to_numpy(dtype=float), dtype=float)
+        n = len(vals)
+        if n < 5:
+            return pd.Index([]), pd.Series([], dtype=float)
+
+        # Select at most k points from contamination.
+        k = max(1, int(math.ceil(n * cont)))
+
+        med = float(np.nanmedian(vals))
+        abs_dev = np.abs(vals - med)
+        mad = float(np.nanmedian(abs_dev))
+
+        if np.isfinite(mad) and mad > 1e-12:
+            robust_z = 0.6745 * (vals - med) / mad
+        else:
+            std = float(np.nanstd(vals, ddof=1)) if n > 1 else 0.0
+            if np.isfinite(std) and std > 1e-12:
+                robust_z = (vals - med) / std
+            else:
+                robust_z = np.zeros(n, dtype=float)
+
+        abs_score = np.abs(robust_z)
+        if (not np.isfinite(abs_score).any()) or float(np.nanmax(abs_score)) <= 0.0:
+            return pd.Index([]), pd.Series([], dtype=float)
+
+        # Explanatory threshold: only keep meaningful outliers.
+        min_abs_score = 2.5
+        ranked = np.argsort(-abs_score, kind='mergesort')
+        selected_positions = [int(pos) for pos in ranked if abs_score[pos] >= min_abs_score][:k]
+        if not selected_positions:
+            return pd.Index([]), pd.Series([], dtype=float)
+
+        selected_positions = sorted(selected_positions)
+        an_idx = s.index[selected_positions]
+        an_score = pd.Series(robust_z[selected_positions], index=an_idx, dtype=float)
         return an_idx, an_score
     except Exception:
         return pd.Index([]), pd.Series([], dtype=float)
@@ -2982,7 +3027,7 @@ def get_cached_anomalies(filename: str, column: str, series: pd.Series, contamin
     ANOMALY_CACHE.set(cache_key, result)
     return result
 
-def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict, used_cols: list, is_timeseries: bool, forecast_horizon: int, contamination: float) -> str:
+def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict | None, used_cols: list, is_timeseries: bool, forecast_horizon: int, contamination: float) -> str:
     """Assemble structured stats the AI can leverage for a deeper analysis."""
     try:
         lines = []
@@ -3025,7 +3070,8 @@ def build_ai_context(df: pd.DataFrame, anomalies_found: dict, corr_payload: dict
                     w = min(len(s), max(20, len(s)//5))
                     y = s.iloc[-w:]
                     x = np.arange(len(y), dtype=float)
-                    slope, intercept = np.polyfit(x, y.values, 1)
+                    y_arr = np.asarray(y.to_numpy(dtype=float), dtype=float)
+                    slope, intercept = np.polyfit(x, y_arr, 1)
                     change = float(y.iloc[-1] - y.iloc[0])
                     pct = float((change / (abs(y.iloc[0]) + 1e-12)) * 100.0)
                     trend_info[col] = {"window": int(w), "slope_per_step": float(slope), "recent_change": float(change), "pct_change": pct, "last": float(y.iloc[-1])}
@@ -3083,7 +3129,7 @@ def upload_file():
             flash('No selected file')
             return redirect(request.url)
         if file and allowed_file(file.filename):
-            orig_name = secure_filename(file.filename)
+            orig_name = secure_filename(file.filename or "")
             _, ext = os.path.splitext(orig_name)
             ext = ext.lower()
 
@@ -3116,7 +3162,7 @@ def upload_file():
                 try:
                     size_bytes = os.path.getsize(final_path)
                     if size_bytes <= app.config['AI_FULL_UPLOAD_MAX_MB'] * 1024 * 1024:
-                        uploaded = genai.upload_file(path=final_path, mime_type="text/csv", display_name=orig_name)
+                        uploaded = getattr(genai, "upload_file")(path=final_path, mime_type="text/csv", display_name=orig_name)
                         AI_FILE_MAP[storage_name] = uploaded
                 except Exception as e:
                     app.logger.info("AI file upload skipped: %s", e)
@@ -3160,7 +3206,9 @@ def read_excel_smart(path: str):
                             if cand in df.columns:
                                 with pd.option_context('mode.chained_assignment', None):
                                     try:
-                                        df[cand] = pd.to_datetime(df[cand], errors='ignore')
+                                        dt = pd.to_datetime(df[cand], errors='coerce')
+                                        if dt.notna().any():
+                                            df[cand] = dt
                                     except Exception:
                                         pass
                                 try:
@@ -3183,11 +3231,13 @@ def read_excel_smart(path: str):
                         header_row = df2.index[df2.notna().any(axis=1)][0] if not df2.empty else 0
                         df2.columns = df2.iloc[df2.index[df2.notna().any(axis=1)][0]]
                         df2 = df2.drop(df2.index[:header_row + 1])
-                        df2 = df2.loc[:, ~df2.columns.isna()]
+                        df2 = df2.loc[:, df2.columns.notna()]
                         for cand in ['timestamp', 'date', 'time']:
                             if cand in df2.columns:
                                 try:
-                                    df2[cand] = pd.to_datetime(df2[cand], errors='ignore')
+                                    dt2 = pd.to_datetime(df2[cand], errors='coerce')
+                                    if dt2.notna().any():
+                                        df2[cand] = dt2
                                     df2 = df2.set_index(cand)
                                 except Exception:
                                     pass
@@ -3267,12 +3317,12 @@ def get_dataframe_for(filename):
 
                 picked = None
                 for c in candidate_cols:
-                    ts = pd.to_datetime(df[c], errors="coerce", utc=False, infer_datetime_format=True)
+                    ts = pd.to_datetime(df[c], errors="coerce", utc=False)
                     if ts.notna().sum() >= max(5, int(0.6 * len(ts))):
                         picked = c
                         break
                 if picked is not None:
-                    ts = pd.to_datetime(df[picked], errors="coerce", utc=False, infer_datetime_format=True)
+                    ts = pd.to_datetime(df[picked], errors="coerce", utc=False)
                     df = df.drop(columns=[picked])
                     df.index = ts
                     try:
@@ -3487,7 +3537,8 @@ def offline_answer(df: pd.DataFrame, question: str = "summary", error=None) -> s
                     w = min(len(s), max(20, len(s)//5))
                     y = s.iloc[-w:]
                     x = np.arange(len(y), dtype=float)
-                    slope, intercept = np.polyfit(x, y.values, 1)
+                    y_arr = np.asarray(y.to_numpy(dtype=float), dtype=float)
+                    slope, intercept = np.polyfit(x, y_arr, 1)
                     change = float(y.iloc[-1] - y.iloc[0])
                     pct = (change / (abs(y.iloc[0]) + 1e-12)) * 100.0
                     parts.append(f"<li><strong>{htmllib.escape(str(col))}</strong>: slope {slope:.4g}, change {change:.4g} ({pct:.2f}%)</li>")
@@ -3678,14 +3729,16 @@ def analyze_file(filename):
                     except Exception:
                         pearson = None
                     if spearman is not None:
+                        spearman_m = spearman.reindex(index=cols, columns=cols).to_numpy(dtype=float)
                         payload["x"] = cols
                         payload["y"] = cols
-                        payload["z"] = [[float(v) if pd.notna(v) else None for v in spearman.loc[r, cols].tolist()] for r in cols]
+                        payload["z"] = [[float(v) if np.isfinite(v) else None for v in row] for row in spearman_m]
                     if pearson is not None:
+                        pearson_m = pearson.reindex(index=cols, columns=cols).to_numpy(dtype=float)
                         payload["pearson"] = {
                             "x": cols,
                             "y": cols,
-                            "z": [[float(v) if pd.notna(v) else None for v in pearson.loc[r, cols].tolist()] for r in cols]
+                            "z": [[float(v) if np.isfinite(v) else None for v in row] for row in pearson_m]
                         }
                     corr_payload = payload if ("z" in payload or "pearson" in payload) else None
                     # Cache the computed correlation for faster subsequent view loads
@@ -3932,7 +3985,8 @@ def analyze_file(filename):
                     except Exception as _e:
                         app.logger.warning("Could not render forecast image for %s: %s", column, _e)
                     try:
-                        app.logger.info("Forecast plot ready col=%s forecast_points=%d", column, len(fc_mean) if hasattr(fc_mean, '__len__') else -1)
+                        fc_points = len(fc_mean) if isinstance(fc_mean, pd.Series) else -1
+                        app.logger.info("Forecast plot ready col=%s forecast_points=%d", column, fc_points)
                     except Exception:
                         pass
 
@@ -3964,7 +4018,8 @@ def analyze_file(filename):
                 # Generate distribution histogram for this column
                 try:
                     fig, ax = plt.subplots(figsize=(6, 4))
-                    ax.hist(series.values, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
+                    series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
+                    ax.hist(series_arr, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
                     ax.set_title(f"Distribution: {column}", fontsize=10)
                     ax.set_xlabel(column, fontsize=9, labelpad=8)
                     ax.set_ylabel("Frequency", fontsize=9)
@@ -4109,9 +4164,11 @@ def analyze_file(filename):
                     fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
                     
                     # Use numeric X-axis continuing from history
+                    if fc_mean is None or len(fc_mean) == 0:
+                        raise ValueError("Empty forecast")
                     n_fc = len(fc_mean)
                     fc_x_numeric = list(range(n_hist, n_hist + n_fc))
-                    fc_y = [float(v) for v in fc_mean.values]
+                    fc_y = [float(v) for v in fc_mean.to_numpy(dtype=float)]
                     fc_labels = [str(i) for i in fc_mean.index]
                     split_x = n_hist - 0.5  # Numeric position for split line
                     
@@ -4497,7 +4554,7 @@ def api_interactive_data(filename):
         cols_processed += 1
         
         # Reuse shared anomaly cache helper.
-        an_idx, _ = get_cached_anomalies(filename, column, series, user_contam)
+        an_idx, an_score = get_cached_anomalies(filename, column, series, user_contam)
         
         # Build traces using NUMERIC indices for proportional X-axis display
         # This ensures forecast (e.g. 20%) takes proportionally 20% of chart width
@@ -4531,11 +4588,31 @@ def api_interactive_data(filename):
             an_values = []
             an_labels = []
             an_idx_set = set(an_idx)
+
+            score_buckets: dict[Any, list[float]] = {}
+            try:
+                for idx_val, score_val in an_score.items():
+                    if pd.notna(score_val):
+                        score_buckets.setdefault(idx_val, []).append(float(score_val))
+            except Exception:
+                score_buckets = {}
+
             for i, idx in enumerate(s_tail.index):
                 if idx in an_idx_set:
                     an_positions.append(i)
                     an_values.append(_safe_number(s_tail.iloc[i]))
-                    an_labels.append(str(idx))
+                    score_list = score_buckets.get(idx, [])
+                    score_val = score_list.pop(0) if score_list else None
+                    if score_list is not None:
+                        score_buckets[idx] = score_list
+
+                    if score_val is None or not math.isfinite(float(score_val)):
+                        reason = "Outlier"
+                    elif float(score_val) >= 0:
+                        reason = f"High outlier (robust z={float(score_val):.2f})"
+                    else:
+                        reason = f"Low outlier (robust z={float(score_val):.2f})"
+                    an_labels.append(f"{idx} | {reason}")
             
             if an_positions:
                 traces.append({
@@ -4805,7 +4882,8 @@ def download_static_plots_zip(filename):
             # Distribution histogram - HIGH QUALITY: Larger figure and more bins
             try:
                 fig, ax = plt.subplots(figsize=(8, 5))
-                ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
+                s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
+                ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
                 ax.set_title(f"Distribution: {col}", fontsize=10)
                 ax.set_xlabel(col, fontsize=9, labelpad=8)
                 ax.set_ylabel("Frequency", fontsize=9)
@@ -4955,7 +5033,7 @@ def download_static_plots_zip(filename):
 
                 # Add value labels above each bar
                 try:
-                    if ax.containers:
+                    if ax.containers and isinstance(ax.containers[0], BarContainer):
                         ax.bar_label(
                             ax.containers[0],
                             labels=[str(int(v)) for v in top_counts.values],
@@ -5623,14 +5701,16 @@ def download_full_report_pdf(filename):
             try:
                 fig, ax = plt.subplots(figsize=(10, 5))  # Wider figure for full-width image
                 if is_numeric:
-                    ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', label='Distribution')
+                    s_num = pd.to_numeric(s, errors='coerce').dropna()
+                    s_arr = np.asarray(s_num.to_numpy(dtype=float), dtype=float)
+                    ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', label='Distribution')
                     ax.set_title(f"Distribution: {col}")
                     ax.set_ylabel("Frequency")
                     
                     # Add stat markers like web version
-                    stats_min, stats_max = float(s.min()), float(s.max())
-                    stats_mean, stats_median = float(s.mean()), float(s.median())
-                    stats_std = float(s.std())
+                    stats_min, stats_max = float(s_num.min()), float(s_num.max())
+                    stats_mean, stats_median = float(s_num.mean()), float(s_num.median())
+                    stats_std = float(s_num.std())
                     
                     # Avg/Med vertical lines (with labels for legend)
                     ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
@@ -5678,7 +5758,7 @@ def download_full_report_pdf(filename):
 
                     # Add value labels above each bar
                     try:
-                        if ax.containers:
+                        if ax.containers and isinstance(ax.containers[0], BarContainer):
                             ax.bar_label(
                                 ax.containers[0],
                                 labels=[str(int(v)) for v in top_counts.values],
@@ -5775,8 +5855,10 @@ def download_full_report_pdf(filename):
             pdf.set_font("helvetica", size=12)
             pdf.cell(0, 10, "No content available for this report.", new_x="LMARGIN", new_y="NEXT")
         
-        out = io.BytesIO()
-        pdf.output(out)
+        pdf_bytes = pdf.output(dest='S')
+        if isinstance(pdf_bytes, str):
+            pdf_bytes = pdf_bytes.encode('latin-1')
+        out = io.BytesIO(pdf_bytes)
         out.seek(0)
     except Exception as e:
         app.logger.error(f"PDF output failed: {e}")
@@ -5879,7 +5961,8 @@ def download_full_report_html(filename):
         # Generate distribution histogram for this column
         try:
             fig, ax = plt.subplots(figsize=(10, 4))
-            ax.hist(s.values, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
+            s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
+            ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
             ax.set_title(f"Distribution: {col}")
             ax.set_xlabel(col)
             ax.set_ylabel("Frequency")
@@ -5920,15 +6003,18 @@ def download_full_report_html(filename):
                 try:
                     idx = _infer_future_index(s.index, forecast_steps)
                     if len(s) >= 2:
-                        trend = float(np.mean(np.diff(s.values[-min(20, len(s)):])))
+                        s_arr = np.asarray(s.to_numpy(dtype=float), dtype=float)
+                        trend = float(np.mean(np.diff(s_arr[-min(20, len(s_arr)): ])))
                         last = float(s.iloc[-1])
                         vals = [last + trend * (i + 1) for i in range(forecast_steps)]
                     else:
                         last = float(s.iloc[-1]) if len(s) else 0.0
                         vals = [last] * forecast_steps
                     fc_mean = pd.Series(vals, index=idx)
-                    std = float(np.std(s.values, ddof=1)) if len(s) > 1 else 1.0
-                    ci = pd.DataFrame({"lower": fc_mean.values - 1.96 * std, "upper": fc_mean.values + 1.96 * std}, index=idx)
+                    s_arr = np.asarray(s.to_numpy(dtype=float), dtype=float)
+                    std = float(np.std(s_arr, ddof=1)) if len(s_arr) > 1 else 1.0
+                    fc_arr = np.asarray(fc_mean.to_numpy(dtype=float), dtype=float)
+                    ci = pd.DataFrame({"lower": fc_arr - 1.96 * std, "upper": fc_arr + 1.96 * std}, index=idx)
                 except Exception as e2:
                     app.logger.warning("Forecast fallback error for %s: %s", col, e2)
                     fc_mean, ci = None, None
@@ -6059,7 +6145,7 @@ def full_history_json():
 
         
         if is_ts:
-            idx = df.index
+            idx = pd.DatetimeIndex(df.index)
             
             try:
                 idx = idx.tz_convert(None)
@@ -6203,10 +6289,11 @@ if __name__ == "__main__":
             app.logger.warning("Talisman init failed: %s", e)
 
     
-    if Limiter and os.getenv("RATE_LIMIT"):
+    rate_limit = os.getenv("RATE_LIMIT")
+    if Limiter and rate_limit:
         try:
-            limiter = Limiter(get_remote_address, app=app, default_limits=[os.getenv("RATE_LIMIT")])
-            app.logger.info("Rate limiting enabled: %s", os.getenv("RATE_LIMIT"))
+            limiter = Limiter(get_remote_address, app=app, default_limits=[rate_limit])
+            app.logger.info("Rate limiting enabled: %s", rate_limit)
         except Exception as e:
             app.logger.warning("Limiter init failed: %s", e)
 

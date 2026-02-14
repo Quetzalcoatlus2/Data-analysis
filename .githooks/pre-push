@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+  PYTHON=".venv/Scripts/python.exe"
+elif [ -x "venv/Scripts/python.exe" ]; then
+  PYTHON="venv/Scripts/python.exe"
+else
+  PYTHON="python"
+fi
+
+echo "[pre-push] Running lint + type checks + tests..."
+"$PYTHON" -m ruff check .
+"$PYTHON" -m mypy app.py check_models.py
+"$PYTHON" -m pytest -q tests
