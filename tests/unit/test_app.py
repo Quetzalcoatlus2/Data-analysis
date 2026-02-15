@@ -3,6 +3,7 @@ import sys
 import os
 import io
 import zipfile
+from typing import Any, cast
 
 import app as app_module
 
@@ -22,6 +23,7 @@ from app import (
     TinyLRU,
     _build_category_plotly_chart,
     _build_interactive_cache_key,
+    _build_qna_cache_key,
     _compute_basic_stats,
     _compute_forecast,
     _thin_series_keep_extrema,
@@ -96,7 +98,7 @@ def test_generate_forecast_plot_returns_base64():
 
 
 def test_generate_forecast_plot_anomaly_positions_with_duplicate_index(monkeypatch):
-    """Anomaly markers should be placed at every matching duplicate index position."""
+    """Anomaly markers should respect anomaly occurrence counts on duplicate labels."""
     history = pd.Series([10.0, 20.0, 30.0, 40.0], index=pd.Index(["A", "B", "A", "C"]))
     forecast = pd.Series([41.0, 42.0], index=pd.Index(["D", "E"]))
     anomalies_idx = pd.Index(["A"])
@@ -125,8 +127,90 @@ def test_generate_forecast_plot_anomaly_positions_with_duplicate_index(monkeypat
     assert isinstance(img, str)
     assert len(img) > 0
     assert captured, "Expected at least one anomaly scatter call"
-    assert captured[0][0] == [0.0, 2.0]
-    assert captured[0][1] == [10.0, 30.0]
+    assert captured[0][0] == [0.0]
+    assert captured[0][1] == [10.0]
+
+
+def test_generate_forecast_plot_anomaly_markers_respect_display_cap(monkeypatch):
+    """Display cap should limit plotted anomaly markers without changing detection output."""
+    history = pd.Series([10.0, 20.0, 30.0, 40.0], index=pd.Index(["A", "B", "C", "D"]))
+    forecast = pd.Series([41.0], index=pd.Index(["E"]))
+    anomalies_idx = pd.Index(["A", "B", "C"])
+
+    original_cap = app.config.get("ANOMALY_MARKER_CAP", 20)
+    app.config["ANOMALY_MARKER_CAP"] = 1
+
+    captured: list[int] = []
+    original_scatter = Axes.scatter
+
+    def _scatter_spy(self, x, y, *args, **kwargs):
+        if kwargs.get("label") == "Anomaly":
+            captured.append(len(np.asarray(x)))
+        return original_scatter(self, x, y, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "scatter", _scatter_spy)
+
+    try:
+        img = generate_forecast_plot(
+            history,
+            forecast,
+            "Forecast",
+            "Index",
+            "Value",
+            anomalies_idx=anomalies_idx,
+        )
+    finally:
+        app.config["ANOMALY_MARKER_CAP"] = original_cap
+
+    assert isinstance(img, str)
+    assert len(img) > 0
+    assert captured and captured[0] == 1
+
+
+def test_qna_cache_key_differs_for_different_filenames_same_shape():
+    """Q&A cache key must not collide for same-shaped datasets with different filenames."""
+    df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+    q = "what is the trend?"
+
+    key_a = _build_qna_cache_key(df, q, filename="aaa.csv")
+    key_b = _build_qna_cache_key(df, q, filename="bbb.csv")
+
+    assert key_a != key_b
+
+
+def test_qna_cache_key_differs_for_different_dataframe_schema_without_filename():
+    """Q&A cache key should isolate different dataframe schemas even with same shape."""
+    q = "summary"
+    df_one = pd.DataFrame({"country": ["A", "B"], "value": [1, 2]})
+    df_two = pd.DataFrame({"city": ["A", "B"], "value": [1, 2]})
+
+    key_one = _build_qna_cache_key(df_one, q)
+    key_two = _build_qna_cache_key(df_two, q)
+
+    assert key_one != key_two
+
+
+def test_call_gemini_raises_on_prompt_block_reason(monkeypatch):
+    """Blocked prompt feedback must raise instead of returning a successful response."""
+
+    class _BlockReason:
+        name = "SAFETY"
+
+    class _PromptFeedback:
+        block_reason = _BlockReason()
+
+    class _Resp:
+        prompt_feedback = _PromptFeedback()
+
+    class _Model:
+        def generate_content(self, *args, **kwargs):
+            return _Resp()
+
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: True)
+    monkeypatch.setattr(app_module, "model", _Model())
+
+    with pytest.raises(RuntimeError, match="Content blocked"):
+        app_module._call_gemini("blocked content probe", retries=0)
 
 
 def test_build_category_plotly_chart_has_bar_labels():
@@ -134,7 +218,7 @@ def test_build_category_plotly_chart_has_bar_labels():
     series = pd.Series(["A", "A", "B", "C", "C", "C"])
     chart = _build_category_plotly_chart(series, "Category")
     assert chart is not None
-    traces = chart.get("traces") or []
+    traces = cast(list[dict[str, Any]], chart.get("traces") or [])
     assert traces
     bar = traces[0]
     assert bar.get("type") == "bar"
@@ -148,9 +232,9 @@ def test_build_category_plotly_chart_avg_med_are_toggleable_traces():
     chart = _build_category_plotly_chart(series, "Category")
     assert chart is not None
 
-    traces = chart.get("traces") or []
-    layout = chart.get("layout") or {}
-    shapes = layout.get("shapes") or []
+    traces = cast(list[dict[str, Any]], chart.get("traces") or [])
+    layout = cast(dict[str, Any], chart.get("layout") or {})
+    shapes = cast(list[dict[str, Any]], layout.get("shapes") or [])
 
     avg_trace = next((t for t in traces if t.get("meta") == "avg-control"), None)
     med_trace = next((t for t in traces if t.get("meta") == "med-control"), None)
@@ -179,6 +263,8 @@ def test_compute_forecast_reproducible():
     fc1, ci1 = _compute_forecast(series, 10)
     fc2, ci2 = _compute_forecast(series, 10)
     pd.testing.assert_series_equal(fc1, fc2)
+    assert ci1 is not None
+    assert ci2 is not None
     pd.testing.assert_frame_equal(ci1, ci2)
 
 
@@ -187,9 +273,9 @@ def test_compute_forecast_does_not_mutate_global_rng():
     series = pd.Series(range(50), index=pd.RangeIndex(50), dtype=float)
     # Set a known global state
     np.random.seed(999)
-    state_before = np.random.get_state()[1].copy()
+    state_before = np.asarray(cast(tuple[Any, ...], np.random.get_state())[1]).copy()
     _compute_forecast(series, 5)
-    state_after = np.random.get_state()[1].copy()
+    state_after = np.asarray(cast(tuple[Any, ...], np.random.get_state())[1]).copy()
     # Global state should be unchanged
     assert np.array_equal(state_before, state_after), "Global RNG state was mutated by _compute_forecast"
 
@@ -200,6 +286,69 @@ def test_detect_anomalies_returns_index():
     an_idx, an_score = detect_anomalies(series, contamination=0.1)
     assert isinstance(an_idx, pd.Index)
     assert isinstance(an_score, pd.Series)
+
+
+def test_detect_anomalies_isolation_forest_flags_injected_outliers():
+    """IsolationForest should flag the strongest injected outliers deterministically."""
+    baseline = np.linspace(50.0, 60.0, 200)
+    series = pd.Series(np.concatenate([baseline, [180.0, -40.0]]), index=pd.RangeIndex(202))
+
+    an_idx, an_score = detect_anomalies(series, contamination=0.01)
+
+    assert isinstance(an_idx, pd.Index)
+    assert isinstance(an_score, pd.Series)
+    assert 200 in set(an_idx)
+    assert 201 in set(an_idx)
+    assert len(an_idx) <= int(np.ceil(len(series) * 0.01))
+
+
+def test_detect_anomalies_seasonal_prefilter_keeps_spike_outliers():
+    """Seasonal pre-filter should still preserve clear spike anomalies."""
+    n = 240
+    idx = pd.date_range("2024-01-01", periods=n, freq="D")
+    x = np.arange(n, dtype=float)
+    values = 50.0 + 8.0 * np.sin((2.0 * np.pi * x) / 7.0)
+
+    spike_positions = [60, 120, 180]
+    values[60] += 25.0
+    values[120] -= 30.0
+    values[180] += 28.0
+
+    series = pd.Series(values, index=idx)
+    an_idx, an_score = detect_anomalies(series, contamination=0.03)
+
+    assert isinstance(an_idx, pd.Index)
+    assert isinstance(an_score, pd.Series)
+
+    detected_positions: set[int] = set()
+    for ts in an_idx:
+        if ts not in series.index:
+            continue
+        loc = series.index.get_loc(ts)
+        if isinstance(loc, (int, np.integer)):
+            detected_positions.add(int(loc))
+        elif isinstance(loc, slice):
+            detected_positions.update(range(loc.start or 0, loc.stop or 0))
+        else:
+            loc_arr = np.asarray(loc)
+            if loc_arr.dtype == bool:
+                detected_positions.update(np.flatnonzero(loc_arr).tolist())
+            else:
+                detected_positions.update(loc_arr.astype(int).tolist())
+    for pos in spike_positions:
+        assert pos in detected_positions
+
+
+def test_detect_anomalies_non_timeseries_dedupes_duplicate_index_labels():
+    """Duplicate categorical index labels should keep only strongest anomaly per label."""
+    idx = pd.Index(["A", "A", "A", "B", "B", "C", "C", "D", "D"], dtype=object)
+    vals = pd.Series([10.0, 11.0, 250.0, 9.0, 200.0, 8.0, 180.0, 7.0, 6.0], index=idx)
+
+    an_idx, _an_score = detect_anomalies(vals, contamination=0.3)
+
+    assert isinstance(an_idx, pd.Index)
+    counts = pd.Series(list(an_idx)).value_counts()
+    assert counts.max() <= 1
 
 
 def test_get_cached_anomalies_caches():
@@ -251,7 +400,7 @@ def test_forecast_does_not_copy_historical_segments():
     history = np.cumsum(rng.normal(0, 1, 200)) + 100
     series = pd.Series(history, index=pd.RangeIndex(200))
     fc, _ci = _compute_forecast(series, 30)
-    fc_vals = fc.values
+    fc_vals = fc.to_numpy(dtype=float, copy=False)
 
     # Slide a window of length 30 over history; none should match the forecast
     for start in range(len(history) - 30 + 1):
@@ -259,7 +408,7 @@ def test_forecast_does_not_copy_historical_segments():
         # Even with an offset shift (like old code did), the shape shouldn't match
         # Check normalised correlation: if segment == shifted copy, corr ≈ 1.0
         seg_centered = segment - segment.mean()
-        fc_centered = fc_vals - fc_vals.mean()
+        fc_centered = fc_vals - float(np.mean(fc_vals))
         seg_std = np.std(seg_centered)
         fc_std = np.std(fc_centered)
         if seg_std < 1e-9 or fc_std < 1e-9:
@@ -280,6 +429,8 @@ def test_forecast_stays_within_data_bounds_without_edge_saturation():
     data_max = float(series.max())
 
     fc, ci = _compute_forecast(series, 30)
+    assert ci is not None
+    fc_vals = fc.to_numpy(dtype=float, copy=False)
 
     assert fc.min() >= data_min - 1e-9, f"Forecast min {fc.min()} < data_min {data_min}"
     assert fc.max() <= data_max + 1e-9, f"Forecast max {fc.max()} > data_max {data_max}"
@@ -287,8 +438,8 @@ def test_forecast_stays_within_data_bounds_without_edge_saturation():
     assert ci["upper"].max() <= data_max + 1e-9, f"CI upper max {ci['upper'].max()} > data_max {data_max}"
 
     # Values should not sit exactly on boundaries (no saturation by clipping).
-    assert not np.isclose(fc.values, data_min, atol=1e-9).any()
-    assert not np.isclose(fc.values, data_max, atol=1e-9).any()
+    assert not np.isclose(fc_vals, data_min, atol=1e-9).any()
+    assert not np.isclose(fc_vals, data_max, atol=1e-9).any()
 
 
 def test_analyze_forecast_data_range_parsing_ratio_and_rows(monkeypatch):
@@ -412,8 +563,10 @@ def test_forecast_matches_historical_variation():
 
     fc, _ci = _compute_forecast(series, 50)
 
-    hist_diffs = np.diff(series.values)
-    fc_diffs = np.diff(fc.values.astype(float))
+    hist_vals = series.to_numpy(dtype=float, copy=False)
+    fc_vals = fc.to_numpy(dtype=float, copy=False)
+    hist_diffs = np.diff(hist_vals)
+    fc_diffs = np.diff(fc_vals)
     std_hist = float(np.std(hist_diffs, ddof=1))
     std_fc = float(np.std(fc_diffs, ddof=1))
 
@@ -440,7 +593,7 @@ def test_forecast_seasonal_data_preserves_oscillation():
     series = pd.Series(values, index=idx)
 
     fc, _ci = _compute_forecast(series, 24)
-    fc_vals = fc.values.astype(float)
+    fc_vals = fc.to_numpy(dtype=float, copy=False)
 
     # The forecast should have meaningful variation (not flat)
     fc_range = float(np.max(fc_vals) - np.min(fc_vals))
@@ -465,7 +618,8 @@ def test_forecast_mean_matches_recent_history():
     fc, _ci = _compute_forecast(series, 30)
 
     recent_mean = float(np.mean(values[-20:]))
-    fc_mean = float(np.mean(fc.values.astype(float)))
+    fc_vals = fc.to_numpy(dtype=float, copy=False)
+    fc_mean = float(np.mean(fc_vals))
     data_range = float(np.max(values) - np.min(values))
 
     # The forecast mean should be within 15% of data range from recent mean
@@ -533,6 +687,26 @@ def test_api_interactive_invalid_filename_rejected():
         assert response.status_code == 400
         payload = response.get_json()
         assert payload["ok"] is False
+
+
+def test_download_full_report_pdf_returns_pdf(monkeypatch):
+    """PDF report route should return a valid PDF payload without page-open errors."""
+    filename = "f" * 40 + ".csv"
+    df = pd.DataFrame({
+        "value": np.linspace(1.0, 50.0, 120),
+        "category": ["A", "B", "C", "D"] * 30,
+    })
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert response.data.startswith(b"%PDF")
 
 
 def test_api_interactive_returns_cached_payload_when_available():

@@ -460,7 +460,6 @@
 
     {% if active_view == 'overview' %}
 
-
     <section id="ai-assistant" class="panel" style="margin-bottom: 16px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <h2 style="margin:0;">AI assistant</h2>
@@ -619,8 +618,15 @@
       </section>
 
       <section class="panel">
-        <h3>Info</h3>
+        <h3>Dataset overview</h3>
+        <div class="muted">Rows, columns, non-null counts, and dtypes</div>
+        {% if analysis.overview_table %}
+        <div class="table-center">
+          {{ analysis.overview_table | safe }}
+        </div>
+        {% else %}
         <pre style="white-space:pre-wrap">{{ analysis.info }}</pre>
+        {% endif %}
       </section>
 
       {% if analysis.missing_values %}
@@ -663,7 +669,7 @@
           </div>
           <div class="row" style="gap:22px; align-items:center; justify-content:flex-start; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
             <label for="contaminationForecast" style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Anomaly contamination</label>
-            <input id="contaminationForecast" type="number" step="0.001" min="0.001" max="0.2" value="{{ '%.3f'|format(contam|float) }}" title="Expected outlier fraction used by robust z-score detector (reloads page)" style="width:88px; min-width:88px;" />
+            <input id="contaminationForecast" type="number" step="0.001" min="0.001" max="0.2" value="{{ '%.3f'|format(contam|float) }}" title="Expected outlier fraction used by IsolationForest detector (reloads page)" style="width:88px; min-width:88px;" />
             <span id="contaminationForecastHint" class="muted" style="white-space:nowrap;">Expected anomalies ≈ {{ '%.0f'|format((forecast_visible_rows * (contam|float))) }} per column ({{ forecast_visible_rows }} rows × {{ '%.3f'|format(contam|float) }}).</span>
           </div>
         </div>
@@ -837,7 +843,7 @@
           <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
             <div class="row" style="gap:22px; align-items:center; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
               <label for="contaminationInteractive" style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Anomaly contamination</label>
-              <input id="contaminationInteractive" type="number" step="0.001" min="0.001" max="0.2" value="{{ '%.3f'|format(contam|float) }}" title="Expected outlier fraction used by robust z-score detector (reloads page)" style="width:88px; min-width:88px;" />
+              <input id="contaminationInteractive" type="number" step="0.001" min="0.001" max="0.2" value="{{ '%.3f'|format(contam|float) }}" title="Expected outlier fraction used by IsolationForest detector (reloads page)" style="width:88px; min-width:88px;" />
               <span id="contaminationInteractiveHint" class="muted" style="white-space:nowrap;">Filter to show recent data points only.</span>
             </div>
           </div>

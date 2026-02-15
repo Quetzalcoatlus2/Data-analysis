@@ -13,17 +13,29 @@ import traceback
 import uuid
 import warnings
 import zipfile
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from datetime import datetime, timedelta
+from html.parser import HTMLParser
 from logging.handlers import RotatingFileHandler
 from typing import Any, Literal, cast
 
 import matplotlib
 import numpy as np
 import pandas as pd
+from flask import (
+    Flask,
+    after_this_request,
+    flash,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from matplotlib.container import BarContainer
 from matplotlib.transforms import blended_transform_factory
-from flask import Flask, request, render_template, redirect, url_for, flash, after_this_request, make_response, jsonify
+from sklearn.ensemble import IsolationForest  # type: ignore[import-untyped]
 from statsmodels.tsa.seasonal import STL  # type: ignore[import-untyped]
 from werkzeug.utils import secure_filename
 
@@ -136,6 +148,7 @@ app.config.setdefault('AI_RETRY_BACKOFF_SECONDS', float(os.getenv("AI_RETRY_BACK
 app.config.setdefault('FORECAST_MAX_INPUT_POINTS', int(os.getenv('FORECAST_MAX_INPUT_POINTS', '4000')))
 app.config.setdefault('FORECAST_BOOTSTRAP_SAMPLES', int(os.getenv('FORECAST_BOOTSTRAP_SAMPLES', '60')))
 app.config.setdefault('CACHE_STATS_LOG_EVERY', int(os.getenv('CACHE_STATS_LOG_EVERY', '0')))
+app.config.setdefault('ANOMALY_MARKER_CAP', int(os.getenv('ANOMALY_MARKER_CAP', '20')))
 # PERFORMANCE: Browser caching for static files (CSS, JS) - 1 hour
 app.config.setdefault('SEND_FILE_MAX_AGE_DEFAULT', int(os.getenv('SEND_FILE_MAX_AGE', '3600')))
 
@@ -527,20 +540,17 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
             content = [file_asset, prompt] if file_asset is not None else [prompt]
             # Sanitize generation_config to avoid unsupported MIME types
             gc_effective = generation_config or {}
-            try:
-                if isinstance(gc_effective, dict) and 'response_mime_type' in gc_effective:
-                    allowed_mimes = {
-                        'text/plain', 'application/json', 'application/xml', 'application/yaml', 'text/x.enum'
-                    }
-                    if gc_effective['response_mime_type'] not in allowed_mimes:
-                        app.logger.debug(
-                            "Coercing unsupported response_mime_type %s to text/plain",
-                            gc_effective['response_mime_type']
-                        )
-                        gc_effective = dict(gc_effective)
-                        gc_effective['response_mime_type'] = 'text/plain'
-            except Exception:
-                pass
+            if isinstance(gc_effective, dict) and 'response_mime_type' in gc_effective:
+                allowed_mimes = {
+                    'text/plain', 'application/json', 'application/xml', 'application/yaml', 'text/x.enum'
+                }
+                if gc_effective['response_mime_type'] not in allowed_mimes:
+                    app.logger.debug(
+                        "Coercing unsupported response_mime_type %s to text/plain",
+                        gc_effective['response_mime_type']
+                    )
+                    gc_effective = dict(gc_effective)
+                    gc_effective['response_mime_type'] = 'text/plain'
             active_model = model
             if active_model is None:
                 raise RuntimeError("AI model is not initialized")
@@ -549,19 +559,21 @@ def _call_gemini(prompt: str, file_asset=None, *, timeout: int | None = None, re
                 request_options={"timeout": timeout},
                 generation_config=gc_effective
             )
+            block_reason = None
             try:
                 pf = getattr(resp, "prompt_feedback", None)
-                if pf and getattr(pf, "block_reason", None):
-                    br = pf.block_reason
-                    raise RuntimeError(f"Content blocked: {getattr(br, 'name', br)}")
+                block_reason = getattr(pf, "block_reason", None) if pf else None
             except Exception:
-                pass
+                block_reason = None
+            if block_reason:
+                raise RuntimeError(f"Content blocked: {getattr(block_reason, 'name', block_reason)}")
             return resp
         except Exception as e:
             last_err = e
             # If rate-limited or model lacks free quota, try switching to a free-tier model and/or reduce budget
             msg = str(getattr(e, 'message', None) or e)
-            is_rate = ('429' in msg) or ('rate limit' in msg.lower()) or ('quota' in msg.lower())
+            msg_l = msg.lower()
+            is_rate = ('429' in msg) or ('rate limit' in msg_l) or ('quota' in msg_l)
             if is_rate:
                 try:
                     # Attempt to switch to the configured default flash family model.
@@ -817,6 +829,40 @@ def allowed_file(filename):
     return bool(filename) and '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+CODE_FENCE_START_RE = re.compile(r'^\s*```(?:\w+)?\s*\n?', re.I | re.M)
+CODE_FENCE_END_RE = re.compile(r'\n?\s*```\s*$', re.M)
+HTML_ENTITY_TAG_RE = re.compile(r'&lt;/?[a-zA-Z]')
+HTML_STRUCTURE_RE = re.compile(
+    r'</?(h[1-6]|p|ul|ol|li|strong|em|b|i|br|table|thead|tbody|tr|th|td|a)\b',
+    re.I,
+)
+HTML_BODY_TAG_RE = re.compile(r'</?\s*(html|body)[^>]*>', re.I)
+SCRIPT_STYLE_RE = re.compile(r'<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>', re.I | re.S)
+EVENT_ATTR_RE = re.compile(r'\s+on\w+\s*=\s*(".*?"|\'.*?\'|\w+)', re.I)
+JS_PROTOCOL_RE = re.compile(r'javascript\s*:', re.I)
+QUOTED_TERM_RE = re.compile(r"'([^'<>\n]{2,80})'")
+
+
+def _apply_text_segment_emphasis(html_text: str) -> str:
+    """Apply emphasis to text nodes only, keeping HTML tags/attributes untouched."""
+    if not html_text:
+        return html_text
+
+    parts = re.split(r'(<[^>]+>)', html_text)
+    out_parts: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith('<') and part.endswith('>'):
+            out_parts.append(part)
+            continue
+
+        text_part = QUOTED_TERM_RE.sub(lambda m: f"<em>{m.group(1).strip()}</em>", part)
+        out_parts.append(text_part)
+
+    return ''.join(out_parts)
+
 def sanitize_ai_html(raw: str) -> str:
     """Coerce Gemini output into a safe, clean HTML snippet.
     - strips Markdown code fences (``` and ```html)
@@ -827,23 +873,210 @@ def sanitize_ai_html(raw: str) -> str:
     if raw is None:
         return "<p></p>"
     s = str(raw)
-    s = re.sub(r'^\s*```(?:\w+)?\s*\n?', '', s, flags=re.I | re.M)
-    s = re.sub(r'\n?\s*```\s*$', '', s, flags=re.M)
+    s = CODE_FENCE_START_RE.sub('', s)
+    s = CODE_FENCE_END_RE.sub('', s)
     s = s.replace("```", "")
-    if re.search(r'&lt;/?[a-zA-Z]', s):
+    if HTML_ENTITY_TAG_RE.search(s):
         try:
             s = htmllib.unescape(s)
         except Exception:
             pass
-    s = re.sub(r'</?\s*(html|body)[^>]*>', '', s, flags=re.I)
-    s = re.sub(r'<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>', '', s, flags=re.I | re.S)
-    s = re.sub(r'\s+on\w+\s*=\s*(".*?"|\'.*?\'|\w+)', '', s, flags=re.I)
-    s = re.sub(r'javascript\s*:', '', s, flags=re.I)
+    s = HTML_BODY_TAG_RE.sub('', s)
+    s = SCRIPT_STYLE_RE.sub('', s)
+    s = EVENT_ATTR_RE.sub('', s)
+    s = JS_PROTOCOL_RE.sub('', s)
     s = s.strip()
-    if not re.search(r'</?(h[1-6]|p|ul|ol|li|strong|em|b|i|br|table|thead|tbody|tr|th|td|a)\b', s, re.I):
+    if not HTML_STRUCTURE_RE.search(s):
         lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
         s = "<p>" + "</p><p>".join(lines) + "</p>" if lines else "<p></p>"
+    s = _apply_text_segment_emphasis(s)
     return s
+
+
+def convert_html_to_formatted_text(html: str) -> str:
+    """Convert HTML to structured text preserving headings, nested lists, and emphasis."""
+    if not html:
+        return ""
+
+    class _SummaryHtmlParser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.lines: list[str] = []
+            self.paragraph_parts: list[str] = []
+            self.heading_parts: list[str] = []
+            self.in_heading = False
+            self.list_stack: list[dict[str, int | str]] = []
+            self.li_parts: list[str] | None = None
+            self.style_stack: list[str] = []
+            self.in_cell = False
+            self.cell_parts: list[str] = []
+            self.row_cells: list[str] = []
+
+        def _append_part(self, target: list[str], text: str) -> None:
+            txt = re.sub(r'\s+', ' ', text)
+            if not txt.strip():
+                return
+            txt = txt.strip()
+            if "b" in self.style_stack:
+                txt = f"**{txt}**"
+            if "i" in self.style_stack:
+                txt = f"*{txt}*"
+            if target and not target[-1].endswith((" ", "\n", "(")) and not txt.startswith((".", ",", ":", ";", "?", "!", ")")):
+                target.append(" ")
+            target.append(txt)
+
+        def _flush_paragraph(self, add_blank: bool = True) -> None:
+            if self.in_heading or self.li_parts is not None or self.in_cell:
+                return
+            text = "".join(self.paragraph_parts).strip()
+            self.paragraph_parts = []
+            if text:
+                self.lines.append(text)
+                if add_blank:
+                    self.lines.append("")
+
+        def _flush_heading(self) -> None:
+            text = "".join(self.heading_parts).strip()
+            self.heading_parts = []
+            self.in_heading = False
+            if not text:
+                return
+            plain_len = len(re.sub(r'[*]', '', text))
+            separator = '=' * min(max(plain_len, 3), 50)
+            self.lines.extend(["", separator, text.upper(), separator, ""])
+
+        def _flush_li(self) -> None:
+            if self.li_parts is None:
+                return
+            text = "".join(self.li_parts).strip()
+            self.li_parts = None
+            if not text:
+                return
+            depth = max(0, len(self.list_stack) - 1)
+            indent = "  " * depth
+            prefix = "- "
+            if self.list_stack and self.list_stack[-1].get("type") == "ol":
+                idx_val = int(self.list_stack[-1].get("index", 1))
+                prefix = f"{idx_val}. "
+            self.lines.append(f"{indent}{prefix}{text}")
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            t = tag.lower()
+            if t in ("strong", "b"):
+                self.style_stack.append("b")
+                return
+            if t in ("em", "i"):
+                self.style_stack.append("i")
+                return
+            if t in ("h1", "h2", "h3", "h4", "h5", "h6"):
+                self._flush_paragraph(add_blank=True)
+                self._flush_li()
+                self.in_heading = True
+                self.heading_parts = []
+                return
+            if t == "p":
+                self._flush_paragraph(add_blank=False)
+                return
+            if t in ("ul", "ol"):
+                if self.li_parts is not None and "".join(self.li_parts).strip():
+                    self._flush_li()
+                self._flush_paragraph(add_blank=True)
+                self.list_stack.append({"type": t, "index": 1})
+                return
+            if t == "li":
+                if self.list_stack and self.list_stack[-1].get("type") == "ol":
+                    cur = int(self.list_stack[-1].get("index", 1))
+                    self.list_stack[-1]["index"] = cur
+                self.li_parts = []
+                return
+            if t == "br":
+                if self.li_parts is not None:
+                    self.li_parts.append("\n")
+                elif self.in_heading:
+                    self.heading_parts.append(" ")
+                else:
+                    self._flush_paragraph(add_blank=False)
+                return
+            if t == "tr":
+                self.row_cells = []
+                return
+            if t in ("td", "th"):
+                self.in_cell = True
+                self.cell_parts = []
+                return
+
+        def handle_endtag(self, tag: str) -> None:
+            t = tag.lower()
+            if t in ("strong", "b"):
+                if "b" in self.style_stack:
+                    self.style_stack.remove("b")
+                return
+            if t in ("em", "i"):
+                if "i" in self.style_stack:
+                    self.style_stack.remove("i")
+                return
+            if t in ("h1", "h2", "h3", "h4", "h5", "h6"):
+                self._flush_heading()
+                return
+            if t == "p":
+                self._flush_paragraph(add_blank=True)
+                return
+            if t == "li":
+                self._flush_li()
+                if self.list_stack and self.list_stack[-1].get("type") == "ol":
+                    cur = int(self.list_stack[-1].get("index", 1))
+                    self.list_stack[-1]["index"] = cur + 1
+                return
+            if t in ("ul", "ol"):
+                if self.li_parts is not None:
+                    self._flush_li()
+                if self.list_stack:
+                    self.list_stack.pop()
+                self.lines.append("")
+                return
+            if t in ("td", "th"):
+                self.in_cell = False
+                cell_text = "".join(self.cell_parts).strip()
+                self.cell_parts = []
+                if cell_text:
+                    self.row_cells.append(cell_text)
+                return
+            if t == "tr":
+                if self.row_cells:
+                    self.lines.append(" | ".join(self.row_cells))
+                self.row_cells = []
+                return
+            if t == "table":
+                self.lines.append("")
+
+        def handle_data(self, data: str) -> None:
+            if not data or not data.strip():
+                return
+            if self.in_cell:
+                self._append_part(self.cell_parts, data)
+            elif self.li_parts is not None:
+                self._append_part(self.li_parts, data)
+            elif self.in_heading:
+                self._append_part(self.heading_parts, data)
+            else:
+                self._append_part(self.paragraph_parts, data)
+
+        def get_text(self) -> str:
+            self._flush_li()
+            self._flush_paragraph(add_blank=False)
+            if self.in_heading:
+                self._flush_heading()
+            text = "\n".join(self.lines)
+            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\n[ \t]+', '\n', text)
+            text = re.sub(r'[ \t]+\n', '\n', text)
+            text = re.sub(r'\n{4,}', '\n\n\n', text)
+            return text.strip()
+
+    parser = _SummaryHtmlParser()
+    parser.feed(htmllib.unescape(str(html)))
+    parser.close()
+    return parser.get_text()
 
 
 # Emoji to text replacements for PDF (since most PDF fonts don't support emojis)
@@ -1036,8 +1269,8 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
                 diag = _diagnose_gemini_response(resp)
                 if diag:
                     app.logger.warning("AI summary empty response: %s", diag)
-            except Exception:
-                pass
+            except Exception as diag_err:
+                app.logger.debug("AI summary diagnostics unavailable: %s", diag_err)
             # Try a simpler prompt with file context
             try:
                 simple_cfg = {"max_output_tokens": 384, "temperature": 0.2, "response_mime_type": "text/plain"}
@@ -1046,8 +1279,8 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
                 text2 = _extract_text_from_gemini_response(simple).strip()
                 if text2:
                     return sanitize_ai_html(text2)
-            except Exception:
-                pass
+            except Exception as simple_err:
+                app.logger.debug("AI summary simple fallback failed: %s", simple_err)
             # As a last resort, try text-only (no file attachment)
             try:
                 resp2 = _call_gemini(prompt, file_asset=None, generation_config={**gen_cfg, "max_output_tokens": 768})
@@ -1086,6 +1319,27 @@ def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
     except Exception as e:
         app.logger.warning("AI summary failed, falling back. Error: %s", e)
         return offline_answer(df, "summary", error=e)
+
+
+def _build_qna_cache_key(df: pd.DataFrame, question: str, filename: str | None = None) -> tuple[Any, ...]:
+    """Build a cache key that is stable per question and dataset identity."""
+    q_norm = (question or '').strip().lower()
+    if filename:
+        return ("file", str(filename), q_norm)
+
+    if isinstance(df, pd.DataFrame):
+        try:
+            dataset_sig = (
+                tuple(df.shape),
+                tuple(str(c) for c in df.columns),
+                tuple(str(t) for t in df.dtypes.to_list()),
+                type(df.index).__name__,
+            )
+        except Exception:
+            dataset_sig = (tuple(df.shape),)
+    else:
+        dataset_sig = (None, None)
+    return ("df", dataset_sig, q_norm)
     
 def get_ai_answer_with_file(df: pd.DataFrame, question: str, file_asset=None, filename: str | None = None) -> str:
     """
@@ -1097,15 +1351,12 @@ def get_ai_answer_with_file(df: pd.DataFrame, question: str, file_asset=None, fi
     try:
         cache_key = None
         try:
-            # Build a stable cache key using DataFrame shape and question text
-            df_sig = (tuple(df.shape) if isinstance(df, pd.DataFrame) else (None, None))
-            q_norm = (question or '').strip().lower()
-            cache_key = (df_sig, q_norm)
+            cache_key = _build_qna_cache_key(df, question, filename=filename)
             cached = QNA_CACHE.get(cache_key)
             if isinstance(cached, str) and cached.strip():
                 return cached
-        except Exception:
-            pass
+        except Exception as cache_read_err:
+            app.logger.debug("Q&A cache read skipped due to key/cache error: %s", cache_read_err)
         if not ensure_ai_ready():
             return offline_answer(df, question, error="AI disabled.")
 
@@ -1115,7 +1366,8 @@ def get_ai_answer_with_file(df: pd.DataFrame, question: str, file_asset=None, fi
         if filename:
             try:
                 summary_html = AI_SUMMARY_CACHE.get(filename)
-            except Exception:
+            except Exception as summary_cache_err:
+                app.logger.debug("Q&A summary cache lookup failed for %s: %s", filename, summary_cache_err)
                 summary_html = None
 
         if summary_html:
@@ -1168,8 +1420,8 @@ Question:
                 diag = _diagnose_gemini_response(resp)
                 if diag:
                     app.logger.warning("AI Q&A empty response: %s", diag)
-            except Exception:
-                pass
+            except Exception as diag_err:
+                app.logger.debug("AI Q&A diagnostics unavailable: %s", diag_err)
             try:
                 simple = _call_gemini(
                     f"Answer briefly in HTML (<p>, <ul><li>) only: {question}\n\nContext:\n{context_text}",
@@ -1182,11 +1434,11 @@ Question:
                     try:
                         if cache_key:
                             QNA_CACHE.set(cache_key, html2)
-                    except Exception:
-                        pass
+                    except Exception as cache_set_err:
+                        app.logger.debug("Q&A cache write skipped (simple fallback): %s", cache_set_err)
                     return html2
-            except Exception:
-                pass
+            except Exception as simple_err:
+                app.logger.debug("AI Q&A simple fallback failed: %s", simple_err)
             # Try again without attaching the file (some environments reject file references)
             try:
                 resp2 = _call_gemini(prompt, file_asset=None, generation_config={
@@ -1202,8 +1454,8 @@ Question:
                     try:
                         if cache_key:
                             QNA_CACHE.set(cache_key, html3)
-                    except Exception:
-                        pass
+                    except Exception as cache_set_err:
+                        app.logger.debug("Q&A cache write skipped (text-only fallback): %s", cache_set_err)
                     return html3
             except Exception as e2:
                 app.logger.info("Text-only fallback failed for AI Q&A: %s", e2)
@@ -1249,8 +1501,8 @@ Question:
         try:
             if cache_key and not _is_offline_html(html):
                 QNA_CACHE.set(cache_key, html)
-        except Exception:
-            pass
+        except Exception as cache_set_err:
+            app.logger.debug("Q&A cache write skipped (final result): %s", cache_set_err)
         return html
 
     except Exception as e:
@@ -1274,6 +1526,60 @@ def get_or_cache_ai_summary_for(filename: str, df: pd.DataFrame, extra_context: 
     except Exception as e:
         return f"<p>AI summary unavailable: {e}</p>"
 
+
+def _cap_anomalies_for_display(
+    anomalies_idx: pd.Index | None,
+    anomalies_score: pd.Series | None = None,
+    max_points: int | None = None,
+) -> pd.Index:
+    """Return a display-only subset of anomalies (detection results remain unchanged)."""
+    if anomalies_idx is None:
+        return pd.Index([])
+    if max_points is None:
+        try:
+            max_points = int(app.config.get('ANOMALY_MARKER_CAP', 20))
+        except Exception:
+            max_points = 20
+    if max_points is None or max_points <= 0:
+        return pd.Index([])
+    if len(anomalies_idx) <= max_points:
+        return pd.Index(anomalies_idx)
+
+    if anomalies_score is None or anomalies_score.empty:
+        return pd.Index(anomalies_idx[:max_points])
+
+    score_buckets: dict[Any, list[float]] = {}
+    try:
+        for idx_val, score_val in anomalies_score.items():
+            if pd.notna(score_val):
+                score_buckets.setdefault(idx_val, []).append(float(score_val))
+    except Exception:
+        score_buckets = {}
+
+    ranked_rows: list[tuple[int, float]] = []
+    for rel_pos, idx_val in enumerate(list(anomalies_idx)):
+        scores = score_buckets.get(idx_val, [])
+        score_val = scores.pop(0) if scores else float('-inf')
+        score_buckets[idx_val] = scores
+        ranked_rows.append((int(rel_pos), float(score_val)))
+
+    ranked_rows.sort(key=lambda row: row[1], reverse=True)
+    top_rel_positions = sorted(pos for pos, _ in ranked_rows[:max_points])
+    return pd.Index([anomalies_idx[pos] for pos in top_rel_positions])
+
+
+def _anomaly_positions_for_index(data_index: pd.Index, anomalies_idx: pd.Index | None) -> list[int]:
+    """Map anomaly labels to concrete plotted positions using occurrence counts."""
+    if anomalies_idx is None or len(anomalies_idx) == 0:
+        return []
+    remaining = Counter(list(anomalies_idx))
+    positions: list[int] = []
+    for i, idx_val in enumerate(list(data_index)):
+        if remaining.get(idx_val, 0) > 0:
+            positions.append(i)
+            remaining[idx_val] -= 1
+    return positions
+
 def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=False):
     # HIGH QUALITY: Larger figure for better image quality
     fig, ax = plt.subplots(figsize=(10, 4))
@@ -1286,10 +1592,11 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         ax.plot(data.index, data.values, label='History', color='tab:blue', lw=1.0)
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                an_mask = data.index.isin(pd.Index(anomalies_idx))
-                if np.any(an_mask):
-                    aligned = data.loc[an_mask]
-                    ax.scatter(aligned.index, aligned.values, color='red', s=14, zorder=5, label='Anomaly')
+                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx))
+                an_positions = _anomaly_positions_for_index(data.index, an_display)
+                if an_positions:
+                    aligned = data.iloc[an_positions]
+                    ax.scatter(aligned.index, aligned.values, color='red', s=2, zorder=5, label='Anomaly')
             except Exception:
                 pass
     else:
@@ -1312,11 +1619,11 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         # Plot anomalies at correct numeric positions
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                an_mask = data.index.isin(pd.Index(anomalies_idx))
-                if np.any(an_mask):
-                    an_positions = np.flatnonzero(an_mask)
+                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx))
+                an_positions = _anomaly_positions_for_index(data.index, an_display)
+                if an_positions:
                     an_values = data.iloc[an_positions].astype(float).values
-                    ax.scatter(an_positions, an_values, color='red', s=14, zorder=5, label='Anomaly')
+                    ax.scatter(an_positions, an_values, color='red', s=2, zorder=5, label='Anomaly')
             except Exception:
                 pass
     
@@ -1890,6 +2197,7 @@ def generate_forecast_plot(
     conf_int=None,
     history_tail=None,
     anomalies_idx=None,
+    anomalies_score=None,
     stats=None,
     legend_y=None,
     xlabel_labelpad=None,
@@ -1943,12 +2251,12 @@ def generate_forecast_plot(
         # Anomaly markers (shown regardless of forecast)
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                an_mask = history_tail_series.index.isin(pd.Index(anomalies_idx))
-                if np.any(an_mask):
-                    an_positions = np.flatnonzero(an_mask)
+                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), anomalies_score)
+                an_positions = _anomaly_positions_for_index(history_tail_series.index, an_display)
+                if an_positions:
                     an_values = history_tail_series.iloc[an_positions].astype(float).values
-                    ax.scatter(an_positions, an_values, color='red', s=40, zorder=5,
-                              label='Anomaly', marker='o', edgecolors='darkred', linewidths=1.5)
+                    ax.scatter(an_positions, an_values, color='red', s=4, zorder=5,
+                              label='Anomaly', marker='o', edgecolors='darkred', linewidths=0.6)
             except Exception as e:
                 app.logger.warning(f"Could not plot anomalies: {e}")
 
@@ -2039,11 +2347,12 @@ def generate_forecast_plot(
         # Add anomaly markers if provided (shown regardless of forecast)
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                an_mask = history_tail_series.index.isin(pd.Index(anomalies_idx))
-                if np.any(an_mask):
-                    aligned_anomalies = history_tail_series.loc[an_mask]
-                    ax.scatter(aligned_anomalies.index, aligned_anomalies.values, color='red', s=40, zorder=5,
-                              label='Anomaly', marker='o', edgecolors='darkred', linewidths=1.5)
+                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), anomalies_score)
+                an_positions = _anomaly_positions_for_index(history_tail_series.index, an_display)
+                if an_positions:
+                    aligned_anomalies = history_tail_series.iloc[an_positions]
+                    ax.scatter(aligned_anomalies.index, aligned_anomalies.values, color='red', s=4, zorder=5,
+                              label='Anomaly', marker='o', edgecolors='darkred', linewidths=0.6)
             except Exception as e:
                 app.logger.warning(f"Could not plot anomalies: {e}")
         
@@ -2948,13 +3257,19 @@ def get_cached_numeric_df(filename: str, df: pd.DataFrame) -> pd.DataFrame:
 
 def detect_anomalies(series: pd.Series, contamination: float = 0.02):
     """
-        Detect anomalies using robust z-score distance from the median (MAD-based).
-        This is deterministic and easier to explain to users:
-        - score = 0.6745 * (x - median) / MAD
-        - select strongest outliers by absolute score, bounded by contamination
+        Detect anomalies using IsolationForest.
+
+        For datetime series with reliable seasonality, run IsolationForest on STL
+        residuals (robust decomposition) to reduce seasonal false positives.
+
+        Apply a confidence gate over IF scores to keep only stronger anomalies and
+        reduce false positives while preserving at least one outlier when IF flags any.
+
+        Returns per-point anomaly scores where larger positive values mean
+        "more anomalous".
     Returns:
       - an_idx: index of detected anomalies (pd.Index)
-            - an_score: signed robust z-score as a Series indexed by anomaly index
+            - an_score: anomaly score as a Series indexed by anomaly index
     """
     try:
         s = pd.to_numeric(series, errors='coerce').dropna()
@@ -2972,41 +3287,83 @@ def detect_anomalies(series: pd.Series, contamination: float = 0.02):
         cont = 0.02
 
     try:
-        vals = np.asarray(s.to_numpy(dtype=float), dtype=float)
+        s_for_model = s
+        if isinstance(s.index, pd.DatetimeIndex):
+            seasonal_period = _infer_seasonal_period(s.index)
+            if isinstance(seasonal_period, int) and seasonal_period >= 2 and len(s) >= max(28, seasonal_period * 2):
+                try:
+                    stl_result = STL(s.astype(float), period=int(seasonal_period), robust=True).fit()
+                    resid = pd.to_numeric(pd.Series(stl_result.resid, index=s.index), errors='coerce').dropna()
+                    if len(resid) >= max(20, seasonal_period * 2):
+                        s_for_model = resid
+                except Exception:
+                    s_for_model = s
+
+        vals = np.asarray(s_for_model.to_numpy(dtype=float), dtype=float)
         n = len(vals)
         if n < 5:
             return pd.Index([]), pd.Series([], dtype=float)
 
-        # Select at most k points from contamination.
-        k = max(1, int(math.ceil(n * cont)))
+        n_estimators = 300 if n >= 200 else 200
+        model = IsolationForest(
+            contamination=cont,
+            random_state=42,
+            n_estimators=n_estimators,
+            max_samples=min(256, n),
+            n_jobs=1,
+        )
+        x = vals.reshape(-1, 1)
+        labels = model.fit_predict(x)
+        if labels is None or len(labels) != n:
+            return pd.Index([]), pd.Series([], dtype=float)
 
-        med = float(np.nanmedian(vals))
-        abs_dev = np.abs(vals - med)
-        mad = float(np.nanmedian(abs_dev))
+        anomaly_positions = np.where(np.asarray(labels) == -1)[0]
+        if anomaly_positions.size == 0:
+            return pd.Index([]), pd.Series([], dtype=float)
 
-        if np.isfinite(mad) and mad > 1e-12:
-            robust_z = 0.6745 * (vals - med) / mad
+        # decision_function: higher means more normal; invert so higher means more anomalous.
+        raw_scores = -np.asarray(model.decision_function(x), dtype=float)
+        finite_scores = raw_scores[np.isfinite(raw_scores)]
+        if finite_scores.size == 0:
+            return pd.Index([]), pd.Series([], dtype=float)
+
+        score_med = float(np.nanmedian(finite_scores))
+        score_mad = float(np.nanmedian(np.abs(finite_scores - score_med)))
+        is_timeseries = isinstance(s_for_model.index, pd.DatetimeIndex)
+        if np.isfinite(score_mad) and score_mad > 1e-12:
+            mad_multiplier = 2.5 if is_timeseries else 3.0
+            min_keep_score = score_med + (mad_multiplier * score_mad)
         else:
-            std = float(np.nanstd(vals, ddof=1)) if n > 1 else 0.0
-            if np.isfinite(std) and std > 1e-12:
-                robust_z = (vals - med) / std
-            else:
-                robust_z = np.zeros(n, dtype=float)
+            fallback_q = max(0.90, 1.0 - cont * 0.5)
+            if not is_timeseries:
+                fallback_q = max(fallback_q, 0.97)
+            min_keep_score = float(np.nanquantile(finite_scores, fallback_q))
 
-        abs_score = np.abs(robust_z)
-        if (not np.isfinite(abs_score).any()) or float(np.nanmax(abs_score)) <= 0.0:
-            return pd.Index([]), pd.Series([], dtype=float)
+        keep_positions = [
+            int(pos)
+            for pos in anomaly_positions.tolist()
+            if np.isfinite(raw_scores[int(pos)]) and raw_scores[int(pos)] >= min_keep_score
+        ]
+        if not keep_positions:
+            anomaly_scores = raw_scores[anomaly_positions]
+            best_rel = int(np.nanargmax(anomaly_scores))
+            keep_positions = [int(anomaly_positions[best_rel])]
 
-        # Explanatory threshold: only keep meaningful outliers.
-        min_abs_score = 2.5
-        ranked = np.argsort(-abs_score, kind='mergesort')
-        selected_positions = [int(pos) for pos in ranked if abs_score[pos] >= min_abs_score][:k]
-        if not selected_positions:
-            return pd.Index([]), pd.Series([], dtype=float)
+        # For non-time-series data with duplicate index labels (e.g., repeated categories),
+        # keep only the strongest anomaly per label to avoid dense visual clutter.
+        if not is_timeseries and len(keep_positions) > 1:
+            best_by_label: dict[Any, tuple[int, float]] = {}
+            for pos in keep_positions:
+                label = s_for_model.index[int(pos)]
+                score = float(raw_scores[int(pos)])
+                prev = best_by_label.get(label)
+                if prev is None or score > prev[1]:
+                    best_by_label[label] = (int(pos), score)
+            keep_positions = [v[0] for v in best_by_label.values()]
 
-        selected_positions = sorted(selected_positions)
-        an_idx = s.index[selected_positions]
-        an_score = pd.Series(robust_z[selected_positions], index=an_idx, dtype=float)
+        selected_positions = sorted(keep_positions)
+        an_idx = s_for_model.index[selected_positions]
+        an_score = pd.Series(raw_scores[selected_positions], index=an_idx, dtype=float)
         return an_idx, an_score
     except Exception:
         return pd.Index([]), pd.Series([], dtype=float)
@@ -3372,6 +3729,59 @@ def safe_df_description_html(df: pd.DataFrame) -> str:
         except Exception:
             return "<p>Could not build description.</p>"
 
+
+def get_dataset_overview_tables(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build dataset overview as tabular data for web and PDF output."""
+    total_rows = int(len(df.index))
+    total_cols = int(len(df.columns))
+
+    summary_rows = [
+        ("Rows", total_rows),
+        ("Columns", total_cols),
+        ("Index Name", str(df.index.name or "(none)")),
+        ("Index Type", type(df.index).__name__),
+        ("Memory Usage", f"{float(df.memory_usage(deep=True).sum()) / 1024:.1f} KB"),
+    ]
+    summary_df = pd.DataFrame(summary_rows, columns=["Metric", "Value"])
+
+    non_null_counts = df.notna().sum()
+    dtypes = df.dtypes.astype(str)
+    columns_df = pd.DataFrame(
+        {
+            "#": list(range(len(df.columns))),
+            "Column": [str(col) for col in df.columns],
+            "Non-Null Count": [f"{int(non_null_counts[col])} non-null" for col in df.columns],
+            "Dtype": [dtypes[col] for col in df.columns],
+        }
+    )
+    return summary_df, columns_df
+
+
+def safe_dataset_overview_html(df: pd.DataFrame) -> str:
+    """Render dataset overview in table form for the Overview page."""
+    try:
+        if df is None or df.shape[1] == 0:
+            return "<p>No dataset overview available.</p>"
+
+        summary_df, columns_df = get_dataset_overview_tables(df)
+        with pd.option_context('display.max_columns', None, 'display.width', None, 'display.max_colwidth', None):
+            summary_html = summary_df.to_html(index=False, classes=['dataframe'], justify='left')
+            columns_html = columns_df.to_html(
+                index=False,
+                classes=['dataframe'],
+                max_cols=None,
+                col_space=50,
+                justify='left',
+            )
+
+        return (
+            f'<div style="overflow-x: auto; max-width: 100%;">{summary_html}</div>'
+            f'<div style="margin-top: 10px; overflow-x: auto; max-width: 100%;">{columns_html}</div>'
+        )
+    except Exception as e:
+        app.logger.warning("safe_dataset_overview_html failed: %s", e)
+        return "<p>Could not render dataset overview table.</p>"
+
 def get_cached_df_info(filename: str, df: pd.DataFrame) -> dict:
     """Get cached head/description/info for a DataFrame to avoid recomputation on view switches."""
     cached = DESCRIPTION_CACHE.get(filename)
@@ -3382,6 +3792,7 @@ def get_cached_df_info(filename: str, df: pd.DataFrame) -> dict:
     result = {
         'head': safe_df_head_html(df),
         'description': safe_df_description_html(df),
+        'overview_table_html': safe_dataset_overview_html(df),
         'info': None,
         'missing_values': None
     }
@@ -3835,6 +4246,7 @@ def analyze_file(filename):
         analysis.update({
             'head': cached_info['head'],
             'description': cached_info['description'],
+            'overview_table': cached_info.get('overview_table_html', ''),
             'info': cached_info['info'],
             'missing_values': cached_info['missing_values'],
             'plots': [],
@@ -3977,6 +4389,7 @@ def analyze_file(filename):
                             conf_int=conf_df_thin,
                             history_tail=None,
                             anomalies_idx=an_idx,  # Add anomaly markers to forecast plot
+                            anomalies_score=an_score,
                             stats=fc_stats,        # Pass stats for visualization
                             legend_y=-0.42,
                             xlabel_labelpad=6
@@ -4132,11 +4545,14 @@ def analyze_file(filename):
             
             if build_interactive and len(an_idx):
                 # Find numeric positions for anomaly markers
+                an_display = _cap_anomalies_for_display(an_idx, an_score)
                 an_positions = []
                 an_y_values = []
                 an_labels = []
-                for i, idx in enumerate(s_tail.index):
-                    if idx in an_idx:
+                remaining = Counter(list(an_display))
+                for i, idx in enumerate(list(s_tail.index)):
+                    if remaining.get(idx, 0) > 0:
+                        remaining[idx] -= 1
                         val = s_tail.iloc[i]
                         an_positions.append(i)
                         an_y_values.append(float(val))
@@ -4150,7 +4566,7 @@ def analyze_file(filename):
                         "x": an_positions,
                         "y": an_y_values,
                         "text": an_labels,
-                        "marker": {"color": "#ef4444", "size": 7, "opacity": 0.9},
+                        "marker": {"color": "#ef4444", "size": 5, "opacity": 0.9},
                         "hovertemplate": "Anomaly<br>%{text}<br>%{y}<extra></extra>"
                     })
             
@@ -4374,6 +4790,7 @@ def analyze_file(filename):
     analysis.update({
         'head': cached_info['head'],
         'description': cached_info['description'],
+        'overview_table': cached_info.get('overview_table_html', ''),
         'info': info_string,
         'missing_values': missing_values_html,
         'plots': [],
@@ -4584,10 +5001,12 @@ def api_interactive_data(filename):
         
         # Add anomaly markers using numeric positions
         if len(an_idx):
+            an_display = _cap_anomalies_for_display(an_idx, an_score)
             an_positions = []
             an_values = []
             an_labels = []
-            an_idx_set = set(an_idx)
+            tail_vals = np.asarray(s_tail.to_numpy(dtype=float), dtype=float)
+            tail_median = float(np.nanmedian(tail_vals)) if tail_vals.size else 0.0
 
             score_buckets: dict[Any, list[float]] = {}
             try:
@@ -4597,8 +5016,10 @@ def api_interactive_data(filename):
             except Exception:
                 score_buckets = {}
 
-            for i, idx in enumerate(s_tail.index):
-                if idx in an_idx_set:
+            remaining = Counter(list(an_display))
+            for i, idx in enumerate(list(s_tail.index)):
+                if remaining.get(idx, 0) > 0:
+                    remaining[idx] -= 1
                     an_positions.append(i)
                     an_values.append(_safe_number(s_tail.iloc[i]))
                     score_list = score_buckets.get(idx, [])
@@ -4608,10 +5029,10 @@ def api_interactive_data(filename):
 
                     if score_val is None or not math.isfinite(float(score_val)):
                         reason = "Outlier"
-                    elif float(score_val) >= 0:
-                        reason = f"High outlier (robust z={float(score_val):.2f})"
+                    elif float(s_tail.iloc[i]) >= tail_median:
+                        reason = f"High outlier (IF score={float(score_val):.3f})"
                     else:
-                        reason = f"Low outlier (robust z={float(score_val):.2f})"
+                        reason = f"Low outlier (IF score={float(score_val):.3f})"
                     an_labels.append(f"{idx} | {reason}")
             
             if an_positions:
@@ -4623,7 +5044,7 @@ def api_interactive_data(filename):
                     "y": an_values,
                     "text": an_labels,
                     "hovertemplate": "Anomaly<br>%{text}<br>%{y}<extra></extra>",
-                    "marker": {"color": "#ef4444", "size": 7, "opacity": 0.9}
+                    "marker": {"color": "#ef4444", "size": 5, "opacity": 0.9}
                 })
         
         # Add forecast using numeric positions continuing from history
@@ -4753,8 +5174,8 @@ def download_cleaned_csv(filename):
             cleaned = cleaned.sort_index()
         
         cleaned = cleaned.dropna(axis=1, how='all')
-    except Exception:
-        pass
+    except Exception as clean_err:
+        app.logger.warning("Cleaned CSV normalization fallback for %s: %s", filename, clean_err)
 
     csv = cleaned.to_csv(index=True)
     resp = make_response(csv)
@@ -4834,16 +5255,16 @@ def download_static_plots_zip(filename):
             if spearman_heatmap:
                 raw = base64.b64decode(spearman_heatmap.encode('utf-8'))
                 zf.writestr("correlation_spearman.png", raw)
-        except Exception:
-            pass
+        except Exception as heatmap_err:
+            app.logger.debug("ZIP spearman heatmap skipped for %s: %s", filename, heatmap_err)
         
         try:
             pearson_heatmap = get_cached_heatmap(filename, df, method='pearson')
             if pearson_heatmap:
                 raw = base64.b64decode(pearson_heatmap.encode('utf-8'))
                 zf.writestr("correlation_pearson.png", raw)
-        except Exception:
-            pass
+        except Exception as heatmap_err:
+            app.logger.debug("ZIP pearson heatmap skipped for %s: %s", filename, heatmap_err)
         
         # Generate plots for each numeric column
         for col in df.columns:
@@ -4851,7 +5272,8 @@ def download_static_plots_zip(filename):
                 continue
             try:
                 s = numeric_df_cached[col].dropna()
-            except Exception:
+            except Exception as series_err:
+                app.logger.debug("ZIP numeric series extraction failed for %s/%s: %s", filename, col, series_err)
                 s = pd.Series(dtype=float)
             if s.empty or len(s) < 3:
                 continue
@@ -4871,13 +5293,14 @@ def download_static_plots_zip(filename):
                     conf_int=None,
                     history_tail=None,
                     anomalies_idx=an_idx,
-                    legend_y=-0.18,
-                    xlabel_labelpad=6
+                    anomalies_score=an_score,
+                    legend_y=-0.38,
+                    xlabel_labelpad=10
                 )
                 raw = base64.b64decode(img_b64.encode('utf-8'))
                 zf.writestr(f"{secure_filename(str(col))}_trend.png", raw)
-            except Exception:
-                pass
+            except Exception as trend_err:
+                app.logger.debug("ZIP trend plot skipped for %s/%s: %s", filename, col, trend_err)
             
             # Distribution histogram - HIGH QUALITY: Larger figure and more bins
             try:
@@ -4941,16 +5364,16 @@ def download_static_plots_zip(filename):
                     # Legend on single line - just below x-axis title
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
                     fig.subplots_adjust(bottom=0.30)
-                except Exception:
-                    pass
+                except Exception as stats_err:
+                    app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
                 plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
-            except Exception:
-                pass
+            except Exception as dist_err:
+                app.logger.debug("ZIP distribution plot skipped for %s/%s: %s", filename, col, dist_err)
             
             # STL decomposition (for timeseries with sufficient data)
             if is_timeseries and len(s) >= 28:
@@ -4962,21 +5385,23 @@ def download_static_plots_zip(filename):
                         if stl_img:
                             raw = base64.b64decode(stl_img.encode('utf-8'))
                             zf.writestr(f"{secure_filename(str(col))}_stl.png", raw)
-                except Exception:
-                    pass
+                except Exception as stl_err:
+                    app.logger.debug("ZIP STL plot skipped for %s/%s: %s", filename, col, stl_err)
             
             # Forecast (for numeric series)
             if len(s) >= 10:
                 try:
                     try:
                         fc_mean, ci = get_cached_column_forecast(filename, col, s, forecast_steps)
-                    except Exception:
+                    except Exception as cache_fc_err:
+                        app.logger.debug("ZIP cached forecast unavailable for %s/%s: %s", filename, col, cache_fc_err)
                         fc_mean, ci = None, None
 
                     if fc_mean is None or len(fc_mean) == 0:
                         try:
                             fc_mean, ci = _recent_slope_forecast(s, steps=forecast_steps)
-                        except Exception:
+                        except Exception as slope_fc_err:
+                            app.logger.debug("ZIP slope fallback forecast failed for %s/%s: %s", filename, col, slope_fc_err)
                             fc_mean, ci = None, None
 
                     if fc_mean is None or len(fc_mean) == 0:
@@ -4995,12 +5420,13 @@ def download_static_plots_zip(filename):
                         conf_int=ci,
                         history_tail=None,
                         anomalies_idx=an_idx,
+                        anomalies_score=an_score,
                         legend_y=-0.38
                     )
                     raw = base64.b64decode(fc_b64.encode('utf-8'))
                     zf.writestr(f"{secure_filename(str(col))}_forecast.png", raw)
-                except Exception:
-                    pass
+                except Exception as fc_err:
+                    app.logger.debug("ZIP forecast plot skipped for %s/%s: %s", filename, col, fc_err)
 
         # Generate Categories bar charts for non-numeric columns (top 50)
         for col in df.columns:
@@ -5040,8 +5466,8 @@ def download_static_plots_zip(filename):
                             padding=2,
                             fontsize=7
                         )
-                except Exception:
-                    pass
+                except Exception as bar_label_err:
+                    app.logger.debug("ZIP categories bar labels skipped for %s/%s: %s", filename, col, bar_label_err)
                 
                 if len(all_counts) > 50:
                     ax.set_title(f"Categories: {col} (Top 50 of {total_unique})", fontsize=12)
@@ -5092,8 +5518,8 @@ def download_static_plots_zip(filename):
                 plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_categories.png", buf.read())
-            except Exception:
-                pass
+            except Exception as cat_err:
+                app.logger.debug("ZIP categories plot skipped for %s/%s: %s", filename, col, cat_err)
 
     bio.seek(0)
     display = request.args.get('display') or filename
@@ -5113,17 +5539,14 @@ class PDFReport(FPDF):
         super().__init__()
         self.report_title = title_str
         self.display_name = display_name
-        self._first_page_added = False
     
     def _ensure_first_page(self):
         """Ensure at least one page exists before any operation."""
-        if not self._first_page_added and self.page_no() == 0:
+        if self.page_no() == 0:
             super().add_page()
-            self._first_page_added = True
     
     def add_page(self, *args, **kwargs):
         super().add_page(*args, **kwargs)
-        self._first_page_added = True
     
     def cell(self, *args, **kwargs):
         self._ensure_first_page()
@@ -5140,10 +5563,14 @@ class PDFReport(FPDF):
     def write_html(self, *args, **kwargs):
         self._ensure_first_page()
         return super().write_html(*args, **kwargs)
-    
+
     def ln(self, *args, **kwargs):
         self._ensure_first_page()
         return super().ln(*args, **kwargs)
+
+    def set_y(self, *args, **kwargs):
+        self._ensure_first_page()
+        return super().set_y(*args, **kwargs)
     
     def set_font(self, *args, **kwargs):
         self._ensure_first_page()
@@ -5156,10 +5583,6 @@ class PDFReport(FPDF):
     def set_draw_color(self, *args, **kwargs):
         self._ensure_first_page()
         return super().set_draw_color(*args, **kwargs)
-    
-    def set_y(self, *args, **kwargs):
-        self._ensure_first_page()
-        return super().set_y(*args, **kwargs)
     
     def get_y(self, *args, **kwargs):
         self._ensure_first_page()
@@ -5253,7 +5676,7 @@ def download_full_report_pdf(filename):
                 
                 # Generate AI summary
                 generated = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
-                if isinstance(generated, str) and not _is_offline_html(generated):
+                if isinstance(generated, str) and generated.strip():
                     AI_SUMMARY_CACHE[filename] = generated
                     app.logger.info(f"Generated AI summary for PDF: {filename}")
         except Exception as e:
@@ -5292,12 +5715,15 @@ def download_full_report_pdf(filename):
         app.logger.info("Continuing PDF generation...")
         ensure_page()
         app.logger.info(f"Page added. Page No: {pdf.page_no()}")
-        
-        # Set default font
-        if "Arial" in pdf.fonts:
-             pdf.set_font("Arial", size=12)
-        else:
-             pdf.set_font("helvetica", size=12)
+
+        has_arial = "Arial" in pdf.fonts
+        default_font = "Arial" if has_arial else "helvetica"
+
+        def _safe_pdf_text(value: str) -> str:
+            out = str(value)
+            return out if has_arial else out.encode('latin-1', 'replace').decode('latin-1')
+
+        pdf.set_font(default_font, size=12)
 
         # Helper for adding sections
         def add_section_title(title, new_page=True):
@@ -5306,110 +5732,259 @@ def download_full_report_pdf(filename):
                 pdf.add_page()
             else:
                 pdf.ln(5)
-            
-            # Use Arial if available, else helvetica
-            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
-            pdf.set_font(font_family, style="B", size=13)
+
+            pdf.set_font(default_font, style="B", size=13)
             pdf.set_fill_color(240, 240, 240)
             pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT", fill=True)
             pdf.ln(2)
-            pdf.set_font(font_family, size=10)
+            pdf.set_font(default_font, size=10)
 
         def add_text_block(text, courier=False, is_html=False):
-            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+            font_family = default_font
+            title_color = (24, 72, 132)
+            subtitle_color = (34, 96, 86)
+            body_color = (20, 24, 35)
+            muted_color = (52, 64, 84)
+
+            def _parse_inline_segments(value: str) -> list[tuple[str, str]]:
+                segments: list[tuple[str, str]] = []
+                i = 0
+                active_style = ""
+                buffer: list[str] = []
+
+                def _flush() -> None:
+                    if not buffer:
+                        return
+                    text_part = "".join(buffer)
+                    if text_part:
+                        segments.append((text_part, active_style))
+                    buffer.clear()
+
+                while i < len(value):
+                    if value.startswith("**", i):
+                        _flush()
+                        active_style = "" if active_style == "B" else "B"
+                        i += 2
+                        continue
+                    if value[i] == "*":
+                        _flush()
+                        active_style = "" if active_style == "I" else "I"
+                        i += 1
+                        continue
+                    buffer.append(value[i])
+                    i += 1
+
+                _flush()
+                if not segments:
+                    return [(value, "")]
+                return [(seg, style) for seg, style in segments if seg]
+
+            def _merge_style(base_style: str, inline_style: str) -> str:
+                style_chars = set((base_style or "") + (inline_style or ""))
+                merged = ""
+                if "B" in style_chars:
+                    merged += "B"
+                if "I" in style_chars:
+                    merged += "I"
+                return merged
+
+            def _render_inline_line(
+                line_text: str,
+                *,
+                prefix: str = "",
+                size: int = 10,
+                line_h: float = 5.2,
+                style: str = "",
+                color: tuple[int, int, int] | None = None,
+                left_offset: float = 0.0,
+            ) -> None:
+                prepared = f"{prefix}{line_text}" if prefix else line_text
+                segments = _parse_inline_segments(prepared)
+
+                start_x = float(pdf.l_margin + max(0.0, left_offset))
+                max_width = max(20.0, float(pdf.w - start_x - pdf.r_margin))
+                effective_line_h = max(5.4, float(line_h))
+                render_color = color or body_color
+
+                if pdf.get_y() > 270:
+                    pdf.add_page()
+                pdf.set_text_color(*render_color)
+                pdf.set_x(start_x)
+
+                def _new_line() -> None:
+                    if pdf.get_y() > 270:
+                        pdf.add_page()
+                    else:
+                        pdf.ln(effective_line_h)
+                    pdf.set_x(start_x)
+
+                def _emit_token(token_text: str, token_style: str) -> None:
+                    safe_token = _safe_pdf_text(token_text)
+                    if not safe_token:
+                        return
+
+                    merged_style = _merge_style(style, token_style)
+                    pdf.set_font(font_family, style=merged_style, size=size)
+                    token_width = pdf.get_string_width(safe_token)
+
+                    if token_width <= max_width:
+                        if pdf.get_x() + token_width > start_x + max_width and not safe_token.isspace():
+                            _new_line()
+                        pdf.cell(token_width, effective_line_h, safe_token, new_x="RIGHT", new_y="TOP")
+                        return
+
+                    for char in safe_token:
+                        char_w = pdf.get_string_width(char)
+                        if pdf.get_x() + char_w > start_x + max_width:
+                            _new_line()
+                        pdf.cell(char_w, effective_line_h, char, new_x="RIGHT", new_y="TOP")
+
+                for seg_text, seg_style in segments:
+                    for token in re.split(r"(\s+)", seg_text):
+                        if token == "":
+                            continue
+                        _emit_token(token, seg_style)
+
+                pdf.ln(effective_line_h)
+                pdf.set_x(pdf.l_margin)
+                pdf.set_text_color(*body_color)
+                pdf.set_font(font_family, size=10)
+
+            def _render_styled_line(
+                line_text: str,
+                *,
+                prefix: str = "",
+                size: int = 10,
+                line_h: float = 5.0,
+                style: str = "",
+                color: tuple[int, int, int] | None = None,
+                left_offset: float = 0.0,
+            ) -> None:
+                _render_inline_line(
+                    line_text.strip(),
+                    prefix=prefix,
+                    size=size,
+                    line_h=line_h,
+                    style=style,
+                    color=color,
+                    left_offset=left_offset,
+                )
+
+            def _emphasize_leading_label(value: str) -> str:
+                plain = re.sub(r'\*(.*?)\*', r'\1', value)
+                if ':' not in plain:
+                    return value
+                if value.strip().startswith("**"):
+                    return value
+                label, rest = value.split(':', 1)
+                if 1 <= len(label.strip()) <= 35 and label.strip().replace(' ', '').replace('-', '').isalpha():
+                    return f"**{label.strip()}:**{rest}"
+                return value
             
             # Ensure we have a page
             if pdf.page_no() == 0:
                 app.logger.warning("No page open, adding one.")
                 ensure_page()
             
-            # Use fpdf2's write_html for HTML content with actual formatting
             if is_html:
+                def _ensure_vertical_space(min_height: float) -> None:
+                    remaining = float(pdf.h - pdf.b_margin - pdf.get_y())
+                    if remaining < max(0.0, min_height):
+                        pdf.add_page()
+
                 try:
-                    # Replace emojis with text equivalents (PDF fonts don't support most emojis)
-                    html_text = replace_emojis_for_pdf(text)
-                    
-                    # Sanitize HTML for fpdf2 compatibility
-                    # fpdf2 write_html supports: b, i, u, h1-h6, p, br, ul, ol, li, font, a, img, table
-                    html_text = re.sub(r'<strong([^>]*)>', r'<b\1>', html_text, flags=re.I)
-                    html_text = re.sub(r'</strong>', '</b>', html_text, flags=re.I)
-                    html_text = re.sub(r'<em([^>]*)>', r'<i\1>', html_text, flags=re.I)
-                    html_text = re.sub(r'</em>', '</i>', html_text, flags=re.I)
-                    
-                    # Remove problematic tags but keep their content
-                    html_text = re.sub(r'</?div[^>]*>', '', html_text, flags=re.I)
-                    html_text = re.sub(r'</?span[^>]*>', '', html_text, flags=re.I)
-                    html_text = re.sub(r'</?section[^>]*>', '', html_text, flags=re.I)
-                    
-                    # Set base font before rendering HTML
-                    pdf.set_font(font_family, size=10)
-                    
-                    # FIX: Render HTML in chunks (by paragraph/list) to prevent mid-content page breaks
-                    # Split on block-level elements to control page breaks better
-                    
-                    # Split HTML by major block elements while keeping delimiters
-                    # This helps prevent large gaps when page breaks occur mid-list
-                    chunks = re.split(r'(?=<(?:p|ul|ol|h[1-6]|table)[^>]*>)', html_text, flags=re.I)
-                    chunks = [c.strip() for c in chunks if c.strip()]
-                    
-                    for idx, chunk in enumerate(chunks):
-                        # Keep PDF summary strictly formatted: skip non-HTML/plain chunks.
-                        if not re.match(r'^<(?:p|ul|ol|h[1-6]|table)\b', chunk, flags=re.I):
-                            continue
-
-                        is_heading = bool(re.match(r'^<h[1-6]\b', chunk, flags=re.I))
-                        next_chunk = chunks[idx + 1] if idx + 1 < len(chunks) else ""
-                        next_is_block = bool(re.match(r'^<(?:p|ul|ol|table)\b', next_chunk, flags=re.I))
-
-                        # Avoid orphan headings at page bottom: force page break earlier for titles.
-                        # Keep room for heading plus at least one following block.
-                        if is_heading and pdf.get_y() > 222:
-                            pdf.add_page()
-                        elif is_heading and next_is_block and pdf.get_y() > 214:
-                            pdf.add_page()
-
-                        # Check if we need a new page before rendering this chunk
-                        # If near bottom, start fresh to keep content together
-                        if pdf.get_y() > 240:  # 240mm leaves ~57mm for content (roughly 8-10 lines)
-                            pdf.add_page()
-                        
-                        # Render this chunk
-                        try:
-                            pdf.write_html(chunk)
-                        except Exception as chunk_err:
-                            app.logger.warning("Skipping unrenderable HTML chunk in PDF summary: %s", chunk_err)
-                    
-                    pdf.ln(5)
-                    pdf.set_font(font_family, size=10)
-                    return
+                    text = convert_html_to_formatted_text(str(text))
                 except Exception as e:
-                    app.logger.warning("write_html failed for PDF summary: %s", e)
-                    # For HTML summary blocks, do not fall back to unformatted text.
-                    # This prevents duplicate/formatted+plain rendering.
-                    pdf.ln(5)
-                    pdf.set_font(font_family, size=10)
-                    return
-            
-            # Standard text rendering
+                    app.logger.warning("HTML conversion failed for PDF summary: %s", e)
+                    text = re.sub(r'<[^>]+>', ' ', str(text))
+
+                text = replace_emojis_for_pdf(text)
+                lines = text.splitlines()
+                heading_with_body_min_h = 24.0
+                subheading_with_body_min_h = 18.0
+                i = 0
+                while i < len(lines):
+                    raw_line = lines[i]
+                    line = raw_line.strip()
+                    if not line:
+                        pdf.ln(3)
+                        i += 1
+                        continue
+
+                    next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
+                    if re.fullmatch(r'[=-]{3,}', line):
+                        i += 1
+                        continue
+
+                    clean_for_type = re.sub(r'\*\*(.*?)\*\*', r'\1', line)
+                    clean_for_type = re.sub(r'\*(.*?)\*', r'\1', clean_for_type)
+
+                    if re.fullmatch(r'[=-]{3,}', next_line):
+                        # Keep section titles from being stranded at the page bottom.
+                        _ensure_vertical_space(heading_with_body_min_h)
+                        if i > 0:
+                            pdf.ln(4)
+                        _render_styled_line(
+                            clean_for_type.upper(),
+                            size=11,
+                            line_h=6,
+                            style="B",
+                            color=title_color,
+                        )
+                        pdf.ln(4)
+                        i += 2
+                        continue
+
+                    if re.match(r'^(-|•)\s+', clean_for_type):
+                        leading_spaces = len(raw_line) - len(raw_line.lstrip(' '))
+                        depth = max(0, leading_spaces // 2)
+                        bullet_text = re.sub(r'^\s*(-|•)\s+', '', raw_line)
+                        bullet_text = _emphasize_leading_label(bullet_text)
+                        bullet_prefix = "- "
+                        _render_styled_line(
+                            bullet_text,
+                            prefix=bullet_prefix,
+                            color=muted_color if depth > 0 else body_color,
+                            left_offset=depth * 7.0,
+                        )
+                    elif re.match(r'^\d+\.\s+', clean_for_type):
+                        leading_spaces = len(raw_line) - len(raw_line.lstrip(' '))
+                        depth = max(0, leading_spaces // 2)
+                        numbered_text = _emphasize_leading_label(raw_line.strip())
+                        _render_styled_line(numbered_text, left_offset=depth * 7.0)
+                    elif clean_for_type.endswith(':') and len(clean_for_type) <= 90:
+                        _ensure_vertical_space(subheading_with_body_min_h)
+                        if i > 0:
+                            pdf.ln(2)
+                        _render_styled_line(
+                            f"**{clean_for_type}**",
+                            size=10,
+                            style="B",
+                            color=subtitle_color,
+                            line_h=5.6,
+                        )
+                        pdf.ln(2)
+                    else:
+                        _render_styled_line(_emphasize_leading_label(raw_line.strip()), color=body_color)
+                    i += 1
+
+                pdf.ln(3)
+                pdf.set_font(font_family, size=10)
+                return
+
             if courier:
                 pdf.set_font("Courier", size=9)
-            elif "Arial" in pdf.fonts:
-                pdf.set_font("Arial", size=10)
             else:
-                pdf.set_font("helvetica", size=10)
+                pdf.set_font(default_font, size=10)
             
-            # Replace emojis for plain text too
             text = replace_emojis_for_pdf(text)
             
-            # Render text
-            if "Arial" in pdf.fonts:
+            if has_arial:
                 pdf.multi_cell(0, 5, text)
             else:
-                safe_text = text.encode('latin-1', 'replace').decode('latin-1')
-                pdf.multi_cell(0, 5, safe_text)
+                pdf.multi_cell(0, 5, _safe_pdf_text(text))
             pdf.ln(5)
             
-            # Reset font
             pdf.set_font(font_family, size=10)
 
         def add_df_table(df_table, title=None, new_page=True):
@@ -5423,61 +5998,177 @@ def download_full_report_pdf(filename):
             
             # Use fpdf2's built-in table context if available, otherwise manual
             try:
-                # Basic data prep: Convert all to string, handle truncation
-                max_cols = 100 # Effectively no limit for typical datasets
-                if len(df_table.columns) > max_cols:
-                    df_display = df_table.iloc[:, :max_cols].copy()
-                    df_display["..."] = "..."
-                else:
-                    df_display = df_table.copy()
+                # Basic data prep: keep full columns/values and convert to string
+                df_display = df_table.copy()
                 
                 # Convert all to string
                 df_display = df_display.astype(str)
                 
-                # Include header
-                headers = [str(c) for c in df_display.columns]
-                # If we want the index to be the first column
-                data = []
-                for idx, row in df_display.iterrows():
-                    row_data = [str(idx)] + [str(x) for x in row.values]
-                    data.append(row_data)
-                
-                headers = ["Index"] + headers
+                # Include header/index and constrain cell text for readability.
+                full_headers = ["Index"] + [str(c) for c in df_display.columns]
+
+                row_count = len(df_display)
+                total_cols = len(full_headers)
+
+                # Adaptive readability settings.
+                if total_cols >= 18:
+                    font_size = 6.0
+                    line_h = 3.8
+                    cols_per_chunk = 8
+                elif total_cols >= 12:
+                    font_size = 6.6
+                    line_h = 4.1
+                    cols_per_chunk = 10
+                else:
+                    font_size = 7.5
+                    line_h = 4.6
+                    cols_per_chunk = 12
+
+                if row_count >= 20:
+                    font_size = max(5.6, font_size - 0.7)
+                    line_h = max(3.4, line_h - 0.4)
+
+                # Keep index + selected data columns per chunk.
+                data_columns = list(df_display.columns)
+                chunks = [
+                    data_columns[i:i + max(1, cols_per_chunk - 1)]
+                    for i in range(0, len(data_columns), max(1, cols_per_chunk - 1))
+                ] or [[]]
 
                 # Print Title at top of fresh page
                 if title:
-                    pdf.set_font("Arial" if "Arial" in pdf.fonts else "helvetica", 'B', 11)
+                    pdf.set_font(default_font, 'B', 11)
                     pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
                     pdf.ln(3)
 
-                # Print Table
-                pdf.set_font("Arial" if "Arial" in pdf.fonts else "helvetica", size=8)
-                with pdf.table() as table:
-                    row = table.row()
-                    for h in headers:
-                        row.cell(h)
-                    for data_row in data:
-                        row = table.row()
-                        for item in data_row:
-                            row.cell(item)
+                for chunk_idx, chunk_cols in enumerate(chunks, start=1):
+                    chunk_headers = ["Index"] + [str(c) for c in chunk_cols]
+
+                    # Subtitle for multi-part wide tables.
+                    if len(chunks) > 1:
+                        pdf.set_font(default_font, 'I', 8)
+                        pdf.cell(
+                            0,
+                            6,
+                            f"Columns {chunk_idx}/{len(chunks)}",
+                            new_x="LMARGIN",
+                            new_y="NEXT",
+                        )
+
+                    available_width = pdf.w - pdf.l_margin - pdf.r_margin
+
+                    # Compute content-aware widths so narrow columns use less space
+                    # and long/header-heavy columns get more space.
+                    width_scores: list[float] = []
+                    max_rows_for_width = 150
+
+                    wide_table = len(chunk_headers) >= 10
+
+                    for col_pos, col_name in enumerate(chunk_headers):
+                        if col_pos == 0:
+                            series_values = [str(v) for v in df_display.index[:max_rows_for_width]]
+                        else:
+                            source_col = chunk_cols[col_pos - 1]
+                            series_values = [str(v) for v in df_display[source_col].iloc[:max_rows_for_width]]
+
+                        max_cell_len = max([len(str(col_name))] + [len(v) for v in series_values])
+                        if col_pos == 0:
+                            if wide_table:
+                                width_scores.append(max(6.0, min(16.0, float(max_cell_len))))
+                            else:
+                                width_scores.append(max(8.0, min(22.0, float(max_cell_len))))
+                        else:
+                            if wide_table:
+                                width_scores.append(max(4.0, min(24.0, float(max_cell_len))))
+                            else:
+                                width_scores.append(max(6.0, min(36.0, float(max_cell_len))))
+
+                    score_sum = sum(width_scores) if width_scores else 1.0
+                    raw_widths = [(w / score_sum) * available_width for w in width_scores]
+
+                    if wide_table:
+                        min_widths = [12.0] + [7.0] * max(0, len(chunk_headers) - 1)
+                    else:
+                        min_widths = [16.0] + [9.0] * max(0, len(chunk_headers) - 1)
+                    col_widths = [max(raw, min_w) for raw, min_w in zip(raw_widths, min_widths)]
+
+                    total_width = sum(col_widths)
+                    if total_width > available_width and total_width > 0:
+                        shrink_factor = available_width / total_width
+                        col_widths = [w * shrink_factor for w in col_widths]
+
+                    def _safe_text(val):
+                        return _safe_pdf_text(val)
+
+                    def _ensure_row_space():
+                        # Keep a small bottom margin; repeat the table header on a new page.
+                        if pdf.get_y() <= 274:
+                            return
+                        pdf.add_page()
+                        if title:
+                            pdf.set_font(default_font, 'B', 11)
+                            pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
+                            pdf.ln(1)
+                        if len(chunks) > 1:
+                            pdf.set_font(default_font, 'I', 8)
+                            pdf.cell(
+                                0,
+                                6,
+                                f"Columns {chunk_idx}/{len(chunks)}",
+                                new_x="LMARGIN",
+                                new_y="NEXT",
+                            )
+                        pdf.set_font(default_font, 'B', font_size)
+                        for i, h in enumerate(chunk_headers):
+                            align = 'L' if i == 0 else 'C'
+                            pdf.cell(col_widths[i], line_h, _safe_text(str(h)), border=1, align=align)
+                        pdf.ln(line_h)
+
+                    # Header row
+                    pdf.set_font(default_font, 'B', font_size)
+                    for i, h in enumerate(chunk_headers):
+                        align = 'L' if i == 0 else 'C'
+                        pdf.cell(col_widths[i], line_h, _safe_text(str(h)), border=1, align=align)
+                    pdf.ln(line_h)
+
+                    # Data rows
+                    pdf.set_font(default_font, size=font_size)
+                    for idx, row_vals in df_display[chunk_cols].iterrows():
+                        _ensure_row_space()
+                        rendered = [str(idx)] + [str(v) for v in row_vals.values]
+                        for i, item in enumerate(rendered):
+                            align = 'L' if i == 0 else 'R'
+                            pdf.cell(col_widths[i], line_h, _safe_text(item), border=1, align=align)
+                        pdf.ln(line_h)
+
+                    if chunk_idx < len(chunks):
+                        pdf.ln(2)
                 
                 pdf.ln(4)
             except Exception as e:
-                app.logger.warning(f"Table rendering failed, falling back to text: {e}")
-                # Fallback
-                add_text_block(df_table.to_string(), courier=True)
+                app.logger.warning("Table rendering failed, using compact text fallback: %s", e)
+                # Keep a predictable fallback that still includes tabular cues.
+                if title:
+                    pdf.set_font(default_font, 'B', 11)
+                    pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
+                    pdf.ln(1)
+                add_text_block(df_table.to_string(max_rows=None, max_cols=None), courier=True)
 
         # Basic Info
         # First section doesn't need a new page (already on p1)
         add_section_title("1. Dataset Overview", new_page=False)
-        
-        buf = io.StringIO()
-        df.info(buf=buf)
-        info_str = buf.getvalue()
-        
-        font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
-        
-        add_text_block(info_str, courier=True)
+
+        font_family = default_font
+
+        try:
+            summary_df, columns_df = get_dataset_overview_tables(df)
+            add_df_table(summary_df, title="Dataset Overview Summary:", new_page=False)
+            add_df_table(columns_df, title="Columns & Types:", new_page=False)
+        except Exception as e:
+            app.logger.warning("Dataset overview table rendering failed, fallback to info text: %s", e)
+            buf = io.StringIO()
+            df.info(buf=buf)
+            add_text_block(buf.getvalue(), courier=True)
         
 
 
@@ -5503,7 +6194,6 @@ def download_full_report_pdf(filename):
         ai_html = AI_SUMMARY_CACHE.get(filename)
         if ai_html:
             add_section_title("2. AI Analysis Summary")
-            # Use write_html to preserve formatting
             add_text_block(ai_html, is_html=True)
 
             # Always include model attribution at the bottom of the summary section.
@@ -5564,11 +6254,10 @@ def download_full_report_pdf(filename):
             app.logger.error(f"Error adding correlation heatmaps to PDF: {e}")
 
         # Plots
-        # Plots
         add_section_title("4. Column Analysis", new_page=True)
         
         # Show forecast setting used (Moved here)
-        font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+        font_family = default_font
         pdf.set_font(font_family, 'B', 10)
         forecast_pct_display = int(forecast_pct * 100)
         if forecast_pct == 0:
@@ -5583,24 +6272,26 @@ def download_full_report_pdf(filename):
         is_ts = isinstance(df.index, pd.DatetimeIndex)
         numeric_df_cached = get_cached_numeric_df(filename, df)
         numeric_cols = {col for col in numeric_df_cached.columns}
+        x_axis_label = 'Timestamp' if is_ts else 'Index'
+        total_rows = len(df)
+        forecast_steps = max(2, int(total_rows * forecast_pct)) if forecast_pct > 0 else 0
         first_col = True
+        img_width = 180
+        img_x = 15
+
+        def _add_base64_plot(plot_b64: str | None) -> bool:
+            if not plot_b64:
+                return False
+            pdf.image(io.BytesIO(base64.b64decode(plot_b64)), w=img_width, x=img_x)
+            pdf.ln(30)
+            return True
         
         for col in df.columns:
-            is_numeric = False
-            if col in numeric_cols:
-                s = numeric_df_cached[col].dropna()
-            else:
-                s = pd.Series(dtype=float)
-            
-            # Check if valid numeric column (enough data)
-            if len(s) >= 3:
-                is_numeric = True
-            else:
-                # Treat as categorical
-                s = df[col].astype(str)
-                # Skip if empty
-                if s.empty:
-                    continue
+            numeric_series = numeric_df_cached[col].dropna() if col in numeric_cols else pd.Series(dtype=float)
+            is_numeric = len(numeric_series) >= 3
+            series = numeric_series if is_numeric else df[col].astype(str)
+            if not is_numeric and series.empty:
+                continue
 
             # Force new page for EACH column to ensure clean layout
             # We don't use add_section_title here because we want a specific format
@@ -5613,8 +6304,7 @@ def download_full_report_pdf(filename):
             else:
                 pdf.add_page()
             
-            # Use Arial if available
-            font_family = "Arial" if "Arial" in pdf.fonts else "helvetica"
+            font_family = default_font
             pdf.set_font(font_family, 'B', 12)
             pdf.set_fill_color(245, 245, 245)
             # Column Title
@@ -5630,69 +6320,54 @@ def download_full_report_pdf(filename):
             
             pdf.set_font(font_family, size=10)
 
-            # IMAGE WIDTH: Use nearly full page width for maximum visibility
-            img_width = 180  # A4 is ~210mm, leaving 15mm margins on each side
-            img_x = 15  # Center the image
-
             # 1. TREND CHART (History + Anomalies, no forecast) - always first
-            if is_numeric and len(s) >= 10:
+            if is_numeric and len(numeric_series) >= 10:
                 try:
-                    # Detect anomalies
-                    an_idx, _ = get_cached_anomalies(filename, col, s, 0.02)
+                    an_idx, _ = get_cached_anomalies(filename, col, numeric_series, 0.02)
                     
                     # Generate trend plot (no forecast, just history + anomalies)
                     trend_title = f"Trend: {col}"
                     trend_b64 = generate_forecast_plot(
-                        s, 
+                        numeric_series,
                         None,  # No forecast
-                        trend_title, 
-                        'Timestamp' if is_ts else 'Index', 
-                        col, 
+                        trend_title,
+                        x_axis_label,
+                        col,
                         conf_int=None,
-                        history_tail=None, 
+                        history_tail=None,
                         anomalies_idx=an_idx,
                         legend_y=-0.36,
                         xlabel_labelpad=6
                     )
-                    if trend_b64:
-                        pdf.image(io.BytesIO(base64.b64decode(trend_b64)), w=img_width, x=img_x)
-                        pdf.ln(30)
+                    _add_base64_plot(trend_b64)
                 except Exception as e:
                     app.logger.error(f"Error adding trend plot to PDF for {col}: {e}")
-                    pass
+                    an_idx = pd.Index([])
             
             # 2. FORECAST CHART (with forecast if pct > 0)
-            if is_numeric and len(s) >= 10 and forecast_pct > 0:
+            if is_numeric and len(numeric_series) >= 10 and forecast_steps > 0:
                 try:
-                    total_rows = len(df)
-                    forecast_steps = max(2, int(total_rows * forecast_pct))
-                    
                     # Use cached forecast
                     try:
-                        fc_mean, ci = get_cached_column_forecast(filename, col, s, forecast_steps)
+                        fc_mean, ci = get_cached_column_forecast(filename, col, numeric_series, forecast_steps)
                     except Exception:
                         fc_mean, ci = None, None
                     
                     if fc_mean is not None:
-                        # Detect anomalies
-                        an_idx, _ = detect_anomalies(s, contamination=0.02)
-                        
                         fc_title = f"Forecast: {col} ({forecast_steps} steps)"
                         fc_b64 = generate_forecast_plot(
-                            s, 
+                            numeric_series,
                             fc_mean,
-                            fc_title, 
-                            'Timestamp' if is_ts else 'Index', 
-                            col, 
+                            fc_title,
+                            x_axis_label,
+                            col,
                             conf_int=ci,
-                            history_tail=None, 
+                            history_tail=None,
                             anomalies_idx=an_idx,
                             legend_y=-0.40,
                             xlabel_labelpad=6
                         )
-                        if fc_b64:
-                            pdf.image(io.BytesIO(base64.b64decode(fc_b64)), w=img_width, x=img_x)
-                            pdf.ln(30)
+                        _add_base64_plot(fc_b64)
                 except Exception as e:
                     app.logger.error(f"Error adding forecast plot to PDF for {col}: {e}")
                     pass
@@ -5701,7 +6376,7 @@ def download_full_report_pdf(filename):
             try:
                 fig, ax = plt.subplots(figsize=(10, 5))  # Wider figure for full-width image
                 if is_numeric:
-                    s_num = pd.to_numeric(s, errors='coerce').dropna()
+                    s_num = numeric_series
                     s_arr = np.asarray(s_num.to_numpy(dtype=float), dtype=float)
                     ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', label='Distribution')
                     ax.set_title(f"Distribution: {col}")
@@ -5752,7 +6427,7 @@ def download_full_report_pdf(filename):
                     fig.subplots_adjust(bottom=0.22)
                 else:
                     # Categorical bar chart (top 50)
-                    all_counts = s.value_counts()
+                    all_counts = series.value_counts()
                     top_counts = all_counts.head(50)
                     top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
 
@@ -5830,15 +6505,13 @@ def download_full_report_pdf(filename):
                 pass
                 
             # 4. STL DECOMPOSITION - last (for timeseries only)
-            if is_numeric and is_ts and len(s) >= 28:
+            if is_numeric and is_ts and len(numeric_series) >= 28:
                 try:
-                    sp = _infer_seasonal_period(s.index)
+                    sp = _infer_seasonal_period(numeric_series.index)
                     if sp and isinstance(sp, int) and sp >= 2:
                         # Use cached STL plot - may already be computed from web view
-                        stl_b64 = get_cached_stl_plot(filename, col, s, sp)
-                        if stl_b64:
-                            pdf.image(io.BytesIO(base64.b64decode(stl_b64)), w=img_width, x=img_x)
-                            pdf.ln(30)
+                        stl_b64 = get_cached_stl_plot(filename, col, numeric_series, sp)
+                        _add_base64_plot(stl_b64)
                 except Exception:
                     pass
     except Exception as e:
@@ -5855,9 +6528,11 @@ def download_full_report_pdf(filename):
             pdf.set_font("helvetica", size=12)
             pdf.cell(0, 10, "No content available for this report.", new_x="LMARGIN", new_y="NEXT")
         
-        pdf_bytes = pdf.output(dest='S')
+        pdf_bytes = pdf.output()
         if isinstance(pdf_bytes, str):
             pdf_bytes = pdf_bytes.encode('latin-1')
+        elif isinstance(pdf_bytes, bytearray):
+            pdf_bytes = bytes(pdf_bytes)
         out = io.BytesIO(pdf_bytes)
         out.seek(0)
     except Exception as e:
@@ -5895,7 +6570,8 @@ def download_full_report_html(filename):
         mv = df.isnull().sum()
         mvf = mv[mv > 0]
         missing_html = mvf.to_frame('missing_count').to_html() if not mvf.empty else ""
-    except Exception:
+    except Exception as mv_err:
+        app.logger.debug("HTML report missing-values rendering skipped for %s: %s", filename, mv_err)
         missing_html = ""
 
     # AI summary
@@ -5924,8 +6600,8 @@ def download_full_report_html(filename):
             # Generate heatmaps
             corr_heatmap_spearman = generate_correlation_heatmap(df, method='spearman', title='Spearman Correlation Heatmap')
             corr_heatmap_pearson = generate_correlation_heatmap(df, method='pearson', title='Pearson Correlation Heatmap')
-    except Exception:
-        pass
+    except Exception as corr_err:
+        app.logger.debug("HTML report correlation section skipped for %s: %s", filename, corr_err)
 
     # Generate plots for each numeric column
     is_ts = isinstance(df.index, pd.DatetimeIndex)
@@ -5952,8 +6628,8 @@ def download_full_report_html(filename):
                 # Re-align with df to maintain proper index
                 s_temp = df[col].copy()
                 s = pd.to_numeric(s_temp, errors='coerce').dropna()
-            except Exception:
-                pass
+            except Exception as realign_err:
+                app.logger.debug("HTML report index realign skipped for %s/%s: %s", filename, col, realign_err)
         
         # Detect anomalies for forecast plots
         an_idx, an_score = detect_anomalies(s, contamination=0.02)
@@ -5976,8 +6652,8 @@ def download_full_report_html(filename):
         except Exception:
             try:
                 plt.close(fig)
-            except Exception:
-                pass
+            except Exception as fig_close_err:
+                app.logger.debug("HTML report figure cleanup skipped for %s/%s: %s", filename, col, fig_close_err)
         
         # STL decomposition (for timeseries with sufficient data)
         if is_ts and len(s) >= 28:
@@ -5988,8 +6664,8 @@ def download_full_report_html(filename):
                     stl_img = generate_stl_plot(s_norm, f"STL Decomposition: {col}", seasonal_period=sp)
                     if stl_img:
                         stl_sections.append(f'<figure><figcaption><strong>STL Decomposition: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{stl_img}" /></figure>')
-            except Exception:
-                pass
+            except Exception as stl_err:
+                app.logger.debug("HTML report STL section skipped for %s/%s: %s", filename, col, stl_err)
         
         # Forecast (for timeseries) - use 10% of data as forecast horizon
         if is_ts and len(s) >= 10:
@@ -6022,7 +6698,17 @@ def download_full_report_html(filename):
             if fc_mean is not None and len(fc_mean) > 0:
                 try:
                     app.logger.debug("Creating forecast plot for %s", col)
-                    fc_b64 = generate_forecast_plot(s, fc_mean, f"Forecast: {col} ({forecast_steps} steps = 10%)", 'Timestamp', col, conf_int=ci, history_tail=None, anomalies_idx=an_idx)
+                    fc_b64 = generate_forecast_plot(
+                        s,
+                        fc_mean,
+                        f"Forecast: {col} ({forecast_steps} steps = 10%)",
+                        'Timestamp',
+                        col,
+                        conf_int=ci,
+                        history_tail=None,
+                        anomalies_idx=an_idx,
+                        anomalies_score=an_score,
+                    )
                     forecast_sections.append(f'<figure><figcaption><strong>Forecast: {col}</strong> ({forecast_steps} steps, 10% of data)</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
                     app.logger.debug("Successfully created forecast plot for %s", col)
                 except Exception as e:
@@ -6138,8 +6824,8 @@ def full_history_json():
         
         try:
             df = df.sort_index()
-        except Exception:
-            pass
+        except Exception as sort_err:
+            app.logger.debug("full_history_json sort_index skipped for %s: %s", filename, sort_err)
 
         is_ts = isinstance(df.index, pd.DatetimeIndex)
 
@@ -6152,8 +6838,8 @@ def full_history_json():
             except Exception:
                 try:
                     idx = idx.tz_localize(None)
-                except Exception:
-                    pass
+                except Exception as tz_err:
+                    app.logger.debug("full_history_json timezone normalization skipped for %s: %s", filename, tz_err)
             try:
                 x_all = [ts.isoformat() for ts in idx.to_pydatetime()]
             except Exception:
@@ -6227,11 +6913,7 @@ def full_history_json():
         return jsonify(payload), 200
 
     except Exception as e:
-        
-        try:
-            app.logger.exception("full_history_json failed: %s", e)
-        except Exception:
-            pass
+        app.logger.exception("full_history_json failed for %s: %s", locals().get('filename', '<unknown>'), e)
         return jsonify({"ok": False, "message": f"Internal error: {e}"}), 500
 
 @app.after_request
@@ -6260,9 +6942,12 @@ def _add_cache_and_security_headers(resp):
             if cleaned:
                 resp.headers['Permissions-Policy'] = cleaned
             else:
-                del resp.headers['Permissions-Policy']
-    except Exception:
-        pass
+                try:
+                    del resp.headers['Permissions-Policy']
+                except Exception as policy_del_err:
+                    app.logger.debug("Could not delete Permissions-Policy header: %s", policy_del_err)
+    except Exception as header_err:
+        app.logger.warning("Header middleware failed for %s: %s", request.path, header_err)
     return resp
 
 if __name__ == "__main__":
