@@ -7,7 +7,7 @@ Multi‑format exploratory data analysis, statistical insights, anomaly & trend 
 </div>
 
 ## 1. Overview
-This project started as a quick way to upload sensor or tabular datasets (CSV, Excel, TXT, JSON) and get fast, readable analysis. It has evolved into a modular data insight tool with AI summaries, question answering, forecasting visuals, decomposition plots, correlation exploration and performance-aware caching. The application is intentionally self-contained (`app.py` drives everything) to keep iteration speed high.
+This project started as a quick way to upload sensor or tabular datasets (CSV, Excel, TXT, JSON) and get fast, readable analysis. It has evolved into a modular data insight tool with AI summaries, question answering, forecasting visuals, decomposition plots, correlation exploration and performance-aware caching. The app now uses a package layout under `data_analysis/` while keeping `app.py` as a backward-compatible entrypoint.
 
 ### Upload Interface
 <div align="center">
@@ -83,7 +83,7 @@ Planned / Roadmap Ideas:
 - Automated test coverage expansion (currently minimal)
 
 ## 3. Tech Stack
-- **Backend**: Flask (single-file app)
+- **Backend**: Flask (modular package + compatibility facade)
 - **Data**: pandas, numpy, statsmodels, scikit-learn (select features)
 - **Plots**: Matplotlib (static PNG via base64)
 - **AI**: `google-generativeai` (Gemini models) with adaptive free-tier fallback
@@ -92,7 +92,16 @@ Planned / Roadmap Ideas:
 - **Dev Tooling**: `ruff`, `mypy`, `pytest`
 
 ## 4. Architecture Snapshot
-Everything centers around `app.py`:
+Core logic is split across `data_analysis/`:
+- `data_analysis/core/`: configuration, logging, cache/state primitives, lazy imports
+- `data_analysis/ai/`: Gemini service integration + HTML/text formatting helpers
+- `data_analysis/analysis/`: forecasting, plotting, anomaly detection, DataFrame operations, AI context builders
+- `data_analysis/routes/`: upload, analysis, API, and download route handlers
+- `data_analysis/reports/`: PDF report classes/handlers
+- `data_analysis/legacy_app.py`: compatibility runtime used during incremental extraction
+- `app.py`: thin facade preserving legacy import and startup behavior
+
+Behavior highlights:
 - Upload endpoint stores the parsed DataFrame in an in‑memory cache (LRU)
 - Analysis route branches views (overview / forecast / decomposition / correlation)
 - AI helpers build a trimmed context (column stats, head/tail detected anomalies) before sending to Gemini

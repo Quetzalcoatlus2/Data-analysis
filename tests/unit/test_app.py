@@ -1,16 +1,16 @@
 
-import sys
-import os
 import io
+import os
+import sys
 import zipfile
 from typing import Any, cast
-
-import app as app_module
 
 import numpy as np
 import pandas as pd
 import pytest
 from matplotlib.axes import Axes
+
+import app as app_module
 
 # Add project root to sys.path to ensure app can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -29,6 +29,7 @@ from app import (
     _thin_series_keep_extrema,
     allowed_file,
     app,
+    convert_html_to_formatted_text,
     describe_for_ai,
     detect_anomalies,
     generate_forecast_plot,
@@ -36,6 +37,7 @@ from app import (
     get_cached_anomalies,
     get_cached_numeric_df,
 )
+
 
 def test_allowed_file():
     """Test the allowed_file function."""
@@ -57,6 +59,28 @@ def test_app_config():
     """Test basic app configuration."""
     assert app.config['UPLOAD_FOLDER'] == 'datasets'
     assert app.config['SECRET_KEY'] is not None
+
+
+def test_convert_html_to_formatted_text_preserves_nested_bullets():
+        """Nested list items should keep leading indentation for PDF renderer depth parsing."""
+        html = """
+        <h3>Data Quality Assessment</h3>
+        <ul>
+            <li>Missing values summary
+                <ul>
+                    <li>Population: 22.2%</li>
+                    <li>GDP: 15.2%</li>
+                </ul>
+            </li>
+        </ul>
+        """
+
+        text = convert_html_to_formatted_text(html)
+        lines = text.splitlines()
+
+        assert any(line.startswith("- Missing values summary") for line in lines)
+        assert any(line.startswith("  - Population: 22.2%") for line in lines)
+        assert any(line.startswith("  - GDP: 15.2%") for line in lines)
 
 def test_index_route():
     """Test that the index route returns 200."""
@@ -132,13 +156,11 @@ def test_generate_forecast_plot_anomaly_positions_with_duplicate_index(monkeypat
 
 
 def test_generate_forecast_plot_anomaly_markers_respect_display_cap(monkeypatch):
-    """Display cap should limit plotted anomaly markers without changing detection output."""
+    """Anomalies should be pre-capped by caller; plot function renders exactly what it receives."""
     history = pd.Series([10.0, 20.0, 30.0, 40.0], index=pd.Index(["A", "B", "C", "D"]))
     forecast = pd.Series([41.0], index=pd.Index(["E"]))
-    anomalies_idx = pd.Index(["A", "B", "C"])
-
-    original_cap = app.config.get("ANOMALY_MARKER_CAP", 20)
-    app.config["ANOMALY_MARKER_CAP"] = 1
+    # Pre-cap: caller passes only 1 anomaly (simulating _cap_anomalies_for_display with max_points=1)
+    anomalies_idx = pd.Index(["A"])
 
     captured: list[int] = []
     original_scatter = Axes.scatter
@@ -150,17 +172,14 @@ def test_generate_forecast_plot_anomaly_markers_respect_display_cap(monkeypatch)
 
     monkeypatch.setattr(Axes, "scatter", _scatter_spy)
 
-    try:
-        img = generate_forecast_plot(
-            history,
-            forecast,
-            "Forecast",
-            "Index",
-            "Value",
-            anomalies_idx=anomalies_idx,
-        )
-    finally:
-        app.config["ANOMALY_MARKER_CAP"] = original_cap
+    img = generate_forecast_plot(
+        history,
+        forecast,
+        "Forecast",
+        "Index",
+        "Value",
+        anomalies_idx=anomalies_idx,
+    )
 
     assert isinstance(img, str)
     assert len(img) > 0
@@ -192,6 +211,7 @@ def test_qna_cache_key_differs_for_different_dataframe_schema_without_filename()
 
 def test_call_gemini_raises_on_prompt_block_reason(monkeypatch):
     """Blocked prompt feedback must raise instead of returning a successful response."""
+    from data_analysis.ai import engine as ai_engine_mod
 
     class _BlockReason:
         name = "SAFETY"
@@ -206,8 +226,8 @@ def test_call_gemini_raises_on_prompt_block_reason(monkeypatch):
         def generate_content(self, *args, **kwargs):
             return _Resp()
 
-    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: True)
-    monkeypatch.setattr(app_module, "model", _Model())
+    monkeypatch.setattr(ai_engine_mod, "ensure_ai_ready", lambda **kw: True)
+    monkeypatch.setattr(ai_engine_mod, "model", _Model())
 
     with pytest.raises(RuntimeError, match="Content blocked"):
         app_module._call_gemini("blocked content probe", retries=0)

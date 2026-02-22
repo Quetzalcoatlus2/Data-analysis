@@ -1,0 +1,977 @@
+# ruff: noqa: F401,F403,F405
+from __future__ import annotations
+
+from typing import Any
+
+from flask import Request
+
+from data_analysis.runtime_app import *
+
+_LOCAL_SYMBOLS = {
+    "_LOCAL_SYMBOLS",
+    "_bind_runtime_globals",
+    "parse_controls",
+    "build_fast_path_payload",
+    "build_forecast_payload",
+    "build_interactive_payload",
+    "resolve_ai_summary",
+    "finalize_analysis_response",
+    "handle_analyze_file",
+    "analyze_file",
+    "__all__",
+}
+
+
+def _bind_runtime_globals():
+    import data_analysis.runtime_app as rt
+
+    g = globals()
+    for key, value in rt.__dict__.items():
+        if key.startswith("__") or key in _LOCAL_SYMBOLS:
+            continue
+        g[key] = value
+    return rt
+
+
+def parse_controls(request: Request) -> dict[str, Any]:
+    rt = _bind_runtime_globals()
+    default_steps = int(rt.app.config.get("DEFAULT_FORECAST_STEPS", 40))
+    return {
+        "view": (request.args.get("view") or request.form.get("view") or "overview").strip().lower(),
+        "forecast_horizon": rt._get_arg_int("forecast_horizon", default_steps),
+        "forecast_pct_raw": request.args.get("forecast_pct") or request.form.get("forecast_pct"),
+        "contamination": rt._get_arg_float(
+            "contamination",
+            float(rt.app.config.get("DEFAULT_CONTAMINATION", 0.02)),
+        ),
+        "data_range": request.args.get("data_range") or request.form.get("data_range"),
+    }
+
+
+def build_fast_path_payload(filename: str) -> dict[str, Any]:
+    return {"filename": filename, "mode": "fast-path", "source": "runtime"}
+
+
+def build_forecast_payload(filename: str) -> dict[str, Any]:
+    return {"filename": filename, "mode": "forecast", "source": "runtime"}
+
+
+def build_interactive_payload(filename: str) -> dict[str, Any]:
+    return {"filename": filename, "mode": "interactive", "source": "runtime"}
+
+
+def resolve_ai_summary(filename: str) -> str:
+    rt = _bind_runtime_globals()
+    summary = rt.AI_SUMMARY_CACHE.get(filename)
+    return summary if isinstance(summary, str) else ""
+
+
+def finalize_analysis_response(filename: str):
+    return handle_analyze_file(filename)
+
+
+def handle_analyze_file(filename):
+    _bind_runtime_globals()
+    filepath = os.path.join(app.config['UPLOADS_DIR'], filename)
+    display_name = request.args.get('display') or request.form.get('display') or filename
+    active_view = (request.args.get('view') or request.form.get('view') or 'overview').strip().lower()
+
+    default_steps = int(app.config.get('DEFAULT_FORECAST_STEPS', 40))
+    default_contam = float(app.config.get('DEFAULT_CONTAMINATION', 0.02))
+    # New percentage-based horizon; fallback to numeric steps if pct absent.
+    raw_pct = request.args.get('forecast_pct') or request.form.get('forecast_pct')
+    pct = None
+    try:
+        if raw_pct not in (None, ""):
+            pct = float(raw_pct)
+            # Validate percentage - allow 0 for no-forecast mode, max 0.5
+            if pct < 0:
+                pct = 0
+            elif pct > 0.5:
+                app.logger.warning("forecast_pct out of range (%.4f), clamping to 0.5", pct)
+                pct = 0.5
+        else:
+            # Default to 5% if not specified
+            pct = 0.05
+    except Exception:
+        pct = 0.05  # Default to 5%
+    raw_data_range = request.args.get("data_range") or request.form.get("data_range")
+    user_steps = _get_arg_int("forecast_horizon", default_steps)  # legacy param support
+    user_contam = _get_arg_float("contamination", default_contam)
+    # Validate contamination is in valid range for IsolationForest
+    try:
+        if user_contam < 0.001 or user_contam > 0.2:
+            app.logger.warning("contamination out of range (%.4f), clamping to [0.001, 0.2]", user_contam)
+            user_contam = max(0.001, min(0.2, user_contam))
+    except Exception:
+        user_contam = default_contam
+
+    if not os.path.exists(filepath) and filename not in DATAFRAME_CACHE:
+        flash("The uploaded file is no longer available. Please re-upload it.")
+        return redirect(url_for('pages.upload_file'))
+
+    df = get_dataframe_for(filename)
+    if df is None:
+        flash('Could not read the uploaded file. Please re-upload.')
+        return redirect(url_for('pages.upload_file'))
+
+    # File deletion is handled by @after_this_request at end of analyze_file
+    _cleanup_uploads_if_configured()
+
+    # Use the uploaded asset (if available) for AI features within this request
+    file_asset = AI_FILE_MAP.get(filename) if 'AI_FILE_MAP' in globals() else None
+
+    user_question = None
+    ai_answer = None
+    if request.method == 'POST':
+        user_question = (request.form.get('question') or '').strip()
+        ai_answer_html = ""
+        if user_question:
+            ai_answer_html = get_ai_answer_with_file(df, user_question, file_asset=file_asset, filename=filename)
+        ai_answer = ai_answer_html  
+
+    analysis = {}
+    forecast_plots = []
+    anomalies_found = {}
+    is_timeseries = _is_reliable_timeseries_index(df.index)
+    used_cols = []
+
+    # Reuse cached numeric coercion once per request to avoid repeated pd.to_numeric work.
+    numeric_df_cached = get_cached_numeric_df(filename, df)
+
+    # Correlation: only compute for views that actually need it (overview & correlation)
+    corr_payload = None
+    if active_view in ('overview', 'correlation'):
+        corr_payload = CORRELATION_CACHE.get(filename)
+        if corr_payload is None:
+            try:
+                num_df = numeric_df_cached
+                if num_df is not None and not num_df.empty:
+                    valid = [c for c in num_df.columns if num_df[c].notna().sum() >= 3]
+                    num_df = num_df[valid]
+                    keep = []
+                    for c in num_df.columns:
+                        s = num_df[c].dropna()
+                        if s.empty:
+                            continue
+                        if float(s.max()) == float(s.min()):
+                            continue
+                        keep.append(c)
+                    num_df = num_df[keep] if keep else num_df
+                if num_df is not None and not num_df.empty and len(num_df.columns) >= 2:
+                    cols = list(num_df.columns)
+                    payload = {}
+                    try:
+                        spearman = num_df.corr(method='spearman')
+                    except Exception:
+                        spearman = None
+                    try:
+                        pearson = num_df.corr(method='pearson')
+                    except Exception:
+                        pearson = None
+                    if spearman is not None:
+                        spearman_m = spearman.reindex(index=cols, columns=cols).to_numpy(dtype=float)
+                        payload["x"] = cols
+                        payload["y"] = cols
+                        payload["z"] = [[float(v) if np.isfinite(v) else None for v in row] for row in spearman_m]
+                    if pearson is not None:
+                        pearson_m = pearson.reindex(index=cols, columns=cols).to_numpy(dtype=float)
+                        payload["pearson"] = {
+                            "x": cols,
+                            "y": cols,
+                            "z": [[float(v) if np.isfinite(v) else None for v in row] for row in pearson_m]
+                        }
+                    corr_payload = payload if ("z" in payload or "pearson" in payload) else None
+                    # Cache the computed correlation for faster subsequent view loads
+                    if corr_payload:
+                        CORRELATION_CACHE.set(filename, corr_payload)
+                else:
+                    corr_payload = None
+            except Exception as e:
+                app.logger.warning("Correlation computation failed: %s", e)
+                corr_payload = None
+
+    interactive = []
+
+    # Apply percentage-based forecast horizon early (if provided) so all downstream forecast logic uses updated user_steps.
+    total_rows = int(getattr(df, 'shape', (0,))[0]) if hasattr(df, 'shape') else 0
+    data_range_ratio = 1.0
+    data_range_rows = 0
+    try:
+        if raw_data_range not in (None, ""):
+            dr = float(raw_data_range)
+            if dr <= 0:
+                data_range_ratio = 1.0
+                data_range_rows = 0
+            elif dr <= 1.0:
+                data_range_ratio = dr
+                if total_rows > 0:
+                    rows = int(math.ceil(total_rows * dr))
+                    data_range_rows = max(1, min(rows, total_rows))
+                    if data_range_rows >= total_rows:
+                        data_range_rows = 0
+                        data_range_ratio = 1.0
+            else:
+                rows = int(dr)
+                if rows <= 0:
+                    data_range_ratio = 1.0
+                    data_range_rows = 0
+                elif total_rows > 0:
+                    rows = min(rows, total_rows)
+                    if rows >= total_rows:
+                        data_range_ratio = 1.0
+                        data_range_rows = 0
+                    else:
+                        data_range_rows = rows
+                        data_range_ratio = rows / total_rows
+                else:
+                    data_range_ratio = 1.0
+                    data_range_rows = 0
+    except Exception:
+        data_range_ratio = 1.0
+        data_range_rows = 0
+    
+    # pct is always defined now (defaulting to 0.05)
+    if pct == 0:
+        user_steps = 0  # 0% means no forecast
+        effective_steps = 0
+    elif pct > 0 and total_rows > 0:
+        user_steps = max(2, int(math.ceil(total_rows * pct)))
+        effective_steps = user_steps
+    else:
+        effective_steps = max(2, int(user_steps)) if user_steps else 2
+
+    # Determine whether to build forecast/interactive content based on active_view.
+    # IMPORTANT: To keep upload/overview fast, run heavy forecasting only in the explicit Forecast view.
+    # Note: overview, correlation, and categories all use the fast path above.
+    build_forecast = active_view == "forecast"
+    build_interactive = active_view == "interactive"
+    
+    # Initialize timing early (used by both fast path and full path)
+    request_start = time.perf_counter()
+
+    # PERFORMANCE OPTIMIZATION: For views that don't need the heavy column loop
+    # (overview, correlation, categories), use the fast path.
+    # - overview/correlation: skip plots, forecasts, interactive traces entirely
+    # - categories: skip forecasts/anomalies; only compute category charts
+    # Note: interactive & forecast still use the full column loop for server-side data.
+    if active_view in ("overview", "correlation", "categories"):
+        # Use cached info for fast response
+        cached_info = get_cached_df_info(filename, df)
+        
+        # Use cached numeric DF to avoid per-column pd.to_numeric calls
+        _num_df = numeric_df_cached
+        used_cols = list(_num_df.columns)[:20] if _num_df is not None and not _num_df.empty else list(df.columns)[:20]
+        
+        # Build minimal AI context without expensive operations
+        ai_context = describe_for_ai(df, filename=filename)
+        
+        ai_summary = _get_clean_ai_summary_from_cache(filename)
+        if ai_summary is None and active_view == 'overview':
+            # Defer AI summary - will load via AJAX
+            ai_summary = ""
+        elif ai_summary is None:
+            ai_summary = ""
+        
+        analysis.update({
+            'head': cached_info['head'],
+            'description': cached_info['description'],
+            'overview_table': cached_info.get('overview_table_html', ''),
+            'info': cached_info['info'],
+            'missing_values': cached_info['missing_values'],
+            'plots': [],
+            'forecast_plots': [],
+            'forecast_plots_by_column': {},
+            'anomalies': {},
+            'ai_summary': ai_summary,
+            'user_question': user_question,
+            'ai_answer': ai_answer,
+            'interactive': [],  # Interactive data loaded via AJAX from /api/interactive/
+            'columns': used_cols,
+            'corr': corr_payload,
+            'controls': {
+                'forecast_horizon': user_steps,
+                'effective_steps': effective_steps,
+                'forecast_pct': pct if pct is not None else None,
+                'total_rows': total_rows,
+                'contamination': user_contam,
+                'data_range': data_range_ratio,
+                'data_range_rows': data_range_rows
+            }
+        })
+        
+        # Categories view: build category charts (lightweight, no forecasts/anomalies)
+        if active_view == 'categories':
+            category_charts = {}
+            for col in df.columns:
+                try:
+                    s_numeric = pd.to_numeric(df[col], errors='coerce')
+                    if s_numeric.notna().sum() >= 3:
+                        continue  # Skip - numeric column
+                    s_cat = df[col].astype(str).dropna()
+                    if len(s_cat) < 3:
+                        continue
+                    chart_data = _build_category_plotly_chart(s_cat, col)
+                    if chart_data is not None:
+                        category_charts[col] = chart_data
+                except Exception:
+                    pass
+            analysis['category_charts'] = category_charts
+        
+        total_dt = time.perf_counter() - request_start
+        app.logger.info("Analyze FAST PATH done file=%s view=%s elapsed=%.2fs", filename, active_view, total_dt)
+        _log_cache_stats_if_needed("analyze-fast")
+        
+        # Compute AI model attribution for template (same logic as full path)
+        _ai_model_name = None
+        if ai_summary:
+            model_match = re.search(r'<!--\s*model:(.*?)\s*-->', ai_summary)
+            if model_match:
+                _ai_model_name = model_match.group(1).strip()
+                ai_summary = re.sub(r'<!--.*?-->', '', ai_summary, flags=re.DOTALL)
+                
+        if not _ai_model_name:
+            _ai_model_name = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+
+        if isinstance(_ai_model_name, str) and _ai_model_name.startswith('models/'):
+            _ai_model_display = _ai_model_name[7:]
+        else:
+            _ai_model_display = str(_ai_model_name) if _ai_model_name else 'gemini-3.0-flash'
+        _ai_is_valid = isinstance(ai_summary, str) and ai_summary and not _is_offline_html(ai_summary)
+        
+        return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name,
+                               ai_model_name=_ai_model_display, ai_is_valid=_ai_is_valid)
+
+    # Per-request timing and budgets to prevent long hangs
+    overview_budget_s = float(os.getenv("OVERVIEW_TIME_BUDGET_SEC", "6.0"))
+    # Slightly higher default budget for forecast view to avoid missing plots under normal loads
+    forecast_budget_s = float(os.getenv("FORECAST_TIME_BUDGET_SEC", "60.0"))
+    budget_s = forecast_budget_s if build_forecast or build_interactive else overview_budget_s
+    # Column limits for forecasting - increased to show ALL columns
+    overview_cols_max = int(os.getenv("OVERVIEW_FORECAST_COLS_MAX", "100"))
+    # No practical limit on forecast columns
+    forecast_cols_max = int(os.getenv("FORECAST_COLS_MAX", "100"))
+    cols_limit = forecast_cols_max if build_forecast else overview_cols_max
+    forecast_done = 0
+    skip_forecasts = False
+
+    for column in df.columns:
+            if column not in numeric_df_cached.columns:
+                continue
+
+            try:
+                full_series = numeric_df_cached[column].dropna()
+            except Exception:
+                full_series = pd.Series(dtype=float)
+            series = full_series
+            if build_forecast and data_range_rows > 0:
+                series = full_series.tail(data_range_rows)
+            if series.empty:
+                continue
+            used_cols.append(column)
+            
+            # Optimization: Only run anomaly detection if we are in a view that needs it
+            # 'overview' doesn't show anomalies in the UI directly, only in AI context.
+            # We skip it for overview on large datasets to speed up transitions.
+            an_idx = pd.Index([])
+            an_score = pd.Series([], dtype=float)
+            if build_forecast or build_interactive or len(df.columns) < 10:
+                 # Keep anomaly detection input consistent with PDF/ZIP exports:
+                 # detect on the full numeric series, then render only visible anomalies per view.
+                 raw_an_idx, raw_an_score = get_cached_anomalies(filename, column, full_series, user_contam)
+                 if len(raw_an_idx):
+                     try:
+                         # Force cap at max_points early to ensure Interactive and Export/Plotly match
+                         try:
+                             max_points = int(app.config.get('ANOMALY_MARKER_CAP', 20))
+                         except Exception:
+                             max_points = 20
+                         
+                         an_idx = _cap_anomalies_for_display(raw_an_idx, raw_an_score, max_points=max_points)
+                         an_score = raw_an_score[an_idx] if not raw_an_score.empty else raw_an_score
+                         
+                         anomalies_found[str(column)] = [str(i) for i in an_idx]
+                     except Exception:
+                        pass
+
+
+            # Stop forecasting if time/column limits are exceeded
+            # Generate forecasts for any numeric series with sufficient length
+            if build_forecast and not skip_forecasts and len(series) >= 5:
+                try:
+                    t0 = time.perf_counter()
+                    steps = effective_steps
+                    app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
+
+                    # Unified pipeline - use cached helper for cross-view performance
+                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+
+                    title_fc = f"Forecast for {column} (with anomalies)"
+                    
+                    # Thin history for display
+                    max_hist_points = 600
+                    s_hist = _thin_series_keep_extrema(series, max_points=max_hist_points, keep_idx=an_idx)
+                    
+                    # PROPORTIONAL THINNING: Thin forecast by same ratio as history
+                    # This maintains correct visual proportions
+                    if len(series) > max_hist_points and fc_mean is not None and len(fc_mean) > 0:
+                        thinning_ratio = len(s_hist) / len(series)
+                        thin_fc_points = max(2, int(len(fc_mean) * thinning_ratio))
+                        fc_mean_thin = _thin_series(fc_mean, max_points=thin_fc_points)
+                        if conf_df is not None and isinstance(conf_df, pd.DataFrame):
+                            conf_df_thin = conf_df.reindex(fc_mean_thin.index)
+                        else:
+                            conf_df_thin = None
+                    else:
+                        fc_mean_thin = fc_mean
+                        conf_df_thin = conf_df
+                    
+                    # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
+                    fc_stats = _compute_basic_stats(series)
+
+                    xlab = 'Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index'
+                    try:
+                        # Pass anomaly indices to the forecast plot generation
+                        img_fc = generate_forecast_plot(
+                            s_hist,
+                            fc_mean_thin,
+                            title_fc,
+                            xlab,
+                            column,
+                            conf_int=conf_df_thin,
+                            history_tail=None,
+                            anomalies_idx=an_idx,  # Add anomaly markers to forecast plot
+                            anomalies_score=an_score,
+                            stats=fc_stats,        # Pass stats for visualization
+                            legend_y=-0.42,
+                            xlabel_labelpad=6
+                        )
+                        forecast_plots.append({"img": img_fc, "title": title_fc, "column": column, "type": "forecast"})
+                    except Exception as _e:
+                        app.logger.warning("Could not render forecast image for %s: %s", column, _e)
+                    try:
+                        fc_points = len(fc_mean) if isinstance(fc_mean, pd.Series) else -1
+                        app.logger.info("Forecast plot ready col=%s forecast_points=%d", column, fc_points)
+                    except Exception:
+                        pass
+
+                    dt = time.perf_counter() - t0
+                    forecast_done += 1
+                    app.logger.info("Forecast done col=%s took=%.2fs steps=%s points=%s", column, dt, steps, len(series))
+                    # Enforce budgets
+                    if (time.perf_counter() - request_start) > budget_s or forecast_done >= cols_limit:
+                        skip_forecasts = True
+                        app.logger.info(
+                            "Forecast budget reached: elapsed=%.2fs limit=%.2fs cols=%d/%d",
+                            time.perf_counter() - request_start, budget_s, forecast_done, cols_limit
+                        )
+                except Exception as e:
+                    app.logger.warning("Could not generate forecast for %s: %s", column, e)
+
+            if build_forecast and not skip_forecasts and len(series) >= 5:
+                try:
+                    if _is_reliable_timeseries_index(series.index):
+                        sp = _infer_seasonal_period(series.index)
+                        if sp:
+                            # Use cached STL plot for performance
+                            stl_img = get_cached_stl_plot(filename, column, series, sp)
+                            if stl_img:
+                                forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
+                except Exception as e:
+                    app.logger.warning("STL plot failed for %s: %s", column, e)
+                
+                # Generate distribution histogram for this column
+                try:
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
+                    ax.hist(series_arr, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
+                    ax.set_title(f"Distribution: {column}", fontsize=10)
+                    ax.set_xlabel(column, fontsize=9, labelpad=8)
+                    ax.set_ylabel("Frequency", fontsize=9)
+                    ax.grid(True, alpha=0.3)
+                    
+                    # Add stat markers
+                    stats = _compute_basic_stats(series)
+                    stats_min = stats['min']
+                    stats_max = stats['max']
+                    stats_mean = stats['mean']
+                    stats_median = stats['median']
+                    stats_std = stats['std']
+                    
+                    # Avg and Median vertical lines
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {stats_median:.2f}')
+
+                    # Avg/Med labels next to their lines (like before), but with a mixed transform
+                    # to avoid altering y-axis scale.
+                    xaxis_transform = blended_transform_factory(ax.transData, ax.transAxes)
+                    xlim = ax.get_xlim()
+                    x_offset = (xlim[1] - xlim[0]) * 0.01
+                    top_lane = 0.985
+                    if stats_mean <= stats_median:
+                        ax.text(stats_mean - x_offset, top_lane, f'Avg: {stats_mean:.2f}', transform=xaxis_transform,
+                                va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
+                        ax.text(stats_median + x_offset, top_lane, f'Med: {stats_median:.2f}', transform=xaxis_transform,
+                                va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
+                    else:
+                        ax.text(stats_median - x_offset, top_lane, f'Med: {stats_median:.2f}', transform=xaxis_transform,
+                                va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
+                        ax.text(stats_mean + x_offset, top_lane, f'Avg: {stats_mean:.2f}', transform=xaxis_transform,
+                                va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
+
+                    ylim = ax.get_ylim()
+                    
+                    # Min/Max markers at bottom - BOTH tags ABOVE their symbols
+                    marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
+                    min_color = '#ff3b30'
+                    max_color = '#00e5ff'
+                    edge_color = '#0b1220'
+
+                    # Add horizontal room and keep labels inside plot bounds.
+                    xlim = ax.get_xlim()
+                    x_range = max(xlim[1] - xlim[0], 1e-9)
+                    ax.set_xlim(xlim[0] - x_range * 0.04, xlim[1] + x_range * 0.04)
+                    xlim = ax.get_xlim()
+
+                    # Requirement: min tag on the LEFT, max tag on the RIGHT, but slightly closer to center.
+                    min_xytext, min_ha = (-3, 12), 'right'
+                    max_xytext, max_ha = (3, 12), 'left'
+
+                    # If min/max are close on x-axis, separate vertically to avoid overlap.
+                    if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
+                        min_xytext = (min_xytext[0], 12)
+                        max_xytext = (max_xytext[0], 22)
+
+                    ax.scatter([stats_min], [marker_y], color=min_color, s=100, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
+                    ax.scatter([stats_max], [marker_y], color=max_color, s=100, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    
+                    # Std in legend only, single-line legend
+                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
+                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.34), ncol=6, frameon=False, columnspacing=0.5)
+                    fig.subplots_adjust(bottom=0.28, right=0.84)
+                    
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
+                    plt.close(fig)
+                    buf.seek(0)
+                    dist_img = base64.b64encode(buf.read()).decode('utf-8')
+                    forecast_plots.append({"img": dist_img, "title": f"Distribution: {column}", "column": column, "type": "distribution"})
+                except Exception as dist_e:
+                    app.logger.warning("Distribution plot failed for %s: %s", column, dist_e)
+
+            if build_interactive and not skip_forecasts and len(series) >= 5:
+                try:
+                    sp = _infer_seasonal_period(series.index) if _is_reliable_timeseries_index(series.index) else None
+                    if sp:
+                        # Use cached STL plot - may already be computed in forecast view
+                        stl_img = get_cached_stl_plot(filename, column, series, sp)
+                        if stl_img:
+                            forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
+                except Exception:
+                    pass
+
+                # Always provide full series to interactive view.
+                # Data-range filtering is handled client-side by the Data Range selector.
+                s_tail = series
+
+                # Use NUMERIC X-axis for proportional display (like in PDF)
+                n_hist = len(s_tail)
+                x_hist_numeric = list(range(n_hist))
+                y_hist = [float(v) for v in s_tail.values]
+                original_labels = [str(i) for i in s_tail.index]
+                
+                traces = [{
+                    "type": "scatter",
+                    "mode": "lines+markers",
+                    "name": "History",
+                    "x": x_hist_numeric,
+                    "y": y_hist,
+                    "text": original_labels,
+                    "hovertemplate": "%{text}<br>%{y}<extra></extra>",
+                    "line": {"color": "rgb(31,119,180)", "width": 2},
+                    "marker": {"size": 4, "opacity": 0.6}
+                }]
+
+            
+            if build_interactive and len(an_idx):
+                # an_idx is already capped uniformly above
+                an_display = an_idx
+                an_positions = _anomaly_positions_for_index(s_tail.index, an_display)
+                an_y_values = []
+                an_labels = []
+                tail_vals = np.asarray(s_tail.to_numpy(dtype=float), dtype=float)
+                tail_median = float(np.nanmedian(tail_vals)) if tail_vals.size else 0.0
+
+                score_buckets: dict[Any, list[float]] = {}
+                try:
+                    for idx_val, score_val in an_score.items():
+                        if pd.notna(score_val):
+                            score_buckets.setdefault(idx_val, []).append(float(score_val))
+                except Exception:
+                    score_buckets = {}
+
+                for pos in an_positions:
+                    i = int(pos)
+                    idx = s_tail.index[i]
+                    val = float(s_tail.iloc[i])
+                    an_y_values.append(val)
+                    score_list = score_buckets.get(idx, [])
+                    score_val = score_list.pop(0) if score_list else None
+                    score_buckets[idx] = score_list
+
+                    if score_val is None:
+                        try:
+                            score_key = int(i)
+                            score_val = float(an_score.loc[score_key]) if score_key in an_score.index else None
+                        except Exception:
+                            score_val = None
+
+                    if score_val is None or not math.isfinite(float(score_val)):
+                        reason = "Outlier"
+                    elif float(s_tail.iloc[i]) >= tail_median:
+                        reason = f"High outlier (IF score={float(score_val):.3f})"
+                    else:
+                        reason = f"Low outlier (IF score={float(score_val):.3f})"
+                    an_labels.append(f"{idx} | {reason}")
+
+                if an_positions:
+                    traces.append({
+                        "type": "scatter",
+                        "mode": "markers",
+                        "name": "Anomaly",
+                        "x": an_positions,
+                        "y": an_y_values,
+                        "text": an_labels,
+                        "marker": {"color": "#ef4444", "size": 5, "opacity": 0.9},
+                        "hovertemplate": "Anomaly<br>%{text}<br>%{y}<extra></extra>"
+                    })
+            
+            # fc_x removed as it was unused
+            fc_y = ci_lower = ci_upper = split_x = None
+            # Generate forecasts and CI for interactive plots (removed is_timeseries requirement)
+            if build_interactive and not skip_forecasts and len(series) >= 5:
+                try:
+                    steps = effective_steps
+                    # Use cached forecast - may already be computed in forecast view
+                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+                    
+                    # Use numeric X-axis continuing from history
+                    if fc_mean is None or len(fc_mean) == 0:
+                        raise ValueError("Empty forecast")
+                    n_fc = len(fc_mean)
+                    fc_x_numeric = list(range(n_hist, n_hist + n_fc))
+                    fc_y = [float(v) for v in fc_mean.to_numpy(dtype=float)]
+                    fc_labels = [str(i) for i in fc_mean.index]
+                    split_x = n_hist - 0.5  # Numeric position for split line
+                    
+                    if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
+                        ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
+                        ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
+
+                    # Add interactive traces using numeric X-axis
+                    if fc_x_numeric and ci_lower and ci_upper:
+                        ci_group = f"ci-{re.sub(r'[^A-Za-z0-9_-]+', '', str(column))}"
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines",
+                            "name": "95% CI",
+                            "x": fc_x_numeric, "y": ci_lower,
+                            "line": {"width": 0},
+                            "hoverinfo": "skip",
+                            "showlegend": True,
+                            "legendgroup": ci_group
+                        })
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines",
+                            "name": "95% CI",
+                            "x": fc_x_numeric, "y": ci_upper,
+                            "line": {"width": 0},
+                            "fill": "tonexty",
+                            "fillcolor": "rgba(255,69,0,0.18)",
+                            "hoverinfo": "skip",
+                            "showlegend": False,
+                            "legendgroup": ci_group,
+                            "legendgrouptitle": {"text": "95% CI"}
+                        })
+
+                    if fc_x_numeric and fc_y:
+                        # Connect to last history point
+                        x_plot = [n_hist - 1] + list(fc_x_numeric)
+                        y_plot = [float(series.iloc[-1])] + list(fc_y)
+                        text_plot = [original_labels[-1]] + list(fc_labels)
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines+markers",
+                            "name": "Forecast",
+                            "x": x_plot, "y": y_plot,
+                            "text": text_plot,
+                            "hovertemplate": "%{text}<br>%{y}<extra></extra>",
+                            "line": {"color": "orangered", "width": 3},
+                            "marker": {"size": 3}
+                        })
+                except Exception as e:
+                    app.logger.warning("Interactive forecast build failed for %s: %s", column, e)
+
+            # Build layout and append to interactive list (moved outside the forecast condition)
+            # This ensures interactive charts work even for non-timeseries or short series
+            if build_interactive:
+                xaxis = {"title": ("Timestamp" if is_timeseries else "Index"), "showgrid": True}
+                layout = {
+                    "title": {"text": f"{column} (interactive)", "x": 0.02},
+                    "xaxis": xaxis,
+                    "yaxis": {"title": column, "showgrid": True},
+                    "shapes": [] if not split_x else [{
+                        "type": "line", "xref": "x", "yref": "paper",
+                        "x0": split_x, "x1": split_x, "y0": 0, "y1": 1,
+                        "line": {"color": "gray", "width": 1, "dash": "dot"}
+                    }],
+                    "legend": {"orientation": "h", "groupclick": "togglegroup"},
+                    "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
+                }
+                if is_timeseries:
+                    layout["xaxis"].update({
+                        "rangeslider": {"visible": True},
+                        "rangeselector": {
+                            "buttons": [
+                                {"count": 1, "label": "1m", "step": "month", "stepmode": "backward"},
+                                {"count": 6, "label": "6m", "step": "month", "stepmode": "backward"},
+                                {"step": "year", "stepmode": "todate", "label": "YTD"},
+                                {"count": 1, "label": "1y", "step": "year", "stepmode": "backward"},
+                                {"step": "all", "label": "All"}
+                            ]
+                        }
+                    })
+
+                dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
+                
+                # Compute statistics for the column
+                try:
+                    stats = {
+                        "min": float(series.min()),
+                        "max": float(series.max()),
+                        "mean": float(series.mean()),
+                        "median": float(series.median()),
+                        "std": float(series.std())
+                    }
+                except Exception:
+                    stats = None
+                
+                interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist, "stats": stats})
+
+    # If in forecast view and no forecast plots were generated (due to errors or strict budgets),
+    # render a fallback forecast for the first eligible numeric column to avoid an empty page.
+    try:
+        if build_forecast and not forecast_plots:
+            for column in df.columns:
+                if column not in numeric_df_cached.columns:
+                    continue
+                full_series = numeric_df_cached[column].dropna()
+                series = full_series
+                if data_range_rows > 0:
+                    series = full_series.tail(data_range_rows)
+                if len(series) >= 5:
+                    # Detect anomalies for fallback forecast
+                    an_idx_fb, _ = get_cached_anomalies(filename, column, full_series, user_contam)
+                    steps = effective_steps
+                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+                    title_fc = f"Forecast for {column}"
+                    s_hist = _thin_series_keep_extrema(series, max_points=600)
+                    forecast_plots.append({
+                        "img": generate_forecast_plot(
+                            s_hist,
+                            fc_mean,
+                            title_fc,
+                            'Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index',
+                            column,
+                            conf_int=conf_df,
+                            history_tail=None,
+                            anomalies_idx=an_idx_fb,
+                            legend_y=-0.42,
+                            xlabel_labelpad=6
+                        ),
+                        "title": title_fc
+                    })
+                    break
+    except Exception as e:
+        app.logger.warning("Fallback static forecast failed: %s", e)
+
+    # Use cached DataFrame info to avoid recomputation on view switches
+    cached_info = get_cached_df_info(filename, df)
+    info_string = cached_info['info']
+    missing_values_html = cached_info['missing_values']
+
+
+    used_cols = used_cols or list(df.columns)
+    ai_context = build_ai_context(
+        df=df,
+        anomalies_found=anomalies_found,
+        corr_payload=corr_payload,
+        used_cols=used_cols,
+        is_timeseries=is_timeseries,
+        forecast_horizon=user_steps,
+        contamination=user_contam
+    )
+
+    ai_summary = _get_clean_ai_summary_from_cache(filename)
+    if ai_summary is None:
+        # Defer AI summary on all GET requests and load via AJAX to keep navigation latency low.
+        # Keep blocking behavior for POST requests (e.g., Q&A flows that need immediate context).
+        defer_ai_on_get = (request.method == 'GET')
+        
+        if not defer_ai_on_get and ensure_ai_ready():
+            try:
+                generated = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
+                ai_summary = generated
+                if isinstance(generated, str) and not _is_offline_html(generated):
+                    AI_SUMMARY_CACHE[filename] = generated
+            except Exception as _e:
+                try:
+                    reason = _sanitize_error_message(getattr(_e, 'message', None) or str(_e)) or (AI_STATUS.get('message') or '')
+                except Exception:
+                    reason = ''
+                detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
+                ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
+        elif defer_ai_on_get:
+            # Leave ai_summary empty/None - frontend will load it async via AJAX
+            ai_summary = ""
+        else:
+            # ensure_ai_ready() failed - report the actual reason
+            reason = AI_STATUS.get('message') or ("AI disabled or not configured." if not AI_ENABLED else "")
+            detail = f"<p class=\"muted\"><small>Reason: {htmllib.escape(str(reason))}</small></p>" if reason else ""
+            ai_summary = f"<p>AI summary temporarily unavailable.</p>{detail}"
+
+    
+    # Log forecast_plots length and per-column stats
+    try:
+        app.logger.info("Static forecast_plots count: %d", len(forecast_plots))
+        for fp in forecast_plots:
+            if isinstance(fp, dict) and 'title' in fp:
+                app.logger.info("Forecast plot: %s", fp['title'])
+    except Exception:
+        pass
+
+    # Organize forecast_plots by column for grouped display
+    forecast_plots_by_column = {}
+    type_order = {'forecast': 0, 'distribution': 1, 'stl': 2}
+    for fp in forecast_plots:
+        if isinstance(fp, dict):
+            col = fp.get('column', 'Other')
+            if col not in forecast_plots_by_column:
+                forecast_plots_by_column[col] = []
+            forecast_plots_by_column[col].append(fp)
+    # Sort plots within each column by type order
+    for col in forecast_plots_by_column:
+        forecast_plots_by_column[col].sort(key=lambda x: type_order.get(x.get('type', ''), 99))
+
+    analysis.update({
+        'head': cached_info['head'],
+        'description': cached_info['description'],
+        'overview_table': cached_info.get('overview_table_html', ''),
+        'info': info_string,
+        'missing_values': missing_values_html,
+        'plots': [],
+        'forecast_plots': _ensure_plot_dicts(forecast_plots) if build_forecast else [],
+        'forecast_plots_by_column': forecast_plots_by_column if build_forecast else {},
+        'anomalies': anomalies_found,
+        'ai_summary': ai_summary,
+        'user_question': user_question,
+        'ai_answer': ai_answer,
+        'interactive': interactive if build_interactive else [],
+        'columns': used_cols,
+        'corr': corr_payload,
+        'controls': {
+            'forecast_horizon': user_steps,
+            'effective_steps': effective_steps,
+            'forecast_pct': pct if pct is not None else None,
+            'total_rows': total_rows,
+            'contamination': user_contam,
+            'data_range': data_range_ratio,
+            'data_range_rows': data_range_rows
+        }
+    })
+    
+
+    
+    if (
+        app.config.get('DELETE_UPLOADED_AFTER_PROCESSING', False)
+        and HASHED_UPLOAD_RE.match(os.path.basename(filepath))
+        and os.path.exists(filepath)
+    ):
+        @after_this_request
+        def _delete_hashed_upload(response):
+            try:
+                success, error_msg = _safe_delete(filepath)
+                if success:
+                    app.logger.info("Deferred delete of %s done", filepath)
+                else:
+                    app.logger.warning("Deferred delete of %s failed: %s", filepath, error_msg or "unknown error")
+            except Exception as e:
+                app.logger.warning("Deferred delete callback failed for %s: %s", filepath, e)
+            return response
+
+    total_dt = time.perf_counter() - request_start
+    app.logger.info("Analyze done file=%s view=%s elapsed=%.2fs cols=%d", filename, active_view, total_dt, len(df.columns))
+    
+    # Get current AI model name for attribution display
+    # Priority: embedded model in AI summary > actual model used > configured default > generic fallback
+    ai_summary = analysis.get('ai_summary', '')
+    ai_answer = analysis.get('ai_answer', '')
+    
+    # Extract model from embedded comment in AI summary
+    ai_summary_model = None
+    if ai_summary:
+        _model_match = re.search(r'<!--\s*model:(.*?)\s*-->', str(ai_summary))
+        if _model_match:
+            ai_summary_model = _model_match.group(1).strip()
+            # Strip the comment from the displayed summary
+            ai_summary = re.sub(r'<!--.*?-->', '', ai_summary, flags=re.DOTALL)
+            analysis['ai_summary'] = ai_summary
+            
+    # Extract model from embedded comment in AI answer
+    ai_answer_model = None
+    if ai_answer:
+        _model_match = re.search(r'<!--\s*model:(.*?)\s*-->', str(ai_answer))
+        if _model_match:
+            ai_answer_model = _model_match.group(1).strip()
+            # Strip the comment from the displayed answer
+            ai_answer = re.sub(r'<!--.*?-->', '', ai_answer, flags=re.DOTALL)
+            analysis['ai_answer'] = ai_answer
+    
+    fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+    ai_summary_model = ai_summary_model or fallback_model
+    ai_answer_model = ai_answer_model or fallback_model
+    
+    def _clean_model(m):
+        m_str = str(m) if m else 'gemini-3.0-flash'
+        return m_str[7:] if m_str.startswith('models/') else m_str
+
+    ai_summary_model_display = _clean_model(ai_summary_model)
+    ai_answer_model_display = _clean_model(ai_answer_model)
+    
+    # Check if AI summary is a valid AI response (not offline/error)
+    ai_is_valid = (
+        (isinstance(ai_summary, str) and ai_summary and not _is_offline_html(ai_summary)) or
+        (isinstance(ai_answer, str) and ai_answer and not _is_offline_html(ai_answer))
+    )
+    
+    app.logger.debug("AI model attribution: display_sum=%s, display_ans=%s", ai_summary_model_display, ai_answer_model_display)
+    
+    _log_cache_stats_if_needed("analyze")
+    return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name, 
+                           ai_summary_model_name=ai_summary_model_display, ai_answer_model_name=ai_answer_model_display, ai_is_valid=ai_is_valid)
+
+analyze_file = handle_analyze_file
+
+__all__ = [
+    "parse_controls",
+    "build_fast_path_payload",
+    "build_forecast_payload",
+    "build_interactive_payload",
+    "resolve_ai_summary",
+    "finalize_analysis_response",
+    "handle_analyze_file",
+    "analyze_file",
+]
