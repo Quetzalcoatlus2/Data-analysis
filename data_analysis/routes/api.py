@@ -64,7 +64,8 @@ def handle_api_ai_summary(filename):
                 _m = re.search(r'<!--\s*model:(.*?)\s*-->', str(summary))
                 if _m:
                     m_name = _m.group(1).strip()
-                    if m_name.startswith('models/'): m_name = m_name[7:]
+                    if m_name.startswith('models/'):
+                        m_name = m_name[7:]
             
             model_display = m_name or CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
             

@@ -137,8 +137,8 @@ if Compress:
 UPLOAD_FOLDER = 'datasets'
 ALLOWED_EXTENSIONS = {'txt', 'csv', 'xlsx', 'json'}
 
-from data_analysis.core.config import apply_default_config
-from data_analysis.core.logging_setup import configure_logging, StripAnsiFormatter
+from data_analysis.core.config import apply_default_config  # noqa: E402
+from data_analysis.core.logging_setup import configure_logging, StripAnsiFormatter  # noqa: E402
 
 apply_default_config(app)
 os.environ.setdefault("NO_COLOR", "1")
@@ -191,7 +191,7 @@ def _call_gemini(prompt, file_asset=None, *, timeout=None, retries=None, generat
     )
 
 
-from data_analysis.core.cache import TinyLRU
+from data_analysis.core.cache import TinyLRU  # noqa: E402
 
 DATAFRAME_CACHE = TinyLRU(max_items=app.config['MAX_CACHE_ITEMS'], max_size_mb=int(os.getenv('DATAFRAME_CACHE_MAX_MB', '200')))
 NAME_MAP_PATH = os.path.join(UPLOAD_FOLDER, "_name_map.json")  
@@ -770,8 +770,8 @@ def _add_cache_and_security_headers(resp):
 
 app_middleware.register_after_request_middleware(app, handler=_add_cache_and_security_headers)
 
-from data_analysis.routes.pages import pages_bp
-from data_analysis.routes.api_routes import api_bp
+from data_analysis.routes.pages import pages_bp  # noqa: E402
+from data_analysis.routes.api_routes import api_bp  # noqa: E402
 
 app.register_blueprint(pages_bp)
 app.register_blueprint(api_bp)

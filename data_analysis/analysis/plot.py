@@ -1,4 +1,5 @@
 from __future__ import annotations
+# ruff: noqa: F821
 
 from collections import Counter
 from typing import Any
