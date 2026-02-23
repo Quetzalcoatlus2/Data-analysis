@@ -41,16 +41,16 @@ from matplotlib.transforms import blended_transform_factory
 from statsmodels.tsa.seasonal import STL  # type: ignore[import-untyped]
 from werkzeug.utils import secure_filename
 
+from data_analysis import middleware as app_middleware
+from data_analysis.ai import engine as ai_engine
+from data_analysis.ai import html_format as ai_html_format
+from data_analysis.ai import service as ai_service
 from data_analysis.analysis import anomaly as analysis_anomaly
 from data_analysis.analysis import context as analysis_context
 from data_analysis.analysis import dataframe_ops as analysis_dataframe_ops
 from data_analysis.analysis import forecast as analysis_forecast
 from data_analysis.analysis import plot as analysis_plots
-from data_analysis import middleware as app_middleware
 from data_analysis.core.lazy_imports import get_genai
-from data_analysis.ai import engine as ai_engine
-from data_analysis.ai import html_format as ai_html_format
-from data_analysis.ai import service as ai_service
 
 with warnings.catch_warnings():
     warnings.filterwarnings(
@@ -138,7 +138,10 @@ UPLOAD_FOLDER = 'datasets'
 ALLOWED_EXTENSIONS = {'txt', 'csv', 'xlsx', 'json'}
 
 from data_analysis.core.config import apply_default_config  # noqa: E402
-from data_analysis.core.logging_setup import configure_logging, StripAnsiFormatter  # noqa: E402
+from data_analysis.core.logging_setup import (  # noqa: E402
+    StripAnsiFormatter,
+    configure_logging,
+)
 
 apply_default_config(app)
 os.environ.setdefault("NO_COLOR", "1")
@@ -322,7 +325,7 @@ def _is_reliable_timeseries_index(idx) -> bool:
     if len(idx) < 2:
         return False
     # Reject if index has NaT values
-    if idx.isna().any():
+    if bool(pd.isna(idx).any()):
         return False
     # Reject non-monotonic (increasing) indices
     if not idx.is_monotonic_increasing:
@@ -381,7 +384,11 @@ def _diagnose_gemini_response(resp):
 def _get_finish_reason(resp):
     return ai_service._get_finish_reason(resp)
 
-def _build_qna_cache_key(df, question: str, filename: str | None = None) -> str:
+def _build_qna_cache_key(
+    df: pd.DataFrame,
+    question: str,
+    filename: str | None = None,
+) -> tuple[Any, ...]:
     return ai_service._build_qna_cache_key(df, question, filename)
 
 def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
@@ -466,12 +473,6 @@ def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
 
 def _thin_series_keep_extrema(s: pd.Series, max_points: int, keep_idx: pd.Index | None = None) -> pd.Series:
     return analysis_forecast._thin_series_keep_extrema(s, max_points, keep_idx=keep_idx)
-
-def _cap_anomalies_for_display(anomalies_idx, anomalies_score=None, max_points=None):
-    return analysis_plots._cap_anomalies_for_display(anomalies_idx, anomalies_score, max_points=max_points)
-
-def _anomaly_positions_for_index(data_index, anomalies_idx):
-    return analysis_plots._anomaly_positions_for_index(data_index, anomalies_idx)
 
 def _ensure_plot_dicts(items):
     return analysis_context._ensure_plot_dicts(items)
@@ -770,8 +771,8 @@ def _add_cache_and_security_headers(resp):
 
 app_middleware.register_after_request_middleware(app, handler=_add_cache_and_security_headers)
 
-from data_analysis.routes.pages import pages_bp  # noqa: E402
 from data_analysis.routes.api_routes import api_bp  # noqa: E402
+from data_analysis.routes.pages import pages_bp  # noqa: E402
 
 app.register_blueprint(pages_bp)
 app.register_blueprint(api_bp)

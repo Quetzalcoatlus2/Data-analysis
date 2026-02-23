@@ -1,6 +1,6 @@
 from __future__ import annotations
-# ruff: noqa: F821
 
+# ruff: noqa: F821
 from collections import Counter
 from typing import Any
 
@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 from data_analysis._legacy_loader import get_legacy
-
 
 _LOCAL_SYMBOLS = {
     '_LOCAL_SYMBOLS',
