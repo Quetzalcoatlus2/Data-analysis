@@ -33,6 +33,22 @@ def _bind_runtime_globals():
     return rt
 
 
+def _extract_model_and_strip_comments(html: str | None) -> tuple[str | None, str]:
+    """Return embedded model marker (if present) and HTML with comments removed."""
+    raw = "" if html is None else str(html)
+    model_name = None
+    model_match = re.search(r'<!--\s*model:(.*?)\s*-->', raw)
+    if model_match:
+        model_name = model_match.group(1).strip()
+    cleaned = re.sub(r'<!--.*?-->', '', raw, flags=re.DOTALL)
+    return model_name, cleaned
+
+
+def _clean_model_name(model_name: str | None) -> str:
+    model_str = str(model_name) if model_name else 'gemini-3.0-flash'
+    return model_str[7:] if model_str.startswith('models/') else model_str
+
+
 def parse_controls(request: Request) -> dict[str, Any]:
     rt = _bind_runtime_globals()
     default_steps = int(rt.app.config.get("DEFAULT_FORECAST_STEPS", 40))
@@ -322,25 +338,24 @@ def handle_analyze_file(filename):
         app.logger.info("Analyze FAST PATH done file=%s view=%s elapsed=%.2fs", filename, active_view, total_dt)
         _log_cache_stats_if_needed("analyze-fast")
         
-        # Compute AI model attribution for template (same logic as full path)
-        _ai_model_name = None
-        if ai_summary:
-            model_match = re.search(r'<!--\s*model:(.*?)\s*-->', ai_summary)
-            if model_match:
-                _ai_model_name = model_match.group(1).strip()
-                ai_summary = re.sub(r'<!--.*?-->', '', ai_summary, flags=re.DOTALL)
-                
-        if not _ai_model_name:
-            _ai_model_name = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        ai_summary_model, ai_summary_clean = _extract_model_and_strip_comments(ai_summary)
+        ai_answer_model, ai_answer_clean = _extract_model_and_strip_comments(ai_answer)
 
-        if isinstance(_ai_model_name, str) and _ai_model_name.startswith('models/'):
-            _ai_model_display = _ai_model_name[7:]
-        else:
-            _ai_model_display = str(_ai_model_name) if _ai_model_name else 'gemini-3.0-flash'
-        _ai_is_valid = isinstance(ai_summary, str) and ai_summary and not _is_offline_html(ai_summary)
+        analysis['ai_summary'] = ai_summary_clean
+        analysis['ai_answer'] = ai_answer_clean
+
+        ai_summary_model_display = _clean_model_name(ai_summary_model or fallback_model)
+        ai_answer_model_display = _clean_model_name(ai_answer_model or fallback_model)
+        _ai_is_valid = (
+            (isinstance(ai_summary_clean, str) and ai_summary_clean and not _is_offline_html(ai_summary_clean))
+            or (isinstance(ai_answer_clean, str) and ai_answer_clean and not _is_offline_html(ai_answer_clean))
+        )
         
         return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name,
-                               ai_model_name=_ai_model_display, ai_is_valid=_ai_is_valid)
+                               ai_summary_model_name=ai_summary_model_display,
+                               ai_answer_model_name=ai_answer_model_display,
+                               ai_is_valid=_ai_is_valid)
 
     # Per-request timing and budgets to prevent long hangs
     overview_budget_s = float(os.getenv("OVERVIEW_TIME_BUDGET_SEC", "6.0"))
@@ -408,23 +423,11 @@ def handle_analyze_file(filename):
 
                     title_fc = f"Forecast for {column} (with anomalies)"
                     
-                    # Thin history for display
-                    max_hist_points = 600
-                    s_hist = _thin_series_keep_extrema(series, max_points=max_hist_points, keep_idx=an_idx)
-                    
-                    # PROPORTIONAL THINNING: Thin forecast by same ratio as history
-                    # This maintains correct visual proportions
-                    if len(series) > max_hist_points and fc_mean is not None and len(fc_mean) > 0:
-                        thinning_ratio = len(s_hist) / len(series)
-                        thin_fc_points = max(2, int(len(fc_mean) * thinning_ratio))
-                        fc_mean_thin = _thin_series(fc_mean, max_points=thin_fc_points)
-                        if conf_df is not None and isinstance(conf_df, pd.DataFrame):
-                            conf_df_thin = conf_df.reindex(fc_mean_thin.index)
-                        else:
-                            conf_df_thin = None
-                    else:
-                        fc_mean_thin = fc_mean
-                        conf_df_thin = conf_df
+                    # Do not thin history for display to ensure anomaly positions 
+                    # perfectly match Interactive, PDF, and ZIP exports which use full series.
+                    s_hist = series
+                    fc_mean_thin = fc_mean
+                    conf_df_thin = conf_df
                     
                     # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
                     fc_stats = _compute_basic_stats(series)
@@ -778,7 +781,7 @@ def handle_analyze_file(filename):
                     steps = effective_steps
                     fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
                     title_fc = f"Forecast for {column}"
-                    s_hist = _thin_series_keep_extrema(series, max_points=600)
+                    s_hist = series
                     forecast_plots.append({
                         "img": generate_forecast_plot(
                             s_hist,
@@ -919,37 +922,18 @@ def handle_analyze_file(filename):
     # Priority: embedded model in AI summary > actual model used > configured default > generic fallback
     ai_summary = analysis.get('ai_summary', '')
     ai_answer = analysis.get('ai_answer', '')
-    
-    # Extract model from embedded comment in AI summary
-    ai_summary_model = None
-    if ai_summary:
-        _model_match = re.search(r'<!--\s*model:(.*?)\s*-->', str(ai_summary))
-        if _model_match:
-            ai_summary_model = _model_match.group(1).strip()
-            # Strip the comment from the displayed summary
-            ai_summary = re.sub(r'<!--.*?-->', '', ai_summary, flags=re.DOTALL)
-            analysis['ai_summary'] = ai_summary
-            
-    # Extract model from embedded comment in AI answer
-    ai_answer_model = None
-    if ai_answer:
-        _model_match = re.search(r'<!--\s*model:(.*?)\s*-->', str(ai_answer))
-        if _model_match:
-            ai_answer_model = _model_match.group(1).strip()
-            # Strip the comment from the displayed answer
-            ai_answer = re.sub(r'<!--.*?-->', '', ai_answer, flags=re.DOTALL)
-            analysis['ai_answer'] = ai_answer
+
+    ai_summary_model, ai_summary = _extract_model_and_strip_comments(ai_summary)
+    ai_answer_model, ai_answer = _extract_model_and_strip_comments(ai_answer)
+    analysis['ai_summary'] = ai_summary
+    analysis['ai_answer'] = ai_answer
     
     fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
     ai_summary_model = ai_summary_model or fallback_model
     ai_answer_model = ai_answer_model or fallback_model
     
-    def _clean_model(m):
-        m_str = str(m) if m else 'gemini-3.0-flash'
-        return m_str[7:] if m_str.startswith('models/') else m_str
-
-    ai_summary_model_display = _clean_model(ai_summary_model)
-    ai_answer_model_display = _clean_model(ai_answer_model)
+    ai_summary_model_display = _clean_model_name(ai_summary_model)
+    ai_answer_model_display = _clean_model_name(ai_answer_model)
     
     # Check if AI summary is a valid AI response (not offline/error)
     ai_is_valid = (

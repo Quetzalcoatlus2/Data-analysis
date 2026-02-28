@@ -167,7 +167,13 @@ def handle_download_static_plots_zip(filename):
                 continue
             
             # Detect anomalies for this column
-            an_idx, an_score = get_cached_anomalies(filename, col, s, user_contam)
+            raw_an_idx, raw_an_score = get_cached_anomalies(filename, col, s, user_contam)
+            try:
+                max_pts = int(app.config.get('ANOMALY_MARKER_CAP', 20))
+            except Exception:
+                max_pts = 20
+            an_idx = _cap_anomalies_for_display(raw_an_idx, raw_an_score, max_points=max_pts)
+            an_score = raw_an_score[an_idx] if not raw_an_score.empty else raw_an_score
             
             # Trend plot with anomalies
             try:
@@ -282,6 +288,16 @@ def handle_download_static_plots_zip(filename):
                     fc_mean, ci = _forecast_with_fallback(s, forecast_steps, filename=filename, col=col)
 
                     xlab = 'Timestamp' if is_timeseries else 'Index'
+                    
+                    # Ensure an_idx and an_score are capped for forecast plot (in case it wasn't already)
+                    raw_an_idx, raw_an_score = get_cached_anomalies(filename, col, s, user_contam)
+                    try:
+                        max_pts = int(app.config.get('ANOMALY_MARKER_CAP', 20))
+                    except Exception:
+                        max_pts = 20
+                    an_idx_fc = _cap_anomalies_for_display(raw_an_idx, raw_an_score, max_points=max_pts)
+                    an_score_fc = raw_an_score[an_idx_fc] if not raw_an_score.empty else raw_an_score
+
                     fc_b64 = generate_forecast_plot(
                         s,
                         fc_mean,
@@ -290,8 +306,8 @@ def handle_download_static_plots_zip(filename):
                         col,
                         conf_int=ci,
                         history_tail=None,
-                        anomalies_idx=an_idx,
-                        anomalies_score=an_score,
+                        anomalies_idx=an_idx_fc,
+                        anomalies_score=an_score_fc,
                         legend_y=-0.38
                     )
                     raw = base64.b64decode(fc_b64.encode('utf-8'))

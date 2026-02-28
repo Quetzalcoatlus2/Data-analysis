@@ -426,6 +426,7 @@ def _get_clean_ai_summary_from_cache(filename: str):
         filename,
         ai_summary_cache=AI_SUMMARY_CACHE,
         sanitize_ai_html_fn=sanitize_ai_html,
+        app_config=dict(app.config),
     )
 
 
