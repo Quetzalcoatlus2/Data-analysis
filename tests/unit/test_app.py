@@ -11,12 +11,10 @@ import pandas as pd
 import pytest
 from matplotlib.axes import Axes
 
-
 # Add project root to sys.path to ensure local absolute imports work
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 import data_analysis.runtime_app as app_module
-
 from app import app
 from data_analysis.runtime_app import (
     AI_DESCRIBE_CACHE,
@@ -39,6 +37,7 @@ from data_analysis.runtime_app import (
     get_cached_anomalies,
     get_cached_numeric_df,
 )
+
 
 def test_allowed_file():
     """Test the allowed_file function."""
@@ -815,6 +814,48 @@ def test_download_full_report_pdf_returns_pdf(monkeypatch):
     assert response.status_code == 200
     assert response.headers.get("Content-Type") == "application/pdf"
     assert response.data.startswith(b"%PDF")
+
+
+def test_download_full_report_pdf_small_series_includes_trend_and_forecast(monkeypatch):
+    """Small numeric datasets (>=5 rows) should still produce trend and forecast charts in PDF."""
+    filename = "1" * 40 + ".json"
+    df = pd.DataFrame({
+        "air_temp_c": [26.3, 26.5, 26.6, 26.8, 27.0],
+        "soil_moisture_pct": [42.5, 42.1, 41.9, 41.7, 41.4],
+    })
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+
+    def fake_get_cached_column_forecast(_filename, _column, series, steps):
+        n_steps = int(steps)
+        idx = pd.RangeIndex(start=len(series), stop=len(series) + n_steps)
+        base = float(series.iloc[-1]) if len(series) else 0.0
+        vals = [base + 0.1 * (i + 1) for i in range(n_steps)]
+        fc = pd.Series(vals, index=idx)
+        ci = pd.DataFrame({"lower": fc - 0.2, "upper": fc + 0.2}, index=idx)
+        return fc, ci
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+
+    original_plot = app_module.generate_forecast_plot
+    titles: list[str] = []
+
+    def spy_generate_forecast_plot(*args, **kwargs):
+        title = args[2] if len(args) > 2 else kwargs.get("title", "")
+        titles.append(str(title))
+        return original_plot(*args, **kwargs)
+
+    monkeypatch.setattr(app_module, "generate_forecast_plot", spy_generate_forecast_plot)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=plant&forecast_pct=0.2")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert any(t.startswith("Trend: air_temp_c") for t in titles)
+    assert any(t.startswith("Forecast: air_temp_c") for t in titles)
 
 
 def test_api_interactive_returns_cached_payload_when_available():

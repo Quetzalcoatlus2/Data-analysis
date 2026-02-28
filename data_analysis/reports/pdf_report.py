@@ -649,8 +649,13 @@ def handle_download_full_report_pdf(filename):
             
             pdf.set_font(font_family, size=10)
 
+            # Keep PDF chart gating aligned with interactive/analyze flow for small datasets.
+            min_trend_forecast_points = 5
+            an_idx = pd.Index([])
+            an_score = pd.Series([], dtype=float)
+
             # 1. TREND CHART (History + Anomalies, no forecast) - always first
-            if is_numeric and len(numeric_series) >= 10:
+            if is_numeric and len(numeric_series) >= min_trend_forecast_points:
                 try:
                     raw_an_idx, raw_an_score = get_cached_anomalies(filename, col, numeric_series, user_contam)
                     
@@ -684,7 +689,7 @@ def handle_download_full_report_pdf(filename):
                     an_score = pd.Series([], dtype=float)
             
             # 2. FORECAST CHART (with forecast if pct > 0)
-            if is_numeric and len(numeric_series) >= 10 and forecast_steps > 0:
+            if is_numeric and len(numeric_series) >= min_trend_forecast_points and forecast_steps > 0:
                 try:
                     # Use cached forecast
                     try:
