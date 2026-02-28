@@ -2,6 +2,7 @@
 import io
 import os
 import sys
+import time
 import zipfile
 from typing import Any, cast
 
@@ -673,6 +674,93 @@ def test_tinylru_size_based_eviction_for_large_values():
     st = cache.stats()
     assert st["evictions"] >= 1
     assert st["size"] == 1
+
+
+def test_tinylru_size_tracking_stays_correct_on_key_replace():
+    """Replacing a large entry with a small one should not keep stale size accounting."""
+    cache = TinyLRU(max_items=10, max_size_mb=0.001)
+
+    cache.set("a", "x" * 200_000)
+    cache.set("a", "x" * 20)
+    cache.set("b", "y" * 20)
+
+    assert cache.get("a") == "x" * 20
+    assert cache.get("b") == "y" * 20
+    st = cache.stats()
+    assert st["size"] == 2
+    assert st["size_bytes"] > 0
+
+
+def test_tinylru_clear_resets_size_bookkeeping():
+    """clear() should reset both entry map and tracked total bytes."""
+    cache = TinyLRU(max_items=10, max_size_mb=1)
+    cache.set("a", "x" * 1000)
+    cache.set("b", "y" * 1000)
+
+    cache.clear()
+
+    st = cache.stats()
+    assert st["size"] == 0
+    assert st["size_bytes"] == 0
+
+
+def test_tinylru_pop_updates_size_and_respects_default():
+    """pop() should update tracked bytes and preserve dict-like missing-key semantics."""
+    cache = TinyLRU(max_items=10, max_size_mb=1)
+    cache.set("a", "x" * 1000)
+    before = cache.stats()["size_bytes"]
+
+    popped = cache.pop("a")
+    assert popped == "x" * 1000
+    after = cache.stats()["size_bytes"]
+    assert after < before
+
+    assert cache.pop("missing", "fallback") == "fallback"
+    with pytest.raises(KeyError):
+        cache.pop("missing")
+
+
+def test_cleanup_uploads_prunes_stale_ai_file_map(tmp_path):
+    """Upload cleanup should remove AI_FILE_MAP entries for deleted/nonexistent files."""
+    uploads_dir = tmp_path / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    stale_name = ("a" * 40) + ".csv"
+    fresh_name = ("b" * 40) + ".csv"
+    missing_name = ("c" * 40) + ".csv"
+
+    stale_path = uploads_dir / stale_name
+    fresh_path = uploads_dir / fresh_name
+    stale_path.write_text("old", encoding="utf-8")
+    fresh_path.write_text("new", encoding="utf-8")
+
+    old_ts = time.time() - (3 * 24 * 3600)
+    now_ts = time.time()
+    os.utime(stale_path, (old_ts, old_ts))
+    os.utime(fresh_path, (now_ts, now_ts))
+
+    prev_retention = app_module.app.config.get("UPLOAD_RETENTION_DAYS")
+    prev_uploads = app_module.app.config.get("UPLOADS_DIR")
+
+    app_module.AI_FILE_MAP.clear()
+    app_module.AI_FILE_MAP[stale_name] = object()
+    app_module.AI_FILE_MAP[fresh_name] = object()
+    app_module.AI_FILE_MAP[missing_name] = object()
+
+    app_module.app.config["UPLOAD_RETENTION_DAYS"] = 1
+    app_module.app.config["UPLOADS_DIR"] = str(uploads_dir)
+
+    try:
+        app_module._cleanup_uploads_if_configured()
+    finally:
+        app_module.app.config["UPLOAD_RETENTION_DAYS"] = prev_retention
+        app_module.app.config["UPLOADS_DIR"] = prev_uploads
+
+    assert stale_name not in app_module.AI_FILE_MAP
+    assert missing_name not in app_module.AI_FILE_MAP
+    assert fresh_name in app_module.AI_FILE_MAP
+    assert not stale_path.exists()
+    assert fresh_path.exists()
 
 
 def test_thin_series_keep_extrema_includes_min_max_and_last():

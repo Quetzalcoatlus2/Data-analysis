@@ -101,7 +101,8 @@ def handle_api_interactive_data(filename):
     raw_pct = request.args.get('forecast_pct', '0.05')
     try:
         user_contam = float(request.args.get('contamination', '0.02'))
-    except Exception:
+    except Exception as e:
+        app.logger.debug("Interactive API contamination parse fallback used for %s: %s", filename, e)
         user_contam = 0.02
     user_contam = max(0.001, min(0.2, user_contam))
 
@@ -116,7 +117,8 @@ def handle_api_interactive_data(filename):
         pct = float(raw_pct) if raw_pct else 0.05
         # Allow 0 for no-forecast mode, clamp max to 0.5
         pct = max(0, min(0.5, pct))
-    except Exception:
+    except Exception as e:
+        app.logger.debug("Interactive API forecast_pct parse fallback used for %s: %s", filename, e)
         pct = 0.05
 
     # Check cache first for instant response (keyed by request parameters)
@@ -202,7 +204,8 @@ def handle_api_interactive_data(filename):
                 for idx_val, score_val in an_score.items():
                     if pd.notna(score_val):
                         score_buckets.setdefault(idx_val, []).append(float(score_val))
-            except Exception:
+            except Exception as e:
+                app.logger.debug("Interactive anomaly score bucketing skipped for %s: %s", column, e)
                 score_buckets = {}
 
             for i in an_positions:
@@ -338,7 +341,8 @@ def handle_api_interactive_data(filename):
                 "median": _safe_number(series.median()),
                 "std": _safe_number(series.std())
             }
-        except Exception:
+        except Exception as e:
+            app.logger.debug("Interactive stats computation skipped for %s: %s", column, e)
             stats = None
         
         interactive.append({"column": column, "traces": traces, "layout": layout, "distribution": dist, "stats": stats})
@@ -406,7 +410,8 @@ def handle_full_history_json():
                     app.logger.debug("full_history_json timezone normalization skipped for %s: %s", filename, tz_err)
             try:
                 x_all = [ts.isoformat() for ts in idx.to_pydatetime()]
-            except Exception:
+            except Exception as e:
+                app.logger.debug("full_history_json ISO timestamp conversion fallback for %s: %s", filename, e)
                 
                 x_all = [str(v) for v in idx.astype('datetime64[ns]').tolist()]
         else:
@@ -423,7 +428,8 @@ def handle_full_history_json():
                         x_all.append(float(v))
                     else:
                         x_all.append(str(v))
-            except Exception:
+            except Exception as e:
+                app.logger.debug("full_history_json index serialization fallback for %s: %s", filename, e)
                 x_all = list(range(len(df)))
 
         n = len(x_all)
@@ -442,7 +448,8 @@ def handle_full_history_json():
                 try:
                     parsed = _try_parse_numeric_series(df[c])
                     num_df[c] = parsed
-                except Exception:
+                except Exception as e:
+                    app.logger.debug("full_history_json numeric parse skipped for %s.%s: %s", filename, c, e)
                     continue
             numeric_cols = [c for c in num_df.columns if pd.api.types.is_numeric_dtype(num_df[c])]
 
@@ -452,7 +459,8 @@ def handle_full_history_json():
         for c in numeric_cols:
             try:
                 y_all = num_df[c].astype(float).tolist()
-            except Exception:
+            except Exception as e:
+                app.logger.debug("full_history_json float cast fallback for %s.%s: %s", filename, c, e)
                 
                 y_all = [float(v) if pd.notna(v) else None for v in num_df[c].tolist()]
             y_vals = y_all[::step] if step > 1 else y_all

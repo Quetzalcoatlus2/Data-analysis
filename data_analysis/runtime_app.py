@@ -258,10 +258,13 @@ def _log_cache_stats_if_needed(context: str):
         parts = []
         for name, cache in watched.items():
             st = cache.stats()
-            parts.append(f"{name}({st['size']}/{st['max_items']} h={st['hits']} m={st['misses']} e={st['evictions']})")
+            size_bytes = int(st.get('size_bytes', 0))
+            parts.append(
+                f"{name}({st['size']}/{st['max_items']} h={st['hits']} m={st['misses']} e={st['evictions']} b={size_bytes})"
+            )
         app.logger.info("CacheStats[%s]: %s", context, " | ".join(parts))
-    except Exception:
-        pass
+    except Exception as e:
+        app.logger.debug("Cache stats logging skipped: %s", e)
 
 def _build_interactive_cache_key(filename: str, forecast_pct: float, contamination: float) -> tuple[str, float, float]:
     try:
@@ -394,14 +397,6 @@ def _resolve_app_override(name: str):
 
 def _is_offline_html(html: str) -> bool:
     return ai_service._is_offline_html(html)
-
-
-def _diagnose_gemini_response(*args, **kwargs):
-    return ai_service._diagnose_gemini_response(*args, **kwargs)
-
-
-def _get_finish_reason(*args, **kwargs):
-    return ai_service._get_finish_reason(*args, **kwargs)
 
 
 def _build_qna_cache_key(*args, **kwargs):
@@ -604,12 +599,25 @@ def read_json_fallback(path):
     )
 
 def _cleanup_uploads_if_configured():
+    uploads_dir = app.config.get('UPLOADS_DIR', UPLOAD_FOLDER)
     analysis_dataframe_ops._cleanup_uploads_if_configured(
         upload_retention_days=app.config.get('UPLOAD_RETENTION_DAYS'),
-        uploads_dir=app.config.get('UPLOADS_DIR', UPLOAD_FOLDER),
+        uploads_dir=uploads_dir,
         hashed_upload_re=HASHED_UPLOAD_RE,
         logger=app.logger,
     )
+    try:
+        stale_keys = [
+            key
+            for key in list(AI_FILE_MAP.keys())
+            if not os.path.isfile(os.path.join(uploads_dir, str(key)))
+        ]
+        for key in stale_keys:
+            AI_FILE_MAP.pop(key, None)
+        if stale_keys:
+            app.logger.debug("Pruned %d stale AI_FILE_MAP entries", len(stale_keys))
+    except Exception as e:
+        app.logger.debug("AI_FILE_MAP prune skipped: %s", e)
 
 def _try_parse_numeric_series(s: pd.Series) -> pd.Series:
     return analysis_dataframe_ops._try_parse_numeric_series(s)
@@ -634,6 +642,7 @@ def detect_anomalies(series: pd.Series, contamination: float = 0.02):
         contamination=contamination,
         is_reliable_timeseries_index=_is_reliable_timeseries_index,
         infer_seasonal_period=_infer_seasonal_period,
+        logger=app.logger,
     )
 
 def _anomaly_series_signature(series: pd.Series) -> tuple[Any, ...]:
@@ -690,7 +699,8 @@ def _should_show_index_as_column(df: pd.DataFrame) -> bool:
             if idx.name in (None, "") and int(idx.start) == 0 and int(idx.step) == 1:
                 return False
         return True
-    except Exception:
+    except Exception as e:
+        app.logger.debug("Index visibility check failed: %s", e)
         return False
 
 
@@ -716,7 +726,8 @@ def _display_df_with_index(df: pd.DataFrame) -> pd.DataFrame:
                 safe_name = f"{idx_name}_{suffix}"
             display_df = display_df.rename(columns={first_col: safe_name})
         return display_df
-    except Exception:
+    except Exception as e:
+        app.logger.debug("Failed to materialize DataFrame index column: %s", e)
         return df.copy()
 
 

@@ -124,8 +124,19 @@ def _anomaly_positions_for_index(data_index: pd.Index, anomalies_idx: pd.Index |
     return positions
 
 
-def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=False):
+def generate_plot(
+    data: pd.Series,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    anomalies_idx: Any = None,
+    use_webp: bool = False,
+) -> str:
     _bind_runtime_globals()
+    try:
+        max_anomaly_markers = int(app.config.get('ANOMALY_MARKER_CAP', 20))
+    except Exception:
+        max_anomaly_markers = 20
     # HIGH QUALITY: Larger figure for better image quality
     fig, ax = plt.subplots(figsize=(10, 4))
     
@@ -137,11 +148,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         ax.plot(data.index, data.values, label='History', color='tab:blue', lw=1.0)
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                try:
-                    max_points = int(app.config.get('ANOMALY_MARKER_CAP', 20))
-                except Exception:
-                    max_points = 20
-                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), max_points=max_points)
+                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), max_points=max_anomaly_markers)
                 an_positions = _anomaly_positions_for_index(data.index, an_display)
                 if an_positions:
                     aligned = data.iloc[an_positions]
@@ -168,11 +175,7 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         # Plot anomalies at correct numeric positions
         if anomalies_idx is not None and len(anomalies_idx):
             try:
-                try:
-                    max_points = int(app.config.get('ANOMALY_MARKER_CAP', 20))
-                except Exception:
-                    max_points = 20
-                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), max_points=max_points)
+                an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), max_points=max_anomaly_markers)
                 an_positions = _anomaly_positions_for_index(data.index, an_display)
                 if an_positions:
                     an_values = data.iloc[an_positions].astype(float).values
@@ -264,15 +267,16 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.6, handletextpad=0.3)
 
         # Std appears in legend only
-    except Exception:
-        pass  # Skip stats if calculation fails
+    except Exception as e:
+        app.logger.debug("generate_plot stats overlay skipped for '%s': %s", title, e)
     
     buf = io.BytesIO()
     # PERFORMANCE: Use WebP if available (smaller), fallback to PNG
     fmt = 'webp' if use_webp else 'png'
     try:
         fig.savefig(buf, format=fmt, bbox_inches='tight', pad_inches=0.1)
-    except Exception:
+    except Exception as e:
+        app.logger.debug("generate_plot save as %s failed; falling back to png: %s", fmt, e)
         fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
     buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8')
@@ -306,14 +310,15 @@ def generate_forecast_plot(
     has_forecast = forecast_series is not None and len(forecast_series) > 0
     
     # For non-datetime indices, use numeric positions to ensure proper alignment
-    use_numeric_x = not _is_reliable_timeseries_index(history_tail_series.index)
+    has_reliable_index = _is_reliable_timeseries_index(history_tail_series.index)
+    use_numeric_x = not has_reliable_index
     
     if use_numeric_x:
         # Use numeric x positions (0, 1, 2...) for plotting
         n_hist = len(history_tail_series)
         hist_x = list(range(n_hist))
         hist_y = history_tail_series.values.astype(float)
-        non_reliable_dt = isinstance(history_tail_series.index, pd.DatetimeIndex) and not _is_reliable_timeseries_index(history_tail_series.index)
+        non_reliable_dt = isinstance(history_tail_series.index, pd.DatetimeIndex) and not has_reliable_index
         
         # Plot history
         ax.plot(hist_x, hist_y, linestyle='-', color='tab:blue', linewidth=1.2, label='History', zorder=2)
@@ -334,8 +339,8 @@ def generate_forecast_plot(
                     lower = conf_int.iloc[:, 0].values.astype(float)
                     upper = conf_int.iloc[:, 1].values.astype(float)
                     ax.fill_between(fc_x, lower, upper, color='orangered', alpha=0.22, label='95% CI', zorder=2)
-                except Exception:
-                    pass
+                except Exception as e:
+                    app.logger.debug("generate_forecast_plot numeric CI skipped for '%s': %s", title, e)
             
             # Forecast start line
             ax.axvline(n_hist - 0.5, color='gray', linestyle=':', linewidth=1.5, label='Forecast start', zorder=1)
@@ -376,8 +381,8 @@ def generate_forecast_plot(
             if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
                 pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
                 ax.set_ylim(y_min - pad, y_max + pad)
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.debug("generate_forecast_plot numeric y-limits skipped for '%s': %s", title, e)
             
         # Set x-ticks to match the original index labels (history + forecast)
         try:
@@ -399,8 +404,8 @@ def generate_forecast_plot(
                 
             ax.set_xticks(tick_positions)
             ax.set_xticklabels(tick_labels, rotation=45, ha='right', fontsize=8)
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.debug("generate_forecast_plot numeric x-ticks skipped for '%s': %s", title, e)
         
     else:
         # Original datetime-based plotting
@@ -428,15 +433,15 @@ def generate_forecast_plot(
                     lower.index = forecast_series.index
                     upper.index = forecast_series.index
                     ax.fill_between(forecast_series.index, lower, upper, color='orangered', alpha=0.22, label='95% CI', zorder=2)
-                except Exception:
-                    pass
+                except Exception as e:
+                    app.logger.debug("generate_forecast_plot datetime CI skipped for '%s': %s", title, e)
             
             try:
                 split_x = history.index[-1]
                 ax.axvline(split_x, color='gray', linestyle=':', linewidth=1.5, label='Forecast start', zorder=1)
                 ax.axvspan(split_x, forecast_series.index[-1], color='orange', alpha=0.08, zorder=0)
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.debug("generate_forecast_plot split marker skipped for '%s': %s", title, e)
         
         # Add anomaly markers if provided (shown regardless of forecast)
         if anomalies_idx is not None and len(anomalies_idx):
@@ -474,14 +479,14 @@ def generate_forecast_plot(
             if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
                 pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
                 ax.set_ylim(y_min - pad, y_max + pad)
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.debug("generate_forecast_plot datetime y-limits skipped for '%s': %s", title, e)
 
     ax.set_title(title)
     # Use a sensible x-axis label depending on index type
     try:
         label_pad = 2 if xlabel_labelpad is None else xlabel_labelpad
-        if _is_reliable_timeseries_index(history_tail_series.index):
+        if has_reliable_index:
             ax.set_xlabel('Timestamp', labelpad=label_pad)
         else:
             ax.set_xlabel('Index', labelpad=label_pad)
@@ -611,8 +616,8 @@ def generate_forecast_plot(
         ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, legend_anchor), ncol=12, frameon=False, columnspacing=0.5, handletextpad=0.3)
         
         # Std appears in legend only
-    except Exception:
-        pass  # Skip stats if calculation fails
+    except Exception as e:
+        app.logger.debug("generate_forecast_plot stats overlay skipped for '%s': %s", title, e)
 
     buf = io.BytesIO()
     fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2)
@@ -852,11 +857,13 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
             ax.set_yticks(np.arange(n_cols))
             ax.set_xticklabels([str(c) for c in corr.columns], rotation=45, ha='right', fontsize=max(6, fontsize - 1))
             ax.set_yticklabels([str(c) for c in corr.index], fontsize=max(6, fontsize - 1))
-            for r in range(n_cols):
-                for c in range(n_cols):
-                    val = data[r, c]
-                    color = 'white' if abs(val) > 0.55 else 'black'
-                    ax.text(c, r, f"{val:.2f}", ha='center', va='center', fontsize=max(5, fontsize - 2), color=color)
+            annotate_cells = n_cols <= 28
+            if annotate_cells:
+                for r in range(n_cols):
+                    for c in range(n_cols):
+                        val = data[r, c]
+                        color = 'white' if abs(val) > 0.55 else 'black'
+                        ax.text(c, r, f"{val:.2f}", ha='center', va='center', fontsize=max(5, fontsize - 2), color=color)
             fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, shrink=0.8)
             ax.grid(False)
 
@@ -869,9 +876,13 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
         img = base64.b64encode(buf.read()).decode('utf-8')
         plt.close(fig)
         return img
-    except Exception:
+    except Exception as e:
         if fig is not None:
             plt.close(fig)
+        try:
+            rt.app.logger.debug("generate_correlation_heatmap failed (%s): %s", method, e)
+        except Exception:
+            pass
         return None
 
 

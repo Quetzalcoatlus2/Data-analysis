@@ -96,8 +96,8 @@ def handle_upload_file():
                 try:
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
-                except Exception:
-                    pass
+                except Exception as cleanup_err:
+                    app.logger.debug("Temp cleanup failed after upload error for %s: %s", temp_path, cleanup_err)
                 flash(f"Upload failed: {e}")
                 return redirect(request.url)
     return render_template('index.html')

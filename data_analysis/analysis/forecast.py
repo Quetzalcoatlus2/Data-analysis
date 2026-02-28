@@ -50,7 +50,8 @@ def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
                 pass
             return out
         return s
-    except Exception:
+    except Exception as e:
+        app.logger.debug("_thin_series fallback used: %s", e)
         return s
 
 
@@ -77,12 +78,14 @@ def _thin_series_keep_extrema(s: pd.Series, max_points: int, keep_idx: pd.Index 
             try:
                 bonus_pos = s.index.get_indexer(keep_idx)
                 keep_pos.extend([int(p) for p in bonus_pos if p >= 0])
-            except Exception:
+            except Exception as e:
+                app.logger.debug("_thin_series_keep_extrema keep_idx mapping skipped: %s", e)
                 pass
 
         keep_pos = sorted(set(keep_pos))
         return s.iloc[np.array(keep_pos, dtype=int)]
-    except Exception:
+    except Exception as e:
+        app.logger.debug("_thin_series_keep_extrema fallback used: %s", e)
         return _thin_series(s, max_points)
 
 
@@ -96,37 +99,39 @@ def normalize_timeseries(series: pd.Series) -> pd.Series:
     _bind_runtime_globals()
     try:
         s = pd.to_numeric(series, errors='coerce').dropna()
-    except Exception:
+    except Exception as e:
+        app.logger.debug("normalize_timeseries numeric coercion fallback used: %s", e)
         try:
             s = pd.Series(series).dropna()
-        except Exception:
+        except Exception as series_err:
+            app.logger.debug("normalize_timeseries Series fallback failed: %s", series_err)
             return series
     try:
         idx = s.index
         if isinstance(idx, pd.DatetimeIndex):
             try:
                 idx = idx.tz_convert(None)
-            except Exception:
+            except Exception as e:
                 try:
                     idx = idx.tz_localize(None)
-                except Exception:
-                    pass
+                except Exception as tz_err:
+                    app.logger.debug("normalize_timeseries timezone normalization skipped: %s / %s", e, tz_err)
             try:
                 s = s.copy()
                 s.index = idx
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.debug("normalize_timeseries index assignment skipped: %s", e)
             try:
                 s = s.sort_index()
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.debug("normalize_timeseries sort_index skipped: %s", e)
             try:
                 if not s.index.is_unique:
                     s = s[~s.index.duplicated(keep='last')]
-            except Exception:
-                pass
-    except Exception:
-        pass
+            except Exception as e:
+                app.logger.debug("normalize_timeseries dedupe skipped: %s", e)
+    except Exception as e:
+        app.logger.debug("normalize_timeseries index normalization skipped: %s", e)
     return s
 
 
@@ -291,11 +296,12 @@ def _match_amplitude(
             upper2 = fc2_arr + scale * upper_dev
             c2 = pd.DataFrame({"lower": lower2, "upper": upper2}, index=fc.index)
         return fc2, (c2 if c2 is not None else conf_df)
-    except Exception:
+    except Exception as e:
+        app.logger.debug("_match_amplitude fallback used: %s", e)
         return forecast_series, conf_df
 
 
-def _compute_forecast(series: pd.Series, steps: int):
+def _compute_forecast(series: pd.Series, steps: int) -> tuple[pd.Series, pd.DataFrame]:
     """Natural-looking forecast that preserves realistic patterns and variance.
     - Uses historical pattern matching for realistic continuations
     - Adds realistic noise based on historical volatility
@@ -656,7 +662,8 @@ def _compute_forecast(series: pd.Series, steps: int):
             cached = FORECAST_CACHE.get(cache_key)
             if cached is not None:
                 return cached
-        except Exception:
+        except Exception as e:
+            app.logger.debug("_compute_forecast cache-key build skipped: %s", e)
             cache_key = None
         
         max_in = int(app.config.get('FORECAST_MAX_INPUT_POINTS', 2000))  # Balance speed and quality
@@ -709,11 +716,12 @@ def _compute_forecast(series: pd.Series, steps: int):
         try:
             if cache_key is not None:
                 FORECAST_CACHE.set(cache_key, (fc, ci))
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.debug("_compute_forecast cache set skipped: %s", e)
         
         return fc, ci
-    except Exception:
+    except Exception as e:
+        app.logger.debug("_compute_forecast primary pipeline failed; using deterministic fallback: %s", e)
         # deterministic fallback: use simple trend
         try:
             s = pd.to_numeric(series, errors='coerce').dropna()
@@ -733,7 +741,8 @@ def _compute_forecast(series: pd.Series, steps: int):
             fc_arr = np.asarray(fc.to_numpy(dtype=float), dtype=float)
             ci = pd.DataFrame({"lower": fc_arr - 1.96 * std, "upper": fc_arr + 1.96 * std}, index=idx)
             return fc, ci
-        except Exception:
+        except Exception as fallback_err:
+            app.logger.debug("_compute_forecast deterministic fallback failed; using zero fallback: %s", fallback_err)
             idx = _infer_future_index(pd.RangeIndex(0, 1), steps)
             zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
             return zero, pd.DataFrame({"lower": zero, "upper": zero})
@@ -775,7 +784,8 @@ def _recent_slope_forecast(series: pd.Series, steps: int = 10, lookback: int = 2
         fc_arr = np.asarray(fc.to_numpy(dtype=float), dtype=float)
         ci = pd.DataFrame({"lower": fc_arr - width, "upper": fc_arr + width}, index=idx)
         return fc, ci
-    except Exception:
+    except Exception as e:
+        app.logger.debug("_recent_slope_forecast fallback used: %s", e)
         idx = _infer_future_index(series.index if hasattr(series, 'index') else pd.RangeIndex(0, 1), steps)
         zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
         return zero, pd.DataFrame({"lower": zero, "upper": zero}, index=idx)
@@ -804,21 +814,24 @@ def _forecast_with_fallback(series: pd.Series, steps: int, filename: str | None 
                 fc_mean, ci = cached_fc_fn(filename, col, series, steps)
             else:
                 fc_mean, ci = get_cached_column_forecast(filename, col, series, steps)
-        except Exception:
+        except Exception as e:
+            app.logger.debug("_forecast_with_fallback cache stage failed for %s/%s: %s", filename, col, e)
             fc_mean, ci = None, None
 
     # 2. Try full forecast pipeline
     if fc_mean is None or len(fc_mean) == 0:
         try:
             fc_mean, ci = _compute_forecast(series, steps)
-        except Exception:
+        except Exception as e:
+            app.logger.debug("_forecast_with_fallback primary forecast stage failed: %s", e)
             fc_mean, ci = None, None
 
     # 3. Try simple slope fallback
     if fc_mean is None or len(fc_mean) == 0:
         try:
             fc_mean, ci = _recent_slope_forecast(series, steps=steps)
-        except Exception:
+        except Exception as e:
+            app.logger.debug("_forecast_with_fallback slope fallback stage failed: %s", e)
             fc_mean, ci = None, None
 
     # 4. Flat-line fallback (always succeeds)
@@ -831,7 +844,12 @@ def _forecast_with_fallback(series: pd.Series, steps: int, filename: str | None 
     return fc_mean, ci
 
 
-def get_cached_column_forecast(filename: str, column: str, series: pd.Series, steps: int):
+def get_cached_column_forecast(
+    filename: str,
+    column: str,
+    series: pd.Series,
+    steps: int,
+) -> tuple[pd.Series | None, pd.DataFrame | None]:
     """Get forecast from cache or compute and cache it.
     
     This is the primary entry point for getting forecasts - ensures each

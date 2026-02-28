@@ -69,6 +69,19 @@ def test_generate_correlation_heatmap_falls_back_without_seaborn(monkeypatch):
     assert len(img) > 100
 
 
+def test_generate_correlation_heatmap_fallback_large_matrix(monkeypatch):
+    monkeypatch.setitem(sys.modules, "seaborn", None)
+
+    rng = np.random.default_rng(7)
+    data = rng.normal(size=(90, 32))
+    df = pd.DataFrame(data, columns=[f"c{i}" for i in range(32)])
+
+    img = app_module.generate_correlation_heatmap(df, method="spearman", title="Large Fallback")
+
+    assert isinstance(img, str)
+    assert len(img) > 100
+
+
 def test_sanitize_ai_html_trims_garbage_tail_and_restores_warning_emoji():
     raw = (
         "<h3>[WARNING] Limitations & Caveats</h3><p>Keep this section.</p>"

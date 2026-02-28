@@ -53,11 +53,14 @@ def detect_anomalies(
     *,
     is_reliable_timeseries_index: Callable[[pd.Index], bool] | None = None,
     infer_seasonal_period: Callable[[pd.Index], int | None] | None = None,
+    logger: Any | None = None,
 ) -> tuple[pd.Index, pd.Series]:
     """Detect anomalies with IsolationForest and optional STL prefiltering for time series."""
     try:
         s = pd.to_numeric(series, errors="coerce").dropna()
-    except Exception:
+    except Exception as e:
+        if logger is not None:
+            logger.debug("detect_anomalies numeric coercion fallback used: %s", e)
         s = pd.Series(dtype=float)
 
     if s is None or len(s) < 5:
@@ -65,7 +68,9 @@ def detect_anomalies(
 
     try:
         cont = float(contamination) if contamination is not None else 0.02
-    except Exception:
+    except Exception as e:
+        if logger is not None:
+            logger.debug("detect_anomalies contamination parse fallback used: %s", e)
         cont = 0.02
     if not (0.0 < cont < 0.5):
         cont = 0.02
@@ -84,7 +89,9 @@ def detect_anomalies(
                     resid = pd.to_numeric(pd.Series(stl_result.resid, index=s.index), errors="coerce").dropna()
                     if len(resid) >= max(20, seasonal_period * 2):
                         s_for_model = resid
-                except Exception:
+                except Exception as e:
+                    if logger is not None:
+                        logger.debug("detect_anomalies STL residual fallback used: %s", e)
                     s_for_model = s
 
         vals = np.asarray(s_for_model.to_numpy(dtype=float), dtype=float)
@@ -161,7 +168,9 @@ def detect_anomalies(
             an_idx = s_for_model.index[selected_positions]
             an_score = pd.Series(raw_scores[selected_positions], index=an_idx, dtype=float)
         return an_idx, an_score
-    except Exception:
+    except Exception as e:
+        if logger is not None:
+            logger.debug("detect_anomalies failed; returning empty anomalies: %s", e)
         return pd.Index([]), pd.Series([], dtype=float)
 
 
@@ -197,6 +206,7 @@ def get_cached_anomalies(
         contamination=contamination,
         is_reliable_timeseries_index=is_reliable_timeseries_index,
         infer_seasonal_period=infer_seasonal_period,
+        logger=logger,
     )
     if cache is not None:
         cache.set(cache_key, result)

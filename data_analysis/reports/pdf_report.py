@@ -446,9 +446,10 @@ def handle_download_full_report_pdf(filename):
 
                     # Data rows
                     pdf.set_text_color(0, 0, 0)
-                    for _, row_vals in df_display[chunk_cols].iterrows():
+                    chunk_df = df_display[chunk_cols]
+                    for row_vals in chunk_df.itertuples(index=False, name=None):
                         _ensure_row_space()
-                        rendered = [str(v) for v in row_vals.values]
+                        rendered = [str(v) for v in row_vals]
                         for i, item in enumerate(rendered):
                             # First column bold as row header
                             if i == 0:
@@ -506,8 +507,8 @@ def handle_download_full_report_pdf(filename):
                 # Convert to DataFrame and use add_df_table for consistent formatting
                 mv_df = mvf.to_frame('Missing Count')
                 add_df_table(mv_df, title="Missing Values:")
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.debug("Missing values table skipped in PDF generation: %s", e)
 
         # AI Summary
         ai_html = _get_clean_ai_summary_from_cache(filename)
@@ -537,8 +538,8 @@ def handle_download_full_report_pdf(filename):
                 pdf.set_text_color(0, 0, 0)
                 pdf.set_font(font_family, size=10)
                 pdf.ln(2)
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.debug("AI summary model attribution skipped in PDF: %s", e)
 
         # Correlation Heatmaps
         try:
@@ -688,7 +689,8 @@ def handle_download_full_report_pdf(filename):
                     # Use cached forecast
                     try:
                         fc_mean, ci = get_cached_column_forecast(filename, col, numeric_series, forecast_steps)
-                    except Exception:
+                    except Exception as e:
+                        app.logger.debug("Cached forecast unavailable for PDF column '%s': %s", col, e)
                         fc_mean, ci = None, None
                     
                     if fc_mean is not None:
@@ -778,8 +780,8 @@ def handle_download_full_report_pdf(filename):
                                 padding=2,
                                 fontsize=7
                             )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        app.logger.debug("Bar labels skipped for PDF category chart '%s': %s", col, e)
                     
                     total_unique = len(all_counts)
                     if len(all_counts) > 50:
@@ -839,8 +841,8 @@ def handle_download_full_report_pdf(filename):
                 buf.seek(0)
                 pdf.image(buf, w=img_width, x=img_x)
                 pdf.ln(30)
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.debug("Distribution chart skipped in PDF for '%s': %s", col, e)
                 
             # 4. STL DECOMPOSITION - last (for timeseries only)
             if is_numeric and is_ts and len(numeric_series) >= 28:
@@ -850,8 +852,8 @@ def handle_download_full_report_pdf(filename):
                         # Use cached STL plot - may already be computed from web view
                         stl_b64 = get_cached_stl_plot(filename, col, numeric_series, sp)
                         _add_base64_plot(stl_b64)
-                except Exception:
-                    pass
+                except Exception as e:
+                    app.logger.debug("STL plot skipped in PDF for '%s': %s", col, e)
     except Exception as e:
         app.logger.error(f"Error generating PDF: {e}")
         app.logger.error(traceback.format_exc())
