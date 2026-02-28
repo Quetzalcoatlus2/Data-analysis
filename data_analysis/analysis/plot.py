@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 # ruff: noqa: F821
+import base64
+import io
 from collections import Counter
 from typing import Any, Literal, cast
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.transforms import blended_transform_factory
 
+# Bound at runtime via _bind_runtime_globals().
+app: Any = cast(Any, None)
 
 _LOCAL_SYMBOLS = {
     '_LOCAL_SYMBOLS',
     '_bind_runtime_globals',
+    '_is_reliable_timeseries_index',
     '_legacy',
     '_cap_anomalies_for_display',
     '_anomaly_positions_for_index',
@@ -34,6 +41,18 @@ def _bind_runtime_globals():
             continue
         g[key] = value
     return rt
+
+
+def _is_reliable_timeseries_index(idx) -> bool:
+    """Resolve time-series index checker lazily from runtime_app."""
+    rt = _bind_runtime_globals()
+    checker = getattr(rt, "_is_reliable_timeseries_index", None)
+    if not callable(checker):
+        return False
+    try:
+        return bool(checker(idx))
+    except Exception:
+        return False
 
 
 def _cap_anomalies_for_display(

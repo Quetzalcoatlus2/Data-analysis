@@ -6,11 +6,11 @@ import zipfile
 
 import numpy as np
 import pandas as pd
+from matplotlib.axes import Axes
 
 import data_analysis.runtime_app as app_module
 from app import app
 from data_analysis.analysis import anomaly as anomaly_module
-from matplotlib.axes import Axes
 
 
 def test_anomaly_positions_support_positional_indices():

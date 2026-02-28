@@ -9,7 +9,15 @@ from html.parser import HTMLParser
 import emoji
 from fpdf import FPDF
 
-from data_analysis.runtime_app import *
+from data_analysis.runtime_app import *  # pyright: ignore[reportAssignmentType]
+from data_analysis.runtime_app import (
+    _cap_anomalies_for_display,
+    _display_df_with_index,
+    _get_clean_ai_summary_from_cache,
+    _infer_seasonal_period,
+    _is_offline_html,
+    _is_reliable_timeseries_index,
+)
 
 _LOCAL_SYMBOLS = {
     "_LOCAL_SYMBOLS",
@@ -328,6 +336,8 @@ def handle_download_full_report_pdf(filename):
                     font_size = max(5.6, font_size - 0.7)
                     line_h = max(3.4, line_h - 0.4)
 
+                font_size_int = max(5, int(round(font_size)))
+
                 # Keep selected data columns per chunk.
                 # The first column (from _display_df_with_index, e.g. stat labels or
                 # meaningful index like Country) is repeated in every chunk.
@@ -419,7 +429,7 @@ def handle_download_full_report_pdf(filename):
                                 new_x="LMARGIN",
                                 new_y="NEXT",
                             )
-                        pdf.set_font(default_font, 'B', font_size)
+                        pdf.set_font(default_font, 'B', font_size_int)
                         pdf.set_text_color(0, 0, 0)
                         for i, h in enumerate(chunk_headers):
                             align = 'L' if i == 0 else 'C'
@@ -427,7 +437,7 @@ def handle_download_full_report_pdf(filename):
                         pdf.ln(line_h)
 
                     # Header row
-                    pdf.set_font(default_font, 'B', font_size)
+                    pdf.set_font(default_font, 'B', font_size_int)
                     pdf.set_text_color(0, 0, 0)
                     for i, h in enumerate(chunk_headers):
                         align = 'L' if i == 0 else 'C'
@@ -442,10 +452,10 @@ def handle_download_full_report_pdf(filename):
                         for i, item in enumerate(rendered):
                             # First column bold as row header
                             if i == 0:
-                                pdf.set_font(default_font, 'B', font_size)
+                                pdf.set_font(default_font, 'B', font_size_int)
                                 align = 'L'
                             else:
-                                pdf.set_font(default_font, '', font_size)
+                                pdf.set_font(default_font, '', font_size_int)
                                 align = 'R'
                             pdf.cell(col_widths[i], line_h, _safe_text(item), border=1, align=align)
                         pdf.ln(line_h)
