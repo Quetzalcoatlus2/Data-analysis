@@ -42,26 +42,32 @@ def handle_api_ai_summary(filename):
     # Check cache first for instant response
     cached = _get_clean_ai_summary_from_cache(filename)
     if cached:
-        return jsonify({"ok": True, "html": cached, "cached": True})
+        m_name = None
+        _m = re.search(r'<!--\s*model:(.*?)\s*-->', str(cached))
+        if _m:
+            m_name = _m.group(1).strip()
+            if m_name.startswith('models/'):
+                m_name = m_name[7:]
+        model_display = m_name or CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        display_html = re.sub(r'<!--.*?-->', '', str(cached), flags=re.DOTALL)
+        return jsonify({"ok": True, "html": display_html, "cached": True, "model": model_display})
     
     # Generate new summary
     df = get_dataframe_for(filename)
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         return jsonify({"ok": False, "html": "<p>Dataset not found.</p>"}), 404
     
-    file_asset = AI_FILE_MAP.get(filename) if 'AI_FILE_MAP' in globals() else None
+
     ai_context = describe_for_ai(df, filename=filename)
     
     try:
         if ensure_ai_ready():
-            summary = get_ai_summary_with_file(df, file_asset, extra_context=ai_context)
-            if isinstance(summary, str) and not _is_offline_html(summary):
-                AI_SUMMARY_CACHE[filename] = summary
+            summary = get_or_cache_ai_summary_for(filename, df, extra_context=ai_context)
             
             # Extract model for AJAX
             m_name = None
-            if summary:
-                _m = re.search(r'<!--\s*model:(.*?)\s*-->', str(summary))
+            if summary and isinstance(summary, str):
+                _m = re.search(r'<!--\s*model:(.*?)\s*-->', summary)
                 if _m:
                     m_name = _m.group(1).strip()
                     if m_name.startswith('models/'):
@@ -69,7 +75,7 @@ def handle_api_ai_summary(filename):
             
             model_display = m_name or CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
             
-            display_html = re.sub(r'<!--.*?-->', '', str(summary), flags=re.DOTALL) if summary else summary
+            display_html = re.sub(r'<!--.*?-->', '', str(summary), flags=re.DOTALL) if isinstance(summary, str) else summary
             
             return jsonify({"ok": True, "html": display_html, "cached": False, "model": model_display})
         else:
