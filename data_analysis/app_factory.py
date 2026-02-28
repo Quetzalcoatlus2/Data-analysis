@@ -3,14 +3,11 @@
 import os
 from typing import Any
 
-from data_analysis._legacy_loader import get_legacy
+from data_analysis.runtime_app import app
 from data_analysis.middleware import init_optional_security, register_after_request_middleware
-
 
 def create_app() -> Any:
     """Create and return the Flask app instance from the modularized runtime."""
-    legacy = get_legacy()
-    app = legacy.app
     register_after_request_middleware(app)
     return app
 

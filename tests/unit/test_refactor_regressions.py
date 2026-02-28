@@ -7,7 +7,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-import app as app_module
+import data_analysis.runtime_app as app_module
 from app import app
 from data_analysis.analysis import anomaly as anomaly_module
 from matplotlib.axes import Axes

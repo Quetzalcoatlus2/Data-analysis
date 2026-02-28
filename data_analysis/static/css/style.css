@@ -1,0 +1,314 @@
+/* Smooth page transitions */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes skeletonPulse {
+
+      0%,
+      100% {
+        opacity: 0.4;
+      }
+
+      50% {
+        opacity: 0.7;
+      }
+    }
+
+    .panel,
+    .content {
+      animation: fadeIn 0.28s ease-out forwards;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--border) 25%, var(--panel) 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: skeletonPulse 1.5s ease-in-out infinite;
+      border-radius: 8px;
+      min-height: 200px;
+    }
+
+    /* Prevent layout shifts */
+    #chart,
+    #corr,
+    #pearson {
+      contain: layout style;
+      overflow: hidden;
+      /* Prevent internal scrollbars */
+    }
+
+    #dist {
+      contain: layout style;
+      overflow: visible;
+      /* Allow legend below chart to be visible */
+    }
+
+
+    .grid .panel {
+      contain: layout style;
+    }
+
+    /* Remove black background from Plotly modebar buttons */
+    .modebar-container {
+      background: transparent !important;
+    }
+
+    .modebar-btn {
+      background: transparent !important;
+    }
+
+    .modebar-group {
+      background: transparent !important;
+    }
+
+:root[data-theme="light"] {
+      --bg: #ffffff;
+      --panel: #f8fafc;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --link: #0ea5e9;
+      --accent: #0ea5e9;
+      --accent-2: #f97316;
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0b1220;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: #1f2937;
+      --link: #93c5fd;
+      --accent: #60a5fa;
+      --accent-2: #f97316;
+    }
+
+    html,
+    body {
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .wrap {
+      width: 100%;
+      margin: 0;
+      padding: 12px clamp(14px, 2vw, 28px);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .wrap .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-right: clamp(24px, 3vw, 56px);
+    }
+
+    @media (max-width:800px) {
+      .wrap .actions {
+        padding-right: clamp(16px, 4vw, 40px);
+      }
+    }
+
+    .wrap .nav {
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 1300px) {
+      .wrap nav.nav {
+        flex: 1 1 100%;
+        order: 10;
+      }
+
+      .wrap>.nav+.nav {
+        order: 11;
+      }
+
+      .wrap .spacer {
+        display: none;
+      }
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin-right: 8px;
+    }
+
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .pill.active {
+      color: var(--text);
+      background: color-mix(in oklab, var(--panel) 80%, var(--bg));
+      border-color: color-mix(in oklab, var(--border) 80%, var(--bg));
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .btn {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+
+    .content {
+      width: 100%;
+      margin: 0;
+      padding: 20px clamp(14px, 2vw, 32px) 60px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    @media (min-width: 900px) {
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    img.plot {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      /* Prevent layout shift during load */
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    select,
+    input[type="number"] {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .table-center {
+      overflow-x: auto;
+      overflow-y: hidden;
+      max-width: 100%;
+      min-width: 0;
+      /* Allow shrinking in flex/grid context */
+      display: block;
+    }
+
+    .table-center table {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: collapse;
+      table-layout: auto;
+    }
+
+    .table-center table th,
+    .table-center table td {
+      white-space: nowrap;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+    }
+
+    .table-center table th,
+    .table-center table thead th {
+      text-align: center !important;
+      background: color-mix(in oklab, var(--panel) 80%, var(--bg));
+    }
+
+    /* Ensure panels can shrink to allow table scrolling */
+    .panel {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+html,
+      body {
+        overflow-y: hidden;
+      }
+
+      main.container {
+        height: calc(100vh - 72px);
+        overflow: hidden;
+      }
+
+      main.container .content {
+        height: 100%;
+        box-sizing: border-box;
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+

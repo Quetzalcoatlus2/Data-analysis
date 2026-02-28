@@ -375,59 +375,16 @@ def replace_emojis_for_pdf(text: str) -> str:
 # ---------------------------------------------------------------------------
 # AI service helpers  (delegates to ai.service)
 # ---------------------------------------------------------------------------
-def _is_offline_html(s: str) -> bool:
-    return ai_service._is_offline_html(s)
-
-def _diagnose_gemini_response(resp):
-    return ai_service._diagnose_gemini_response(resp)
-
-def _get_finish_reason(resp):
-    return ai_service._get_finish_reason(resp)
-
-def _build_qna_cache_key(
-    df: pd.DataFrame,
-    question: str,
-    filename: str | None = None,
-) -> tuple[Any, ...]:
-    return ai_service._build_qna_cache_key(df, question, filename)
-
-def get_ai_summary_with_file(df, file_asset=None, extra_context: str = ""):
-    return ai_service.get_ai_summary_with_file(
-        df, file_asset, extra_context,
-        describe_for_ai_fn=describe_for_ai,
-        sanitize_ai_html_fn=sanitize_ai_html,
-        offline_answer_fn=offline_answer,
-        app_config=dict(app.config), logger=app.logger,
-    )
-
-def get_ai_answer_with_file(df, question: str, file_asset=None, filename: str | None = None):
-    return ai_service.get_ai_answer_with_file(
-        df, question, file_asset, filename,
-        describe_for_ai_fn=describe_for_ai,
-        sanitize_ai_html_fn=sanitize_ai_html,
-        offline_answer_fn=offline_answer,
-        get_clean_ai_summary_fn=_get_clean_ai_summary_from_cache,
-        qna_cache=QNA_CACHE,
-        app_config=dict(app.config), logger=app.logger,
-    )
-
-def get_or_cache_ai_summary_for(filename: str, df, extra_context: str = ""):
-    return ai_service.get_or_cache_ai_summary_for(
-        filename, df, extra_context,
-        ai_summary_cache=AI_SUMMARY_CACHE,
-        describe_for_ai_fn=describe_for_ai,
-        sanitize_ai_html_fn=sanitize_ai_html,
-        offline_answer_fn=offline_answer,
-        app_config=dict(app.config), logger=app.logger,
-    )
-
-def _get_clean_ai_summary_from_cache(filename: str):
-    return ai_service._get_clean_ai_summary_from_cache(
-        filename,
-        ai_summary_cache=AI_SUMMARY_CACHE,
-        sanitize_ai_html_fn=sanitize_ai_html,
-        app_config=dict(app.config),
-    )
+from data_analysis.ai.service import (  # noqa: E402
+    _is_offline_html,
+    _diagnose_gemini_response,
+    _get_finish_reason,
+    _build_qna_cache_key,
+    get_ai_summary_with_file,
+    get_ai_answer_with_file,
+    get_or_cache_ai_summary_for,
+    _get_clean_ai_summary_from_cache,
+)
 
 
 

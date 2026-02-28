@@ -10,12 +10,14 @@ import pandas as pd
 import pytest
 from matplotlib.axes import Axes
 
-import app as app_module
 
-# Add project root to sys.path to ensure app can be imported
+# Add project root to sys.path to ensure local absolute imports work
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from app import (
+import data_analysis.runtime_app as app_module
+
+from app import app
+from data_analysis.runtime_app import (
     AI_DESCRIBE_CACHE,
     DATAFRAME_CACHE,
     INTERACTIVE_DATA_CACHE,
@@ -28,7 +30,6 @@ from app import (
     _compute_forecast,
     _thin_series_keep_extrema,
     allowed_file,
-    app,
     convert_html_to_formatted_text,
     describe_for_ai,
     detect_anomalies,
@@ -37,7 +38,6 @@ from app import (
     get_cached_anomalies,
     get_cached_numeric_df,
 )
-
 
 def test_allowed_file():
     """Test the allowed_file function."""

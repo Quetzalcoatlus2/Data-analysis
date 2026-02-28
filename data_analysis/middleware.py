@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from data_analysis._legacy_loader import get_legacy
 
 _HEADERS_MIDDLEWARE_KEY = "data_analysis_headers_middleware_registered"
 
@@ -66,16 +65,14 @@ def register_after_request_middleware(
 
 def init_optional_security(app: Any) -> None:
     """Initialize optional Talisman/Limiter integrations from env flags."""
-    legacy = get_legacy()
-
-    talisman_cls = getattr(legacy, "Talisman", None)
-    if talisman_cls and str(os.getenv("USE_TALISMAN", "0")).strip().lower() in (
+    if str(os.getenv("USE_TALISMAN", "0")).strip().lower() in (
         "1",
         "true",
         "yes",
         "on",
     ):
         try:
+            from flask_talisman import Talisman
             default_csp = {
                 "default-src": ["'self'", "https:", "http:"],
                 "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
@@ -83,18 +80,22 @@ def init_optional_security(app: Any) -> None:
                 "img-src": ["'self'", "data:", "blob:", "https:", "http:"],
                 "connect-src": ["'self'", "https:", "http:"],
             }
-            talisman_cls(app, content_security_policy=default_csp)
+            Talisman(app, content_security_policy=default_csp)
             app.logger.info("Talisman enabled.")
+        except ImportError:
+            app.logger.warning("Flask-Talisman requested but not installed.")
         except Exception as exc:
             app.logger.warning("Talisman init failed: %s", exc)
 
-    limiter_cls = getattr(legacy, "Limiter", None)
-    get_remote_address = getattr(legacy, "get_remote_address", None)
     rate_limit = os.getenv("RATE_LIMIT")
-    if limiter_cls and rate_limit and get_remote_address is not None:
+    if rate_limit:
         try:
-            limiter_cls(get_remote_address, app=app, default_limits=[rate_limit])
+            from flask_limiter import Limiter
+            from flask_limiter.util import get_remote_address
+            Limiter(get_remote_address, app=app, default_limits=[rate_limit])
             app.logger.info("Rate limiting enabled: %s", rate_limit)
+        except ImportError:
+            app.logger.warning("Flask-Limiter requested but not installed.")
         except Exception as exc:
             app.logger.warning("Limiter init failed: %s", exc)
 

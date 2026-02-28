@@ -7,7 +7,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from data_analysis._legacy_loader import get_legacy
 
 _LOCAL_SYMBOLS = {
     '_LOCAL_SYMBOLS',
@@ -24,10 +23,6 @@ _LOCAL_SYMBOLS = {
     'get_cached_stl_plot',
     '__all__',
 }
-
-
-def _legacy():
-    return get_legacy()
 
 
 def _bind_runtime_globals():
