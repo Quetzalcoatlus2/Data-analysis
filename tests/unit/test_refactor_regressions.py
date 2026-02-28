@@ -212,6 +212,43 @@ def test_analyze_interactive_includes_positional_anomalies(monkeypatch):
     assert anomaly_trace.get("x") == [1, 3]
 
 
+def test_analyze_interactive_short_series_keeps_history_trace(monkeypatch):
+    filename = "e" * 40 + ".csv"
+    df = pd.DataFrame({"value": [10.0, 11.0, 12.0]}, index=pd.Index(["A", "B", "C"]))
+    numeric_df = pd.DataFrame({"value": pd.to_numeric(df["value"], errors="coerce")}, index=df.index)
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_numeric_df", lambda _filename, _df: numeric_df)
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_df_info",
+        lambda *_args, **_kwargs: {"head": "", "description": "", "overview_table_html": "", "info": "", "missing_values": ""},
+    )
+    monkeypatch.setattr(app_module, "build_ai_context", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "_get_clean_ai_summary_from_cache", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_anomalies",
+        lambda *_args, **_kwargs: (pd.Index([], dtype="int64"), pd.Series(dtype=float)),
+    )
+
+    app_module.DATAFRAME_CACHE.set(filename, df)
+    try:
+        with app.test_client() as client:
+            response = client.get(f"/analyze/{filename}?view=interactive&forecast_pct=0.2")
+    finally:
+        app_module.DATAFRAME_CACHE.pop(filename, None)
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    match = re.search(r'<script id="interactivePayload" type="application/json">(.*?)</script>', html, flags=re.DOTALL)
+    assert match is not None
+    payload = json.loads(match.group(1))
+    assert payload
+    traces = payload[0].get("traces", [])
+    assert any(str(t.get("name", "")).lower() == "history" for t in traces)
+
+
 def test_overview_tables_include_named_index_column():
     idx = pd.to_datetime(["2015-01-01", "2014-01-01", "2013-01-01"])
     df = pd.DataFrame(

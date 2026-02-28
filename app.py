@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from data_analysis.runtime_app import *  # noqa: F403
+from data_analysis.runtime_app import _compute_forecast  # noqa: F401
 from data_analysis.app_factory import create_app, run_from_env
 
 app = create_app()

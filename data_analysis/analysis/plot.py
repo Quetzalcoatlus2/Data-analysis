@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: F821
 from collections import Counter
-from typing import Any
+from typing import Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -770,16 +770,21 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
 
 def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
     """Generate a correlation heatmap as base64 image."""
-    _bind_runtime_globals()
+    rt = _bind_runtime_globals()
     fig = None
     try:
+        import base64
+        import io
+
+        import matplotlib.pyplot as plt
+
         try:
-            import seaborn as sns  # type: ignore[import-untyped]
+            import seaborn as sns
         except Exception:
             sns = None
         
         # Get numeric columns
-        df_num = coerce_numeric_df(df)
+        df_num = rt.coerce_numeric_df(df)
         sel = df_num.select_dtypes(include='number')
         if sel.empty:
             return None
@@ -856,24 +861,32 @@ def get_cached_heatmap(filename: str, df: pd.DataFrame, method: str = 'spearman'
     
     Avoids regenerating identical heatmaps for PDF when already generated for web view.
     """
-    _bind_runtime_globals()
+    rt = _bind_runtime_globals()
+    logger = rt.app.logger
+    cache = rt.HEATMAP_CACHE
     cache_key = (filename, method)
-    cached = HEATMAP_CACHE.get(cache_key)
+    cached = cache.get(cache_key)
     if cached is not None:
-        app.logger.debug("Heatmap cache HIT: %s/%s", filename[:8], method)
+        logger.debug("Heatmap cache HIT: %s/%s", filename[:8], method)
         return cached
-    app.logger.debug("Heatmap cache MISS: %s/%s - generating", filename[:8], method)
+    logger.debug("Heatmap cache MISS: %s/%s - generating", filename[:8], method)
     img = generate_correlation_heatmap(df, method=method, title=f'{method.capitalize()} Correlation')
     if img:
-        HEATMAP_CACHE.set(cache_key, img)
+        cache.set(cache_key, img)
     return img
 
 
 def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
-    _bind_runtime_globals()
+    rt = _bind_runtime_globals()
     fig = None
     try:
-        s = normalize_timeseries(series)
+        import base64
+        import io
+
+        import matplotlib.pyplot as plt
+        from statsmodels.tsa.seasonal import STL
+
+        s = rt.normalize_timeseries(series)
         if s is None or len(s) < max(28, seasonal_period * 2):
             return None
         res = STL(s.astype(float), period=int(seasonal_period), robust=True).fit()  # robust=True for quality
@@ -914,21 +927,23 @@ def get_cached_stl_plot(filename: str, column: str, series: pd.Series, seasonal_
     STL decomposition is computationally expensive. This ensures each unique
     (filename, column, seasonal_period) is only computed once.
     """
-    _bind_runtime_globals()
+    rt = _bind_runtime_globals()
+    logger = rt.app.logger
+    cache = rt.STL_CACHE
     if seasonal_period is None or seasonal_period < 2:
         return None
     cache_key = (filename, str(column), int(seasonal_period))
-    cached = STL_CACHE.get(cache_key)
+    cached = cache.get(cache_key)
     if cached is not None:
-        app.logger.debug("STL cache HIT: %s/%s", filename[:8], column)
+        logger.debug("STL cache HIT: %s/%s", filename[:8], column)
         return cached
-    app.logger.debug("STL cache MISS: %s/%s - generating", filename[:8], column)
-    s_norm = normalize_timeseries(series)
+    logger.debug("STL cache MISS: %s/%s - generating", filename[:8], column)
+    s_norm = rt.normalize_timeseries(series)
     if s_norm is None or len(s_norm) < max(28, seasonal_period * 2):
         return None
     stl_img = generate_stl_plot(s_norm, f"STL decomposition for {column}", seasonal_period=seasonal_period)
     if stl_img:
-        STL_CACHE.set(cache_key, stl_img)
+        cache.set(cache_key, stl_img)
     return stl_img
 
 

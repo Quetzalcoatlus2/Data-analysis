@@ -319,10 +319,12 @@ def handle_analyze_file(filename):
         # Categories view: build category charts (lightweight, no forecasts/anomalies)
         if active_view == 'categories':
             category_charts = {}
+            numeric_non_na_counts: dict[Any, int] = {}
+            if _num_df is not None and not _num_df.empty:
+                numeric_non_na_counts = {c: int(_num_df[c].notna().sum()) for c in _num_df.columns}
             for col in df.columns:
                 try:
-                    s_numeric = pd.to_numeric(df[col], errors='coerce')
-                    if s_numeric.notna().sum() >= 3:
+                    if numeric_non_na_counts.get(col, 0) >= 3:
                         continue  # Skip - numeric column
                     s_cat = df[col].astype(str).dropna()
                     if len(s_cat) < 3:
@@ -564,17 +566,7 @@ def handle_analyze_file(filename):
                 except Exception as dist_e:
                     app.logger.warning("Distribution plot failed for %s: %s", column, dist_e)
 
-            if build_interactive and not skip_forecasts and len(series) >= 5:
-                try:
-                    sp = _infer_seasonal_period(series.index) if _is_reliable_timeseries_index(series.index) else None
-                    if sp:
-                        # Use cached STL plot - may already be computed in forecast view
-                        stl_img = get_cached_stl_plot(filename, column, series, sp)
-                        if stl_img:
-                            forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
-                except Exception:
-                    pass
-
+            if build_interactive:
                 # Always provide full series to interactive view.
                 # Data-range filtering is handled client-side by the Data Range selector.
                 s_tail = series
@@ -596,6 +588,17 @@ def handle_analyze_file(filename):
                     "line": {"color": "rgb(31,119,180)", "width": 2},
                     "marker": {"size": 4, "opacity": 0.6}
                 }]
+
+                if not skip_forecasts and len(series) >= 5:
+                    try:
+                        sp = _infer_seasonal_period(series.index) if _is_reliable_timeseries_index(series.index) else None
+                        if sp:
+                            # Use cached STL plot - may already be computed in forecast view
+                            stl_img = get_cached_stl_plot(filename, column, series, sp)
+                            if stl_img:
+                                forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
+                    except Exception:
+                        pass
 
             
             if build_interactive and len(an_idx):

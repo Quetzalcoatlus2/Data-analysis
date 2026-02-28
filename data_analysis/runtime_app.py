@@ -185,6 +185,11 @@ def configure_ai():
     return ai_engine.configure_ai(logger=app.logger)
 
 def ensure_ai_ready():
+    # Preserve compatibility with tests/integrations that monkeypatch app.ensure_ai_ready.
+    app_module = sys.modules.get("app")
+    override = getattr(app_module, "ensure_ai_ready", None) if app_module is not None else None
+    if callable(override) and override is not ensure_ai_ready:
+        return override()
     return ai_engine.ensure_ai_ready(logger=app.logger)
 
 def _call_gemini(prompt, file_asset=None, *, timeout=None, retries=None, generation_config=None):
@@ -375,16 +380,70 @@ def replace_emojis_for_pdf(text: str) -> str:
 # ---------------------------------------------------------------------------
 # AI service helpers  (delegates to ai.service)
 # ---------------------------------------------------------------------------
-from data_analysis.ai.service import (  # noqa: E402
-    _is_offline_html,
-    _diagnose_gemini_response,
-    _get_finish_reason,
-    _build_qna_cache_key,
-    get_ai_summary_with_file,
-    get_ai_answer_with_file,
-    get_or_cache_ai_summary_for,
-    _get_clean_ai_summary_from_cache,
-)
+def _resolve_app_override(name: str):
+    """Return a monkeypatched callable from app.py when present."""
+    app_module = sys.modules.get("app")
+    if app_module is None:
+        return None
+    override = getattr(app_module, name, None)
+    current = globals().get(name)
+    if callable(override) and override is not current:
+        return override
+    return None
+
+
+def _is_offline_html(html: str) -> bool:
+    return ai_service._is_offline_html(html)
+
+
+def _diagnose_gemini_response(*args, **kwargs):
+    return ai_service._diagnose_gemini_response(*args, **kwargs)
+
+
+def _get_finish_reason(*args, **kwargs):
+    return ai_service._get_finish_reason(*args, **kwargs)
+
+
+def _build_qna_cache_key(*args, **kwargs):
+    return ai_service._build_qna_cache_key(*args, **kwargs)
+
+
+def get_ai_summary_with_file(*args, **kwargs):
+    override = _resolve_app_override("get_ai_summary_with_file")
+    if override is not None:
+        return override(*args, **kwargs)
+    return ai_service.get_ai_summary_with_file(*args, **kwargs)
+
+
+def get_ai_answer_with_file(*args, **kwargs):
+    override = _resolve_app_override("get_ai_answer_with_file")
+    if override is not None:
+        return override(*args, **kwargs)
+    return ai_service.get_ai_answer_with_file(*args, **kwargs)
+
+
+def get_or_cache_ai_summary_for(*args, **kwargs):
+    kwargs.setdefault("ai_summary_cache", AI_SUMMARY_CACHE)
+    kwargs.setdefault("ai_file_map", AI_FILE_MAP)
+    kwargs.setdefault("sanitize_ai_html_fn", sanitize_ai_html)
+    kwargs.setdefault("app_config", app.config)
+    kwargs.setdefault("logger", app.logger)
+    return ai_service.get_or_cache_ai_summary_for(*args, **kwargs)
+
+
+def _get_clean_ai_summary_from_cache(
+    filename: str,
+    *,
+    ai_summary_cache: dict[str, Any] | None = None,
+    sanitize_ai_html_fn=None,
+    app_config: dict[str, Any] | None = None,
+):
+    return ai_service._get_clean_ai_summary_from_cache(
+        filename,
+        ai_summary_cache=AI_SUMMARY_CACHE if ai_summary_cache is None else ai_summary_cache,
+        sanitize_ai_html_fn=sanitize_ai_html if sanitize_ai_html_fn is None else sanitize_ai_html_fn,
+        app_config=app.config if app_config is None else app_config,
+    )
 
 
 
