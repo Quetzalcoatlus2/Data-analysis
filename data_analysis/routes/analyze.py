@@ -349,14 +349,26 @@ def handle_analyze_file(filename):
 
         ai_summary_model_display = _clean_model_name(ai_summary_model or fallback_model)
         ai_answer_model_display = _clean_model_name(ai_answer_model or fallback_model)
+        ai_summary_is_valid = bool(
+            isinstance(ai_summary_clean, str)
+            and ai_summary_clean
+            and not _is_offline_html(ai_summary_clean)
+        )
+        ai_answer_is_valid = bool(
+            isinstance(ai_answer_clean, str)
+            and ai_answer_clean
+            and not _is_offline_html(ai_answer_clean)
+        )
         _ai_is_valid = (
-            (isinstance(ai_summary_clean, str) and ai_summary_clean and not _is_offline_html(ai_summary_clean))
-            or (isinstance(ai_answer_clean, str) and ai_answer_clean and not _is_offline_html(ai_answer_clean))
+            ai_summary_is_valid
+            or ai_answer_is_valid
         )
         
         return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name,
                                ai_summary_model_name=ai_summary_model_display,
                                ai_answer_model_name=ai_answer_model_display,
+                               ai_summary_is_valid=ai_summary_is_valid,
+                               ai_answer_is_valid=ai_answer_is_valid,
                                ai_is_valid=_ai_is_valid)
 
     # Per-request timing and budgets to prevent long hangs
@@ -937,18 +949,32 @@ def handle_analyze_file(filename):
     
     ai_summary_model_display = _clean_model_name(ai_summary_model)
     ai_answer_model_display = _clean_model_name(ai_answer_model)
+    ai_summary_is_valid = bool(
+        isinstance(ai_summary, str)
+        and ai_summary
+        and not _is_offline_html(ai_summary)
+    )
+    ai_answer_is_valid = bool(
+        isinstance(ai_answer, str)
+        and ai_answer
+        and not _is_offline_html(ai_answer)
+    )
     
     # Check if AI summary is a valid AI response (not offline/error)
     ai_is_valid = (
-        (isinstance(ai_summary, str) and ai_summary and not _is_offline_html(ai_summary)) or
-        (isinstance(ai_answer, str) and ai_answer and not _is_offline_html(ai_answer))
+        ai_summary_is_valid
+        or ai_answer_is_valid
     )
     
     app.logger.debug("AI model attribution: display_sum=%s, display_ans=%s", ai_summary_model_display, ai_answer_model_display)
     
     _log_cache_stats_if_needed("analyze")
     return render_template('analysis.html', analysis=analysis, filename=filename, display_name=display_name, 
-                           ai_summary_model_name=ai_summary_model_display, ai_answer_model_name=ai_answer_model_display, ai_is_valid=ai_is_valid)
+                           ai_summary_model_name=ai_summary_model_display,
+                           ai_answer_model_name=ai_answer_model_display,
+                           ai_summary_is_valid=ai_summary_is_valid,
+                           ai_answer_is_valid=ai_answer_is_valid,
+                           ai_is_valid=ai_is_valid)
 
 analyze_file = handle_analyze_file
 
