@@ -18,8 +18,9 @@
 
 
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260228-scrollfix') }}">
-  <script src="{{ url_for('static', filename='js/analysis.js', v='20260228-scrollfix') }}" defer></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260301-amoled') }}">
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'amoled');</script>
+  <script src="{{ url_for('static', filename='js/analysis.js', v='20260301-amoled') }}" defer></script>
   <style>
     html,
     body {
@@ -78,8 +79,8 @@
         <a class="pill" title="Upload a new dataset (opens file picker)"
           href="{{ url_for('pages.upload_file') }}?auto=1">New
           dataset</a>
-        <button id="themeToggle" title="Toggle light / dark theme" class="btn" type="button" onclick="toggleTheme()"
-          style="padding:8px 14px;">Theme</button>
+        <button id="themeToggle" title="Cycle theme: AMOLED → Light → Dark" class="btn" type="button"
+          onclick="toggleTheme()" style="padding:8px 14px;">Theme</button>
       </div>
     </div>
   </header>
@@ -595,7 +596,7 @@
 
       function applyThemeLayoutDefaults(layout) {
         const t = getThemeVars();
-        const isDark = t.bg && /^#0|^#1|^#2/i.test(t.bg.trim());
+        const isDark = window.isDarkMode ? window.isDarkMode() : (t.bg && /^#0|^#1|^#2/i.test(t.bg.trim()));
         const gridColor = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
         const sharedLegend = { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.14, yanchor: 'top' };
         layout.paper_bgcolor = t.panel;

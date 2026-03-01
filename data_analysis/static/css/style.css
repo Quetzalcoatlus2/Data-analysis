@@ -91,6 +91,18 @@
       --accent-2: #f97316;
     }
 
+    :root,
+    :root[data-theme="amoled"] {
+      --bg: #000000;
+      --panel: #050505;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --border: #1a1a1a;
+      --link: #8ab4f8;
+      --accent: #8ab4f8;
+      --accent-2: #f28b82;
+    }
+
     html,
     body {
       background: var(--bg);

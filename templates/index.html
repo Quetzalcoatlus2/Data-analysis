@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <style>
-    :root {
+    :root[data-theme="light"] {
       --bg: #ffffff;
       --text: #0f172a;
       --muted: #475569;
@@ -30,7 +30,27 @@
       --border: #1f2937;
       --accent: #38bdf8;
       --accent-fg: #0b1220;
+      --focus: #38bdf8;
+      --danger: #f87171;
+      --radius: 10px;
+      --radius-sm: 6px;
       --shadow: 0 2px 4px -2px rgba(0, 0, 0, .6), 0 4px 12px -2px rgba(0, 0, 0, .4);
+    }
+
+    :root,
+    :root[data-theme="amoled"] {
+      --bg: #000000;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --surface: #050505;
+      --border: #1a1a1a;
+      --accent: #8ab4f8;
+      --accent-fg: #000000;
+      --focus: #8ab4f8;
+      --danger: #f28b82;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --shadow: 0 2px 4px -2px rgba(0, 0, 0, .8), 0 4px 12px -2px rgba(0, 0, 0, .6);
     }
 
     * {
@@ -217,19 +237,23 @@
   </style>
   <script>
     (function () {
-      const saved = localStorage.getItem('theme') || 'light';
+      var _themeOrder = ['amoled', 'light', 'dark'];
+      var _themeLabels = { amoled: '🖤 AMOLED', light: '☀️ Light', dark: '🌙 Dark' };
+      const saved = localStorage.getItem('theme') || 'amoled';
       document.documentElement.setAttribute('data-theme', saved);
       window.toggleTheme = function () {
-        const cur = document.documentElement.getAttribute('data-theme') || 'light';
-        const next = cur === 'light' ? 'dark' : 'light';
+        const cur = document.documentElement.getAttribute('data-theme') || 'amoled';
+        const idx = _themeOrder.indexOf(cur);
+        const next = _themeOrder[(idx + 1) % _themeOrder.length];
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
         const btn = document.getElementById('themeToggle');
-        if (btn) btn.textContent = next === 'light' ? 'Dark mode' : 'Light mode';
+        if (btn) btn.textContent = _themeLabels[next] || '🖤 AMOLED';
       };
       window.addEventListener('DOMContentLoaded', function () {
         const btn = document.getElementById('themeToggle');
-        if (btn) btn.textContent = (localStorage.getItem('theme') || 'light') === 'light' ? 'Dark mode' : 'Light mode';
+        var cur = localStorage.getItem('theme') || 'amoled';
+        if (btn) btn.textContent = _themeLabels[cur] || '🖤 AMOLED';
       });
     })();
   </script>
@@ -240,7 +264,7 @@
     <h1>Data Analysis – Upload</h1>
     <div class="spacer"></div>
     <button id="themeToggle" class="btn secondary" type="button" onclick="toggleTheme()"
-      title="Toggle light / dark mode">Dark mode</button>
+      title="Cycle theme: AMOLED → Light → Dark">🖤 AMOLED</button>
   </header>
 
   <!-- Flash messages -->

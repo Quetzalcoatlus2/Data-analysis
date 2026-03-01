@@ -39,7 +39,7 @@ def _format_stat_value(v: float) -> str:
             raw = f"{value / 1e6:.3f}"
             return raw.rstrip("0").rstrip(".") + "M"
         if mag >= 1e3:
-            raw = f"{value / 1e3:.3f}"
+            raw = f"{value / 1e3:.2f}"
             return raw.rstrip("0").rstrip(".") + "K"
         raw = f"{value:.2f}"
         return raw.rstrip("0").rstrip(".")

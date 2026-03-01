@@ -465,7 +465,7 @@ def handle_download_full_report_pdf(filename):
                     raw = f"{v / 1e6:.3f}"
                     return raw.rstrip("0").rstrip(".") + "M"
                 if mag >= 1e3:
-                    raw = f"{v / 1e3:.3f}"
+                    raw = f"{v / 1e3:.2f}"
                     return raw.rstrip("0").rstrip(".") + "K"
                 raw = f"{v:.2f}"
                 return raw.rstrip("0").rstrip(".")
