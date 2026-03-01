@@ -96,6 +96,9 @@ def _bind_runtime_globals():
     if callable(sync):
         sync()
 
+    global app
+    app = getattr(rt, "app", None)
+
     g = globals()
     for key, value in rt.__dict__.items():
         if key.startswith("__") or key in _LOCAL_SYMBOLS:

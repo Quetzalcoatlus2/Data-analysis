@@ -166,10 +166,9 @@ def handle_download_static_plots_zip(filename):
 
     try:
         from data_analysis.analysis.plot import (
-            _apply_sci_formatter as _plot_apply_sci_formatter,
-        )
-        from data_analysis.analysis.plot import (
+            generate_plot, 
             _format_stat_value as _plot_format_stat_value,
+            _apply_sci_formatter as _plot_apply_sci_formatter
         )
     except Exception:
         def _plot_format_stat_value(v: float) -> str:
@@ -195,8 +194,6 @@ def handle_download_static_plots_zip(filename):
             except Exception:
                 return str(v)
 
-        def _plot_apply_sci_formatter(ax: Any) -> None:
-            return None
     
     with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
         # Generate correlation heatmaps
@@ -324,16 +321,8 @@ def handle_download_static_plots_zip(filename):
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
                     fig.subplots_adjust(bottom=0.30)
                     
-                    # Apply compact B/T axis labels for large values.
+                    # Apply compact K/M/B/T axis labels for large values.
                     _plot_apply_sci_formatter(ax)
-                    try:
-                        import matplotlib.ticker as _mticker
-                        xmin, xmax = ax.get_xlim()
-                        if max(abs(xmin), abs(xmax)) >= 1e9:
-                            xfmt = _mticker.FuncFormatter(lambda val, _pos: _plot_format_stat_value(float(val)))
-                            ax.xaxis.set_major_formatter(xfmt)
-                    except Exception:
-                        pass
                 except Exception as stats_err:
                     app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
                 

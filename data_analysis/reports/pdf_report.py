@@ -1162,17 +1162,10 @@ def handle_download_full_report_pdf(filename):
                     # Std in legend only (always add this, outside the if/else)
                     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_plot_value(stats_std)}')
 
-                    # Use compact B/T labels for extreme values to keep labels compact.
+                    # Use compact K/M/B/T labels for extreme values.
                     try:
                         from data_analysis.analysis.plot import _apply_sci_formatter
-                        import matplotlib.ticker as _mticker
-
                         _apply_sci_formatter(ax)
-                        if max(abs(stats_min), abs(stats_max)) >= 1e9:
-                            xfmt = _mticker.FuncFormatter(
-                                lambda val, _pos: _format_plot_value(float(val))
-                            )
-                            ax.xaxis.set_major_formatter(xfmt)
                     except Exception:
                         pass
                     

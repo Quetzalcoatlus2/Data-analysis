@@ -576,17 +576,8 @@ def handle_analyze_file(filename):
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.34), ncol=6, frameon=False, columnspacing=0.5)
                     fig.subplots_adjust(bottom=0.28, right=0.84)
                     
-                    # Apply compact B/T y-axis labels for large values.
+                    # Apply compact K/M/B/T axis labels for large values.
                     _apply_sci_formatter(ax)
-                    # Also apply to x-axis for distribution (x = value)
-                    try:
-                        import matplotlib.ticker as _mticker
-                        xmin, xmax = ax.get_xlim()
-                        if max(abs(xmin), abs(xmax)) >= 1e9:
-                            xfmt = _mticker.FuncFormatter(lambda val, _pos: _format_stat_value(float(val)))
-                            ax.xaxis.set_major_formatter(xfmt)
-                    except Exception:
-                        pass
                     
                     buf = io.BytesIO()
                     fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
