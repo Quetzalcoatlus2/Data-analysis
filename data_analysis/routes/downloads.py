@@ -2,6 +2,15 @@
 from __future__ import annotations
 
 from data_analysis.runtime_app import *
+from data_analysis.runtime_app import (
+    _cap_anomalies_for_display,
+    _forecast_with_fallback,
+    _get_clean_ai_summary_from_cache,
+    _infer_seasonal_period,
+    _is_offline_html,
+    _is_reliable_timeseries_index,
+    _try_parse_numeric_series,
+)
 
 _LOCAL_SYMBOLS = {
     "_LOCAL_SYMBOLS",
@@ -227,7 +236,10 @@ def handle_download_static_plots_zip(filename):
                     stats_std = float(s.std())
                     
                     try:
-                        from data_analysis.analysis.plot import _format_stat_value, _apply_sci_formatter
+                        from data_analysis.analysis.plot import (
+                            _apply_sci_formatter,
+                            _format_stat_value,
+                        )
                     except Exception:
                         def _format_stat_value(v: float) -> str:
                             try:
