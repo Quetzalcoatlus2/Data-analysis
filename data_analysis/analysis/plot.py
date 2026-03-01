@@ -7,9 +7,46 @@ from collections import Counter
 from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from matplotlib.transforms import blended_transform_factory
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _format_stat_value(v: float) -> str:
+    """Return a compact string for a statistic value.
+
+    Values >= 1e9 (1 billion) switch to B/T compact notation so they fit
+    inside chart labels without overflowing.
+    """
+    try:
+        value = float(v)
+        mag = abs(value)
+        if mag >= 1e12:
+            return f"{value / 1e12:.3f}T"
+        if mag >= 1e9:
+            return f"{value / 1e9:.3f}B"
+        return f"{value:.2f}"
+    except Exception:
+        return str(v)
+
+
+def _apply_sci_formatter(ax) -> None:
+    """Apply compact B/T y-axis formatter when values are very large.
+
+    Inspects the current y-axis limits and applies B/T labels when needed.
+    """
+    try:
+        ymin, ymax = ax.get_ylim()
+        if max(abs(ymin), abs(ymax)) >= 1e9:
+            formatter = mticker.FuncFormatter(lambda val, _pos: _format_stat_value(float(val)))
+            ax.yaxis.set_major_formatter(formatter)
+    except Exception:
+        pass
 
 # Bound at runtime via _bind_runtime_globals().
 app: Any = cast(Any, None)
@@ -142,23 +179,29 @@ def generate_plot(
     
     # Use numeric x-positions for non-datetime indexes to ensure proper alignment
     is_datetime = _is_reliable_timeseries_index(data.index)
+    y_values = pd.to_numeric(data, errors='coerce').to_numpy(dtype=float, na_value=np.nan)
     
     if is_datetime:
         # For datetime index, use the index directly
-        ax.plot(data.index, data.values, label='History', color='tab:blue', lw=1.0)
+        ax.plot(data.index, y_values, label='History', color='tab:blue', lw=1.0)
         if anomalies_idx is not None and len(anomalies_idx):
             try:
                 an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), max_points=max_anomaly_markers)
                 an_positions = _anomaly_positions_for_index(data.index, an_display)
                 if an_positions:
-                    aligned = data.iloc[an_positions]
-                    ax.scatter(aligned.index, aligned.values, color='red', s=2, zorder=5, label='Anomaly')
+                    an_pos_arr = np.asarray(an_positions, dtype=np.int64)
+                    aligned = data.iloc[an_pos_arr]
+                    aligned_y = pd.to_numeric(
+                        aligned,
+                        errors='coerce',
+                    ).to_numpy(dtype=float, na_value=np.nan)
+                    ax.scatter(aligned.index, aligned_y, color='red', s=2, zorder=5, label='Anomaly')
             except Exception:
                 pass
     else:
         # For non-datetime index (e.g., country names), use numeric positions
-        x_positions = range(len(data))
-        ax.plot(x_positions, data.values, label='History', color='tab:blue', lw=1.0)
+        x_positions = np.arange(len(data), dtype=np.int64)
+        ax.plot(x_positions, y_values, label='History', color='tab:blue', lw=1.0)
         
         # Map index labels to positions for tick labels
         if len(data) > 20:
@@ -178,8 +221,12 @@ def generate_plot(
                 an_display = _cap_anomalies_for_display(pd.Index(anomalies_idx), max_points=max_anomaly_markers)
                 an_positions = _anomaly_positions_for_index(data.index, an_display)
                 if an_positions:
-                    an_values = data.iloc[an_positions].astype(float).values
-                    ax.scatter(an_positions, an_values, color='red', s=2, zorder=5, label='Anomaly')
+                    an_pos_arr = np.asarray(an_positions, dtype=np.int64)
+                    an_values = pd.to_numeric(
+                        data.iloc[an_pos_arr],
+                        errors='coerce',
+                    ).to_numpy(dtype=float, na_value=np.nan)
+                    ax.scatter(an_pos_arr, an_values, color='red', s=2, zorder=5, label='Anomaly')
             except Exception:
                 pass
     
@@ -199,8 +246,8 @@ def generate_plot(
         stats_std = float(data.std())
         
         # Draw horizontal lines for Avg and Median
-        ax.axhline(y=stats_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
-        ax.axhline(y=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.7, label=f'Median: {stats_median:.2f}')
+        ax.axhline(y=stats_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.8, label=f'Avg: {_format_stat_value(stats_mean)}')
+        ax.axhline(y=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.7, label=f'Median: {_format_stat_value(stats_median)}')
         
         # Add value tags - position based on which line is higher
         xlim = ax.get_xlim()
@@ -209,12 +256,12 @@ def generate_plot(
         # Position tags so they don't overlap: higher line's tag above it, lower line's tag below it
         if stats_mean >= stats_median:
             # Avg is above Med - Avg tag above its line, Med tag below its line
-            ax.text(xlim[1], stats_mean + y_offset, f' Avg: {stats_mean:.2f}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
-            ax.text(xlim[1], stats_median - y_offset, f' Med: {stats_median:.2f}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+            ax.text(xlim[1], stats_mean + y_offset, f' Avg: {_format_stat_value(stats_mean)}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+            ax.text(xlim[1], stats_median - y_offset, f' Med: {_format_stat_value(stats_median)}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
         else:
             # Med is above Avg - Med tag above its line, Avg tag below its line
-            ax.text(xlim[1], stats_median + y_offset, f' Med: {stats_median:.2f}', va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
-            ax.text(xlim[1], stats_mean - y_offset, f' Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+            ax.text(xlim[1], stats_median + y_offset, f' Med: {_format_stat_value(stats_median)}', va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+            ax.text(xlim[1], stats_mean - y_offset, f' Avg: {_format_stat_value(stats_mean)}', va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
         
         # Mark the actual Min and Max points on the data with value annotations
         min_color = '#ff3b30'
@@ -248,20 +295,25 @@ def generate_plot(
         if is_datetime:
             min_idx = data.idxmin()
             max_idx = data.idxmax()
-            ax.scatter([min_idx], [stats_min], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
-            ax.scatter([max_idx], [stats_max], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-            _annotate_extreme(min_idx, stats_min, f'{stats_min:.2f}', min_color, 'left')
-            _annotate_extreme(max_idx, stats_max, f'{stats_max:.2f}', max_color, 'right')
+            ax.scatter([min_idx], [stats_min], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}')
+            ax.scatter([max_idx], [stats_max], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}')
+            _annotate_extreme(min_idx, stats_min, f'{_format_stat_value(stats_min)}', min_color, 'left')
+            _annotate_extreme(max_idx, stats_max, f'{_format_stat_value(stats_max)}', max_color, 'right')
         else:
-            min_pos = data.values.argmin()
-            max_pos = data.values.argmax()
-            ax.scatter([min_pos], [stats_min], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
-            ax.scatter([max_pos], [stats_max], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-            _annotate_extreme(min_pos, stats_min, f'{stats_min:.2f}', min_color, 'left')
-            _annotate_extreme(max_pos, stats_max, f'{stats_max:.2f}', max_color, 'right')
+            finite_mask = np.isfinite(y_values)
+            if not bool(finite_mask.any()):
+                raise ValueError("No finite data available for min/max annotation")
+            min_pos = int(np.nanargmin(y_values))
+            max_pos = int(np.nanargmax(y_values))
+            min_pos_arr = np.asarray([min_pos], dtype=np.int64)
+            max_pos_arr = np.asarray([max_pos], dtype=np.int64)
+            ax.scatter(min_pos_arr, np.asarray([stats_min], dtype=float), color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}')
+            ax.scatter(max_pos_arr, np.asarray([stats_max], dtype=float), color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}')
+            _annotate_extreme(min_pos, stats_min, f'{_format_stat_value(stats_min)}', min_color, 'left')
+            _annotate_extreme(max_pos, stats_max, f'{_format_stat_value(stats_max)}', max_color, 'right')
         
         # Std legend entry
-        ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
+        ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_stat_value(stats_std)}')
 
         # Legend on single line - at the lowest position below x-axis label
         ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.6, handletextpad=0.3)
@@ -274,6 +326,7 @@ def generate_plot(
     # PERFORMANCE: Use WebP if available (smaller), fallback to PNG
     fmt = 'webp' if use_webp else 'png'
     try:
+        _apply_sci_formatter(ax)
         fig.savefig(buf, format=fmt, bbox_inches='tight', pad_inches=0.1)
     except Exception as e:
         app.logger.debug("generate_plot save as %s failed; falling back to png: %s", fmt, e)
@@ -534,22 +587,22 @@ def generate_forecast_plot(
             raise ValueError("Non-finite stats")
         
         # Draw horizontal lines for Avg and Median
-        ax.axhline(y=hist_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.7, label=f'Avg: {hist_mean:.2f}')
-        ax.axhline(y=hist_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.6, label=f'Median: {hist_median:.2f}')
+        ax.axhline(y=hist_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.7, label=f'Avg: {_format_stat_value(hist_mean)}')
+        ax.axhline(y=hist_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.6, label=f'Median: {_format_stat_value(hist_median)}')
         
         # Put Avg/Med labels next to their horizontal lines (line-relative placement).
         ylim = ax.get_ylim()
         y_offset = (ylim[1] - ylim[0]) * 0.004
         yaxis_transform = blended_transform_factory(ax.transAxes, ax.transData)
         if hist_mean >= hist_median:
-            ax.text(1.01, hist_mean + y_offset, f'Avg: {hist_mean:.2f}', transform=yaxis_transform,
+            ax.text(1.01, hist_mean + y_offset, f'Avg: {_format_stat_value(hist_mean)}', transform=yaxis_transform,
                 va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold', clip_on=False)
-            ax.text(1.01, hist_median - y_offset, f'Med: {hist_median:.2f}', transform=yaxis_transform,
+            ax.text(1.01, hist_median - y_offset, f'Med: {_format_stat_value(hist_median)}', transform=yaxis_transform,
                 va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold', clip_on=False)
         else:
-            ax.text(1.01, hist_mean - y_offset, f'Avg: {hist_mean:.2f}', transform=yaxis_transform,
+            ax.text(1.01, hist_mean - y_offset, f'Avg: {_format_stat_value(hist_mean)}', transform=yaxis_transform,
                 va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold', clip_on=False)
-            ax.text(1.01, hist_median + y_offset, f'Med: {hist_median:.2f}', transform=yaxis_transform,
+            ax.text(1.01, hist_median + y_offset, f'Med: {_format_stat_value(hist_median)}', transform=yaxis_transform,
                 va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold', clip_on=False)
         
         # Add Min/Max markers - find positions in visible data closest to the global min/max
@@ -593,17 +646,17 @@ def generate_forecast_plot(
         max_color = '#00BCD4'  # Cyan - works on both light and dark backgrounds
         edge_color = '#0b1220'
         # Plot Min marker
-        ax.scatter([tail_min_pos], [hist_min], color=min_color, s=80, zorder=10, marker='v', 
-               edgecolors=edge_color, linewidths=1.5, label=f'Min: {hist_min:.2f}')
-        _annotate_extreme(tail_min_pos, hist_min, f'{hist_min:.2f}', min_color, 'left')
+        ax.scatter([tail_min_pos], [hist_min], color=min_color, s=30, zorder=10, marker='v', 
+               edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(hist_min)}')
+        _annotate_extreme(tail_min_pos, hist_min, f'{_format_stat_value(hist_min)}', min_color, 'left')
         
         # Plot Max marker
-        ax.scatter([tail_max_pos], [hist_max], color=max_color, s=80, zorder=10, marker='^', 
-               edgecolors=edge_color, linewidths=1.5, label=f'Max: {hist_max:.2f}')
-        _annotate_extreme(tail_max_pos, hist_max, f'{hist_max:.2f}', max_color, 'right')
+        ax.scatter([tail_max_pos], [hist_max], color=max_color, s=30, zorder=10, marker='^', 
+               edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(hist_max)}')
+        _annotate_extreme(tail_max_pos, hist_max, f'{_format_stat_value(hist_max)}', max_color, 'right')
         
         # Std legend entry
-        ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {hist_std:.2f}')
+        ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_stat_value(hist_std)}')
 
         # Reserve space for the right-side Avg/Med label lane.
         try:
@@ -620,6 +673,7 @@ def generate_forecast_plot(
         app.logger.debug("generate_forecast_plot stats overlay skipped for '%s': %s", title, e)
 
     buf = io.BytesIO()
+    _apply_sci_formatter(ax)
     fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2)
     buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8')
@@ -988,3 +1042,4 @@ __all__ = [
     "generate_stl_plot",
     "get_cached_stl_plot",
 ]
+

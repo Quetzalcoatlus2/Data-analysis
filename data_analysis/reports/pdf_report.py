@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import base64
+import html as htmllib
 import io
+import math
 import re
 from html.parser import HTMLParser
+from typing import Any, cast
 
 import emoji
 from fpdf import FPDF
@@ -52,6 +55,123 @@ def _select_pdf_font(available_fonts: set[str]) -> str:
             return normalized[cand]
 
     return "helvetica"
+
+
+def _collapse_pdf_html_spacing(html: str) -> str:
+    """Normalize AI-summary HTML spacing to reduce false page skips."""
+    text = str(html or "")
+    # Remove comments (e.g., model markers) before layout checks.
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    # Collapse repeated empty paragraphs into a single separator paragraph.
+    text = re.sub(
+        r"(?is)(?:\s*<p[^>]*>\s*(?:&nbsp;|\s|<br\s*/?>)*\s*</p>\s*){2,}",
+        "<p></p>",
+        text,
+    )
+    # Collapse repeated line breaks.
+    text = re.sub(r"(?is)(?:<br\s*/?>\s*){2,}", "<br/>", text)
+    # Remove whitespace-only gaps between tags that can add hidden vertical space.
+    text = re.sub(r">\s+<", "><", text)
+    return text.strip()
+
+
+def _extract_first_context_text(body_html: str) -> tuple[str, bool]:
+    """Return first meaningful paragraph/list-item text and whether it's from a list item."""
+    html_body = str(body_html or "").strip()
+    if not html_body:
+        return "", False
+
+    candidates: list[tuple[int, str, bool]] = []
+    for is_list, pattern in (
+        (True, r"(?is)<li[^>]*>(.*?)</li>"),
+        (False, r"(?is)<p[^>]*>(.*?)</p>"),
+    ):
+        for match in re.finditer(pattern, html_body):
+            snippet = re.sub(r"<[^>]+>", " ", match.group(1))
+            snippet = htmllib.unescape(snippet)
+            snippet = re.sub(r"\s+", " ", snippet).strip()
+            if snippet:
+                candidates.append((match.start(), snippet, is_list))
+                break
+
+    if candidates:
+        candidates.sort(key=lambda c: c[0])
+        _, text, is_list = candidates[0]
+        return text, is_list
+
+    plain = re.sub(r"<[^>]+>", " ", html_body)
+    plain = htmllib.unescape(plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    return plain, False
+
+
+def _estimate_wrapped_lines(pdf: FPDF, text: str, width_mm: float) -> int:
+    """Estimate wrapped line count using current PDF font metrics."""
+    if width_mm <= 0:
+        return 1
+    normalized = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not normalized:
+        return 1
+
+    words = normalized.split(" ")
+    if not words:
+        return 1
+
+    line_count = 1
+    current_line = ""
+
+    for word in words:
+        if not current_line:
+            if pdf.get_string_width(word) <= width_mm:
+                current_line = word
+                continue
+
+            # Hard-wrap a single long token.
+            chunk = ""
+            segments = 1
+            for ch in word:
+                trial = chunk + ch
+                if not chunk or pdf.get_string_width(trial) <= width_mm:
+                    chunk = trial
+                else:
+                    segments += 1
+                    chunk = ch
+            line_count += max(0, segments - 1)
+            current_line = chunk
+            continue
+
+        candidate = f"{current_line} {word}"
+        if pdf.get_string_width(candidate) <= width_mm:
+            current_line = candidate
+            continue
+
+        line_count += 1
+        if pdf.get_string_width(word) <= width_mm:
+            current_line = word
+            continue
+
+        chunk = ""
+        segments = 1
+        for ch in word:
+            trial = chunk + ch
+            if not chunk or pdf.get_string_width(trial) <= width_mm:
+                chunk = trial
+            else:
+                segments += 1
+                chunk = ch
+        line_count += max(0, segments - 1)
+        current_line = chunk
+
+    return max(1, line_count)
+
+
+def _should_break_before_heading(y_mm: float, remaining_mm: float, required_mm: float) -> bool:
+    """Break only when a heading is near page bottom and context space is insufficient."""
+    if y_mm <= 46.0:
+        return False
+    return remaining_mm < required_mm
+
+
 class PDFReport(FPDF):  # type: ignore[no-redef]
     def __init__(self, title_str, display_name):
         super().__init__()
@@ -220,6 +340,9 @@ def handle_download_full_report_pdf(filename):
             out = str(value)
             return out if body_font_is_unicode else out.encode('latin-1', 'replace').decode('latin-1')
 
+        def _remaining_page_space() -> float:
+            return float(pdf.h - pdf.b_margin - pdf.get_y())
+
         pdf.set_font(default_font, size=12)
         def _restore_emoji_placeholders(text: str) -> str:
             """Strip emojis entirely."""
@@ -229,13 +352,16 @@ def handle_download_full_report_pdf(filename):
         def add_section_title(title, new_page=True):
             ensure_page()
             if new_page:
-                pdf.add_page()
-            else:
-                remaining = float(pdf.h - pdf.b_margin - pdf.get_y())
-                # Require generous space (60 units) to avoid title ending up orphaned at page bottom
-                if remaining < 60.0:
+                # Avoid creating a near-empty page when we're already at the top.
+                if float(pdf.get_y()) > 46.0:
                     pdf.add_page()
-                pdf.ln(5)
+            else:
+                # Keep title + at least ~2 body lines together without being overly aggressive.
+                # 8mm title + 2mm spacing + 2*5mm body lines + small cushion ~= 24mm.
+                if _remaining_page_space() < 24.0:
+                    pdf.add_page()
+                else:
+                    pdf.ln(4)
 
             pdf.set_font(default_font, style="B", size=13)
             pdf.set_text_color(0, 0, 0)
@@ -243,6 +369,96 @@ def handle_download_full_report_pdf(filename):
             pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT", fill=True)
             pdf.ln(2)
             pdf.set_font(default_font, size=10)
+
+        def _truncate_cell(text: str, col_width_mm: float, font_size_pt: int = 9) -> str:
+            """Clip text to fit within a PDF cell of the given width.
+
+            Uses pdf.get_string_width() for exact measurement. When the text
+            is too wide for the cell it is progressively shortened until it
+            fits. A short ellipsis is appended when clipping occurs.
+            """
+            if not text:
+                return text
+            text = str(text).replace("\r", " ").replace("\n", " ").strip()
+            # Measure actual rendered width using the current font
+            try:
+                # Save current font state
+                cur_family = pdf.font_family
+                cur_style = pdf.font_style
+                cur_size = pdf.font_size_pt
+                cur_size_int = max(1, int(round(float(cur_size))))
+                pdf.set_font(cur_family, style=cast(Any, cur_style), size=font_size_pt)
+                tw = pdf.get_string_width(text)
+                # Keep text strictly inside the inner content box:
+                # full cell width minus left/right cell margins and a tiny safety gap.
+                inner_margin = float(getattr(pdf, "c_margin", 1.0))
+                target_w = max(0.0, col_width_mm - (2.0 * inner_margin) - 0.05)
+                if tw <= target_w or target_w <= 0:
+                    pdf.set_font(cur_family, style=cast(Any, cur_style), size=cur_size_int)
+                    return text
+                # Binary search for the longest prefix that fits
+                lo, hi = 0, len(text)
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if pdf.get_string_width(text[:mid]) <= target_w:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                clipped = text[:max(1, lo)].rstrip()
+                if lo < len(text):
+                    ell = "..."
+                    if len(clipped) > len(ell):
+                        while clipped and pdf.get_string_width(clipped + ell) > target_w:
+                            clipped = clipped[:-1]
+                        if clipped:
+                            clipped = clipped + ell
+                pdf.set_font(cur_family, style=cast(Any, cur_style), size=cur_size_int)
+                return clipped
+            except Exception:
+                # Fallback: rough char estimate
+                char_w = font_size_pt * 0.8 * 0.352778
+                max_chars = max(3, int(col_width_mm / char_w))
+                if len(text) <= max_chars:
+                    return text
+                if max_chars <= 3:
+                    return text[:max_chars]
+                return text[:max_chars - 3] + "..."
+
+        def _format_table_cell_value(value: object) -> str:
+            """Compact table text to avoid cell overflow."""
+            text = str(value).replace("\r", " ").replace("\n", " ").strip()
+            if not text:
+                return text
+            try:
+                n = float(text)
+                if math.isfinite(n):
+                    mag = abs(n)
+                    if mag >= 1e12:
+                        return f"{n / 1e12:.3f}T"
+                    if mag >= 1e9:
+                        return f"{n / 1e9:.3f}B"
+            except Exception:
+                pass
+            return text
+
+        def _format_plot_value(value: float) -> str:
+            """Compact stat labels for charts with B/T suffixes for large values."""
+            try:
+                v = float(value)
+                if math.isfinite(v):
+                    mag = abs(v)
+                    if mag >= 1e12:
+                        return f"{v / 1e12:.3f}T"
+                    if mag >= 1e9:
+                        return f"{v / 1e9:.3f}B"
+                return f"{v:.2f}"
+            except Exception:
+                return str(value)
+
+        def _ensure_img_space(min_mm: float = 60.0) -> None:
+            """Start a new page if there isn't enough vertical space for an image."""
+            if _remaining_page_space() < min_mm:
+                pdf.add_page()
 
         def add_text_block(text, courier=False, is_html=False):
             font_family = default_font
@@ -255,23 +471,111 @@ def handle_download_full_report_pdf(filename):
             if is_html:
                 pdf.set_font(font_family, size=10)
                 
-                html_text = str(text)
-                html_text = _restore_emoji_placeholders(html_text)
-                
-                # Strip HTML comments (e.g. model markers)
-                html_text = re.sub(r'<!--.*?-->', '', html_text, flags=re.DOTALL)
-                
-                try:
-                    pdf.write_html(html_text)
-                except Exception as e:
-                    app.logger.error(f"Native HTMLParser PDF rendering failed: {e}")
-                    # Ultimate fallback
-                    fallback_text = re.sub(r'<[^>]+>', ' ', html_text)
-                    fallback_text = re.sub(r'\s+', ' ', fallback_text).strip()
-                    if body_font_is_unicode:
-                        pdf.multi_cell(0, 5, fallback_text)
-                    else:
-                        pdf.multi_cell(0, 5, _safe_pdf_text(fallback_text))
+                html_text = _restore_emoji_placeholders(str(text))
+                html_text = _collapse_pdf_html_spacing(html_text)
+
+                def _write_html_fragment(fragment: str) -> None:
+                    fragment = str(fragment or "").strip()
+                    if not fragment:
+                        return
+                    try:
+                        pdf.write_html(fragment)
+                    except Exception as e:
+                        app.logger.error(f"Native HTMLParser PDF rendering failed: {e}")
+                        fallback_text = re.sub(r'<[^>]+>', ' ', fragment)
+                        fallback_text = re.sub(r'\s+', ' ', fallback_text).strip()
+                        if body_font_is_unicode:
+                            pdf.multi_cell(0, 5, fallback_text)
+                        else:
+                            pdf.multi_cell(0, 5, _safe_pdf_text(fallback_text))
+
+                # Keep heading blocks from being stranded at page bottom.
+                heading_re = re.compile(r'(?is)<h[1-6][^>]*>.*?</h[1-6]>')
+                heading_matches = list(heading_re.finditer(html_text))
+                if not heading_matches:
+                    _write_html_fragment(html_text)
+                else:
+                    cursor = 0
+                    for idx_match, match in enumerate(heading_matches):
+                        start = match.start()
+                        end_of_block = heading_matches[idx_match + 1].start() if idx_match + 1 < len(heading_matches) else len(html_text)
+
+                        # Render content before heading (if any).
+                        if start > cursor:
+                            _write_html_fragment(html_text[cursor:start])
+
+                        # Heading + following content block.
+                        heading_html = html_text[start:match.end()]
+                        body_html = html_text[match.end():end_of_block]
+                        heading_html = heading_html.strip()
+                        body_html = body_html.strip()
+                        body_plain = re.sub(r"<[^>]+>", " ", body_html)
+                        body_plain = re.sub(r"\s+", " ", body_plain).strip()
+
+                        # If the heading has no meaningful body, skip it to avoid
+                        # creating a near-empty page with a single title line.
+                        if len(body_plain) <= 2:
+                            cursor = end_of_block
+                            continue
+
+                        first_context_text, is_list_context = _extract_first_context_text(body_html)
+                        if not first_context_text:
+                            cursor = end_of_block
+                            continue
+
+                        available_width = float(pdf.w - pdf.l_margin - pdf.r_margin - 1.0)
+                        first_context_lines = _estimate_wrapped_lines(pdf, first_context_text, available_width)
+                        first_context_lines = max(1, min(6, first_context_lines))
+
+                        heading_mm = 8.0
+                        heading_gap_mm = 2.0
+                        line_mm = 5.0
+                        # Extra context guard: if only heading + one short paragraph fits,
+                        # defer section to next page.
+                        extra_context_mm = 4.0 if is_list_context else 5.0
+                        min_block_space = (
+                            heading_mm
+                            + heading_gap_mm
+                            + (line_mm * float(first_context_lines))
+                            + extra_context_mm
+                        )
+
+                        # Preserve nested list structure but keep at least one bullet with
+                        # heading+intro when body pattern is paragraph -> list.
+                        first_para = re.search(r"(?is)<p\b[^>]*>.*?</p>", body_html)
+                        first_list = re.search(r"(?is)<(?:ul|ol)\b[^>]*>", body_html)
+                        if first_para and first_list and first_list.start() > first_para.start():
+                            first_bullet_text = ""
+                            bullet_match = re.search(r"(?is)<li\b[^>]*>(.*?)</li>", body_html)
+                            if bullet_match:
+                                snippet = re.sub(r"<[^>]+>", " ", bullet_match.group(1))
+                                snippet = htmllib.unescape(snippet)
+                                first_bullet_text = re.sub(r"\s+", " ", snippet).strip()
+                            bullet_width = max(10.0, available_width - 6.0)
+                            if first_bullet_text:
+                                bullet_lines = _estimate_wrapped_lines(
+                                    pdf,
+                                    first_bullet_text,
+                                    bullet_width,
+                                )
+                                bullet_lines = max(1, min(3, bullet_lines))
+                                min_block_space += 2.0 + (line_mm * float(bullet_lines))
+                            else:
+                                min_block_space += 6.0
+
+                        remaining = _remaining_page_space()
+                        if _should_break_before_heading(
+                            y_mm=float(pdf.get_y()),
+                            remaining_mm=remaining,
+                            required_mm=min_block_space,
+                        ):
+                            pdf.add_page()
+
+                        # Render heading first, then body. This avoids native HTML pagination
+                        # splitting the heading from the first sentence/list item.
+                        _write_html_fragment(heading_html)
+                        _write_html_fragment(body_html)
+                        cursor = end_of_block
                 pdf.ln(5)
                 return
 
@@ -298,6 +602,9 @@ def handle_download_full_report_pdf(filename):
             # ALWAYS start on fresh page to prevent mid-page tables
             if new_page:
                 pdf.add_page()
+            else:
+                if (pdf.h - pdf.b_margin - pdf.get_y()) < 34:
+                    pdf.add_page()
             
             # Use fpdf2's built-in table context if available, otherwise manual
             try:
@@ -320,21 +627,21 @@ def handle_download_full_report_pdf(filename):
 
                 # Adaptive readability settings.
                 if total_cols >= 18:
+                    font_size = 5.5
+                    line_h = 3.4
+                    cols_per_chunk = 6  # Fewer cols → more width → less overflow
+                elif total_cols >= 12:
                     font_size = 6.0
                     line_h = 3.8
-                    cols_per_chunk = 8
-                elif total_cols >= 12:
-                    font_size = 6.6
-                    line_h = 4.1
-                    cols_per_chunk = 10
+                    cols_per_chunk = 7
                 else:
-                    font_size = 7.5
-                    line_h = 4.6
-                    cols_per_chunk = 12
+                    font_size = 7.0
+                    line_h = 4.2
+                    cols_per_chunk = 8
 
                 if row_count >= 20:
-                    font_size = max(5.6, font_size - 0.7)
-                    line_h = max(3.4, line_h - 0.4)
+                    font_size = max(5.4, font_size - 0.8)
+                    line_h = max(3.8, line_h - 0.2)
 
                 font_size_int = max(5, int(round(font_size)))
 
@@ -364,6 +671,11 @@ def handle_download_full_report_pdf(filename):
                 for chunk_idx, chunk_cols in enumerate(chunks, start=1):
                     chunk_headers = [str(c) for c in chunk_cols]
 
+                    # Avoid orphaned chunk title/header at page bottom.
+                    min_chunk_space = 24.0
+                    if _remaining_page_space() < min_chunk_space:
+                        pdf.add_page()
+
                     # Subtitle for multi-part wide tables.
                     if len(chunks) > 1:
                         pdf.set_font(default_font, 'I', 8)
@@ -377,43 +689,90 @@ def handle_download_full_report_pdf(filename):
 
                     available_width = pdf.w - pdf.l_margin - pdf.r_margin
 
-                    # Compute content-aware widths so narrow columns use less space
-                    # and long/header-heavy columns get more space.
-                    width_scores: list[float] = []
+                    # -------------------------------------------------------
+                    # Content-aware column widths using MEASURED string widths
+                    # pdf.get_string_width() accounts for actual glyph sizes.
+                    # -------------------------------------------------------
+                    pdf.set_font(default_font, 'B', font_size_int)  # headers are bold
+                    header_widths = [pdf.get_string_width(h) + 3.0 for h in chunk_headers]  # +3 padding
+
+                    pdf.set_font(default_font, '', font_size_int)  # data is regular
                     max_rows_for_width = 150
-
-                    wide_table = len(chunk_headers) >= 10
-
+                    data_widths: list[float] = []
                     for col_pos, col_name in enumerate(chunk_headers):
                         source_col = chunk_cols[col_pos]
                         series_values = [str(v) for v in df_display[source_col].iloc[:max_rows_for_width]]
+                        max_data_w = max((pdf.get_string_width(v) for v in series_values), default=0.0) + 2.0
+                        data_widths.append(max_data_w)
 
-                        max_cell_len = max([len(str(col_name))] + [len(v) for v in series_values])
-                        if wide_table:
-                            width_scores.append(max(4.0, min(24.0, float(max_cell_len))))
+                    # Each column's ideal width is the max of its header and data content.
+                    ideal_widths = [max(hw, dw) for hw, dw in zip(header_widths, data_widths)]
+
+                    # Hard per-column bounds:
+                    # - keep the first (label/index) column readable
+                    # - prevent long free-text columns from starving neighbors.
+                    def _is_compact_index_like_first_col() -> bool:
+                        if not chunk_headers:
+                            return False
+                        h0 = str(chunk_headers[0]).strip().lower()
+                        if not (h0 == "index" or h0 == "level_0" or h0.startswith("unnamed:")):
+                            return False
+                        values = [str(v).strip() for v in df_display[chunk_cols[0]].iloc[:max_rows_for_width].tolist()]
+                        vals = [v for v in values if v]
+                        if not vals:
+                            return True
+                        lengths = sorted(len(v) for v in vals)
+                        p90_len = lengths[min(len(lengths) - 1, int(0.9 * (len(lengths) - 1)))]
+                        numericish = sum(1 for v in vals if re.fullmatch(r"[-+]?\d+", v) is not None)
+                        numericish_ratio = numericish / max(1, len(vals))
+                        return p90_len <= 6 and numericish_ratio >= 0.85
+
+                    compact_first_col = _is_compact_index_like_first_col()
+                    first_min = 9.0 if compact_first_col else 12.0
+                    first_max = 16.0 if compact_first_col else 42.0
+                    min_widths = [first_min] + [9.0] * max(0, len(chunk_headers) - 1)
+                    max_widths = [first_max] + [64.0] * max(0, len(chunk_headers) - 1)
+                    bounded = [
+                        max(min_w, min(w, max_w))
+                        for w, min_w, max_w in zip(ideal_widths, min_widths, max_widths)
+                    ]
+
+                    total_width = sum(bounded)
+                    if total_width > available_width:
+                        # Shrink only the part above minimum widths.
+                        min_total = sum(min_widths)
+                        if min_total >= available_width:
+                            col_widths = [available_width / max(1, len(chunk_headers))] * len(chunk_headers)
                         else:
-                            width_scores.append(max(6.0, min(36.0, float(max_cell_len))))
-
-                    score_sum = sum(width_scores) if width_scores else 1.0
-                    raw_widths = [(w / score_sum) * available_width for w in width_scores]
-
-                    if wide_table:
-                        min_widths = [12.0] + [7.0] * max(0, len(chunk_headers) - 1)
+                            overflow = total_width - available_width
+                            reducible = [max(0.0, w - m) for w, m in zip(bounded, min_widths)]
+                            reducible_total = sum(reducible)
+                            if reducible_total > 0:
+                                col_widths = [
+                                    w - overflow * (r / reducible_total)
+                                    for w, r in zip(bounded, reducible)
+                                ]
+                            else:
+                                col_widths = list(bounded)
                     else:
-                        min_widths = [16.0] + [9.0] * max(0, len(chunk_headers) - 1)
-                    col_widths = [max(raw, min_w) for raw, min_w in zip(raw_widths, min_widths)]
-
-                    total_width = sum(col_widths)
-                    if total_width > available_width and total_width > 0:
-                        shrink_factor = available_width / total_width
-                        col_widths = [w * shrink_factor for w in col_widths]
+                        # Grow columns with remaining headroom.
+                        surplus = available_width - total_width
+                        headroom = [max(0.0, mx - w) for w, mx in zip(bounded, max_widths)]
+                        headroom_total = sum(headroom)
+                        if headroom_total > 0 and surplus > 0:
+                            col_widths = [
+                                w + surplus * (h / headroom_total)
+                                for w, h in zip(bounded, headroom)
+                            ]
+                        else:
+                            col_widths = list(bounded)
 
                     def _safe_text(val):
                         return _safe_pdf_text(val)
 
                     def _ensure_row_space():
                         # Keep a small bottom margin; repeat the table header on a new page.
-                        if pdf.get_y() <= 274:
+                        if (pdf.get_y() + line_h) <= (pdf.h - pdf.b_margin):
                             return
                         pdf.add_page()
                         if title:
@@ -433,15 +792,19 @@ def handle_download_full_report_pdf(filename):
                         pdf.set_text_color(0, 0, 0)
                         for i, h in enumerate(chunk_headers):
                             align = 'L' if i == 0 else 'C'
-                            pdf.cell(col_widths[i], line_h, _safe_text(str(h)), border=1, align=align)
+                            pdf.cell(col_widths[i], line_h,
+                                     _safe_text(_truncate_cell(str(h), col_widths[i], font_size_int)),
+                                     border=1, align=align)
                         pdf.ln(line_h)
 
-                    # Header row
+                    # Header row — clip header text to column width (no ellipsis)
                     pdf.set_font(default_font, 'B', font_size_int)
                     pdf.set_text_color(0, 0, 0)
                     for i, h in enumerate(chunk_headers):
                         align = 'L' if i == 0 else 'C'
-                        pdf.cell(col_widths[i], line_h, _safe_text(str(h)), border=1, align=align)
+                        pdf.cell(col_widths[i], line_h,
+                                 _safe_text(_truncate_cell(str(h), col_widths[i], font_size_int)),
+                                 border=1, align=align)
                     pdf.ln(line_h)
 
                     # Data rows
@@ -449,7 +812,7 @@ def handle_download_full_report_pdf(filename):
                     chunk_df = df_display[chunk_cols]
                     for row_vals in chunk_df.itertuples(index=False, name=None):
                         _ensure_row_space()
-                        rendered = [str(v) for v in row_vals]
+                        rendered = [_format_table_cell_value(v) for v in row_vals]
                         for i, item in enumerate(rendered):
                             # First column bold as row header
                             if i == 0:
@@ -458,7 +821,11 @@ def handle_download_full_report_pdf(filename):
                             else:
                                 pdf.set_font(default_font, '', font_size_int)
                                 align = 'R'
-                            pdf.cell(col_widths[i], line_h, _safe_text(item), border=1, align=align)
+                            pdf.cell(
+                                col_widths[i], line_h,
+                                _safe_text(_truncate_cell(item, col_widths[i], font_size_int)),
+                                border=1, align=align,
+                            )
                         pdf.ln(line_h)
 
                     if chunk_idx < len(chunks):
@@ -555,9 +922,8 @@ def handle_download_full_report_pdf(filename):
             corr_heatmap_spearman = get_cached_heatmap(filename, df, method='spearman')
             if corr_heatmap_spearman:
                 ensure_corr_header()
-                # Keep-with-next logic: If near bottom, page break
-                if pdf.page_no() > 0 and pdf.get_y() > 200: # Approx 297mm height, safety margin
-                    pdf.add_page()
+                # Keep section title + label + image together.
+                _ensure_img_space(115.0)
                     
                 pdf.set_font(font_family, 'B', 10)
                 pdf.cell(0, 8, "Spearman Correlation:", new_x="LMARGIN", new_y="NEXT")
@@ -569,10 +935,8 @@ def handle_download_full_report_pdf(filename):
             corr_heatmap_pearson = get_cached_heatmap(filename, df, method='pearson')
             if corr_heatmap_pearson:
                 ensure_corr_header()
-                # Keep label and image together - add page if not enough space for both
-                # Image height is approximately 100-120mm, so break earlier
-                if pdf.page_no() > 0 and pdf.get_y() > 120:
-                    pdf.add_page()
+                # Keep section title + label + image together.
+                _ensure_img_space(115.0)
                     
                 pdf.set_font(font_family, 'B', 10)
                 pdf.cell(0, 8, "Pearson Correlation:", new_x="LMARGIN", new_y="NEXT")
@@ -584,6 +948,12 @@ def handle_download_full_report_pdf(filename):
 
         # Plots
         add_section_title("4. Column Analysis", new_page=True)
+
+        def _steps_for_history_rows(history_rows: int) -> int:
+            if forecast_pct <= 0 or history_rows <= 0:
+                return 0
+            pct_den = max(1e-9, 1.0 - float(forecast_pct))
+            return max(1, int(math.floor(float(history_rows) * float(forecast_pct) / pct_den)))
         
         # Show forecast setting used (Moved here)
         font_family = default_font
@@ -593,8 +963,17 @@ def handle_download_full_report_pdf(filename):
             pdf.cell(0, 8, "Forecast Setting: 0% (data and anomalies only)", new_x="LMARGIN", new_y="NEXT")
         else:
             total_rows = len(df)
-            forecast_steps = max(2, int(total_rows * forecast_pct))
-            pdf.cell(0, 8, f"Forecast Setting: {forecast_pct_display}% ({forecast_steps} steps of {total_rows} rows)", new_x="LMARGIN", new_y="NEXT")
+            forecast_steps = _steps_for_history_rows(total_rows)
+            pdf.cell(
+                0,
+                8,
+                (
+                    f"Forecast Setting: {forecast_pct_display}% "
+                    f"(up to {forecast_steps} steps for {total_rows} rows; per-column non-null history)"
+                ),
+                new_x="LMARGIN",
+                new_y="NEXT",
+            )
         pdf.set_font(font_family, size=10)
         pdf.ln(2)
         
@@ -602,8 +981,6 @@ def handle_download_full_report_pdf(filename):
         numeric_df_cached = get_cached_numeric_df(filename, df)
         numeric_cols = {col for col in numeric_df_cached.columns}
         x_axis_label = 'Timestamp' if is_ts else 'Index'
-        total_rows = len(df)
-        forecast_steps = max(2, int(total_rows * forecast_pct)) if forecast_pct > 0 else 0
         first_col = True
         img_width = 180
         img_x = 15
@@ -621,6 +998,7 @@ def handle_download_full_report_pdf(filename):
             series = numeric_series if is_numeric else df[col].astype(str)
             if not is_numeric and series.empty:
                 continue
+            col_forecast_steps = _steps_for_history_rows(len(numeric_series))
 
             # Force new page for EACH column to ensure clean layout
             # We don't use add_section_title here because we want a specific format
@@ -689,17 +1067,17 @@ def handle_download_full_report_pdf(filename):
                     an_score = pd.Series([], dtype=float)
             
             # 2. FORECAST CHART (with forecast if pct > 0)
-            if is_numeric and len(numeric_series) >= min_trend_forecast_points and forecast_steps > 0:
+            if is_numeric and len(numeric_series) >= min_trend_forecast_points and col_forecast_steps > 0:
                 try:
                     # Use cached forecast
                     try:
-                        fc_mean, ci = get_cached_column_forecast(filename, col, numeric_series, forecast_steps)
+                        fc_mean, ci = get_cached_column_forecast(filename, col, numeric_series, col_forecast_steps)
                     except Exception as e:
                         app.logger.debug("Cached forecast unavailable for PDF column '%s': %s", col, e)
                         fc_mean, ci = None, None
                     
                     if fc_mean is not None:
-                        fc_title = f"Forecast: {col} ({forecast_steps} steps)"
+                        fc_title = f"Forecast: {col} ({col_forecast_steps} steps)"
                         fc_b64 = generate_forecast_plot(
                             numeric_series,
                             fc_mean,
@@ -733,8 +1111,8 @@ def handle_download_full_report_pdf(filename):
                     stats_std = float(s_num.std())
                     
                     # Avg/Med vertical lines (with labels for legend)
-                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
-                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Med: {stats_median:.2f}')
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_plot_value(stats_mean)}')
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Med: {_format_plot_value(stats_median)}')
                     
                     # Min/Max markers at bottom with annotations
                     ylim = ax.get_ylim()
@@ -743,8 +1121,8 @@ def handle_download_full_report_pdf(filename):
                     min_color = '#ff3b30'
                     max_color = '#00e5ff'
                     edge_color = '#0b1220'
-                    ax.scatter([stats_min], [marker_y], color=min_color, s=80, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
-                    ax.scatter([stats_max], [marker_y], color=max_color, s=80, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
+                    ax.scatter([stats_min], [marker_y], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_plot_value(stats_min)}')
+                    ax.scatter([stats_max], [marker_y], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_plot_value(stats_max)}')
 
                     # Match Detailed Analysis: min tag slightly left, max tag slightly right.
                     min_xytext, min_ha = (-3, 12), 'right'
@@ -752,20 +1130,34 @@ def handle_download_full_report_pdf(filename):
                     if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
                         min_xytext = (min_xytext[0], 12)
                         max_xytext = (max_xytext[0], 22)
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{_format_plot_value(stats_min)}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{_format_plot_value(stats_max)}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
                     
                     # Avg/Med tags
                     x_offset = (xlim[1] - xlim[0]) * 0.02
                     if stats_mean <= stats_median:
-                        ax.text(stats_mean - x_offset, ylim[1] * 0.985, f'Avg: {stats_mean:.2f}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
-                        ax.text(stats_median + x_offset, ylim[1] * 0.985, f'Med: {stats_median:.2f}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean - x_offset, ylim[1] * 0.985, f'Avg: {_format_plot_value(stats_mean)}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median + x_offset, ylim[1] * 0.985, f'Med: {_format_plot_value(stats_median)}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                     else:
-                        ax.text(stats_median - x_offset, ylim[1] * 0.985, f'Med: {stats_median:.2f}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
-                        ax.text(stats_mean + x_offset, ylim[1] * 0.985, f'Avg: {stats_mean:.2f}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median - x_offset, ylim[1] * 0.985, f'Med: {_format_plot_value(stats_median)}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean + x_offset, ylim[1] * 0.985, f'Avg: {_format_plot_value(stats_mean)}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
                     
                     # Std in legend only (always add this, outside the if/else)
-                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
+                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_plot_value(stats_std)}')
+
+                    # Use compact B/T labels for extreme values to keep labels compact.
+                    try:
+                        from data_analysis.analysis.plot import _apply_sci_formatter
+                        import matplotlib.ticker as _mticker
+
+                        _apply_sci_formatter(ax)
+                        if max(abs(stats_min), abs(stats_max)) >= 1e9:
+                            xfmt = _mticker.FuncFormatter(
+                                lambda val, _pos: _format_plot_value(float(val))
+                            )
+                            ax.xaxis.set_major_formatter(xfmt)
+                    except Exception:
+                        pass
                     
                     # Legend with all stats (Min, Max, Avg, Med, Std) - always show
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=6, frameon=False)

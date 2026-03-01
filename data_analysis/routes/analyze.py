@@ -247,21 +247,42 @@ def handle_analyze_file(filename):
         data_range_ratio = 1.0
         data_range_rows = 0
     
-    # pct is always defined now (defaulting to 0.05)
+    # pct is always defined now (defaulting to 0.05).
+    # Use pct as a VISUAL x-axis share target:
+    # forecast_share = steps / (history + steps) ~= pct
+    def _steps_for_history_rows(history_rows: int) -> int:
+        if pct <= 0 or history_rows <= 0:
+            return 0
+        pct_den = max(1e-9, 1.0 - float(pct))
+        return max(1, int(math.floor(float(history_rows) * float(pct) / pct_den)))
+
     if pct == 0:
-        user_steps = 0  # 0% means no forecast
+        user_steps = 0
         effective_steps = 0
     elif pct > 0 and total_rows > 0:
-        user_steps = max(2, int(math.ceil(total_rows * pct)))
+        base_rows = total_rows
+        if active_view == "forecast" and data_range_rows > 0:
+            base_rows = data_range_rows
+        user_steps = _steps_for_history_rows(base_rows)
         effective_steps = user_steps
     else:
-        effective_steps = max(2, int(user_steps)) if user_steps else 2
+        effective_steps = max(1, int(user_steps)) if user_steps else 1
 
     # Determine whether to build forecast/interactive content based on active_view.
     # IMPORTANT: To keep upload/overview fast, run heavy forecasting only in the explicit Forecast view.
     # Note: overview, correlation, and categories all use the fast path above.
     build_forecast = active_view == "forecast"
     build_interactive = active_view == "interactive"
+    numeric_cols_all = list(numeric_df_cached.columns) if numeric_df_cached is not None else []
+    inline_rows_limit = int(os.getenv("INTERACTIVE_INLINE_MAX_ROWS", "50000"))
+    inline_cells_limit = int(os.getenv("INTERACTIVE_INLINE_MAX_CELLS", "1200000"))
+    interactive_force_async = bool(
+        build_interactive
+        and (
+            total_rows > inline_rows_limit
+            or (len(numeric_cols_all) * max(total_rows, 1)) > inline_cells_limit
+        )
+    )
     
     # Initialize timing early (used by both fast path and full path)
     request_start = time.perf_counter()
@@ -271,16 +292,28 @@ def handle_analyze_file(filename):
     # - overview/correlation: skip plots, forecasts, interactive traces entirely
     # - categories: skip forecasts/anomalies; only compute category charts
     # Note: interactive & forecast still use the full column loop for server-side data.
-    if active_view in ("overview", "correlation", "categories"):
+    if active_view in ("overview", "correlation", "categories") or interactive_force_async:
         # Use cached info for fast response
-        cached_info = get_cached_df_info(filename, df)
+        if interactive_force_async:
+            cached_info = {
+                'head': '',
+                'description': '',
+                'overview_table_html': '',
+                'info': '',
+                'missing_values': '',
+            }
+        else:
+            cached_info = get_cached_df_info(filename, df)
         
         # Use cached numeric DF to avoid per-column pd.to_numeric calls
         _num_df = numeric_df_cached
-        used_cols = list(_num_df.columns)[:20] if _num_df is not None and not _num_df.empty else list(df.columns)[:20]
+        if build_interactive:
+            used_cols = list(_num_df.columns) if _num_df is not None and not _num_df.empty else list(df.columns)
+        else:
+            used_cols = list(_num_df.columns)[:20] if _num_df is not None and not _num_df.empty else list(df.columns)[:20]
         
         # Build minimal AI context without expensive operations
-        ai_context = describe_for_ai(df, filename=filename)
+        ai_context = describe_for_ai(df, filename=filename) if not build_interactive else ""
         
         ai_summary = _get_clean_ai_summary_from_cache(filename)
         if ai_summary is None and active_view == 'overview':
@@ -337,18 +370,22 @@ def handle_analyze_file(filename):
             analysis['category_charts'] = category_charts
         
         total_dt = time.perf_counter() - request_start
-        app.logger.info("Analyze FAST PATH done file=%s view=%s elapsed=%.2fs", filename, active_view, total_dt)
+        app.logger.info(
+            "Analyze FAST PATH done file=%s view=%s elapsed=%.2fs interactive_force_async=%s",
+            filename, active_view, total_dt, interactive_force_async,
+        )
         _log_cache_stats_if_needed("analyze-fast")
         
-        fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        summary_fallback_model = AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        answer_fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
         ai_summary_model, ai_summary_clean = _extract_model_and_strip_comments(ai_summary)
         ai_answer_model, ai_answer_clean = _extract_model_and_strip_comments(ai_answer)
 
         analysis['ai_summary'] = ai_summary_clean
         analysis['ai_answer'] = ai_answer_clean
 
-        ai_summary_model_display = _clean_model_name(ai_summary_model or fallback_model)
-        ai_answer_model_display = _clean_model_name(ai_answer_model or fallback_model)
+        ai_summary_model_display = _clean_model_name(ai_summary_model or summary_fallback_model)
+        ai_answer_model_display = _clean_model_name(ai_answer_model or answer_fallback_model)
         ai_summary_is_valid = bool(
             isinstance(ai_summary_clean, str)
             and ai_summary_clean
@@ -371,16 +408,15 @@ def handle_analyze_file(filename):
                                ai_answer_is_valid=ai_answer_is_valid,
                                ai_is_valid=_ai_is_valid)
 
-    # Per-request timing and budgets to prevent long hangs
+    # Per-request timing and budgets.
+    # Forecast view intentionally has no budget/column cap so all charts are rendered.
     overview_budget_s = float(os.getenv("OVERVIEW_TIME_BUDGET_SEC", "6.0"))
-    # Slightly higher default budget for forecast view to avoid missing plots under normal loads
-    forecast_budget_s = float(os.getenv("FORECAST_TIME_BUDGET_SEC", "60.0"))
-    budget_s = forecast_budget_s if build_forecast or build_interactive else overview_budget_s
-    # Column limits for forecasting - increased to show ALL columns
+    interactive_budget_s = float(os.getenv("INTERACTIVE_TIME_BUDGET_SEC", "90.0"))
+    budget_s = interactive_budget_s if build_interactive else overview_budget_s
     overview_cols_max = int(os.getenv("OVERVIEW_FORECAST_COLS_MAX", "100"))
-    # No practical limit on forecast columns
-    forecast_cols_max = int(os.getenv("FORECAST_COLS_MAX", "100"))
-    cols_limit = forecast_cols_max if build_forecast else overview_cols_max
+    interactive_cols_max = int(os.getenv("INTERACTIVE_FORECAST_COLS_MAX", "80"))
+    cols_limit = interactive_cols_max if build_interactive else overview_cols_max
+    forecast_force_full = bool(build_forecast)
     forecast_done = 0
     skip_forecasts = False
 
@@ -426,10 +462,12 @@ def handle_analyze_file(filename):
 
             # Stop forecasting if time/column limits are exceeded
             # Generate forecasts for any numeric series with sufficient length
-            if build_forecast and not skip_forecasts and len(series) >= 5:
+            if build_forecast and not skip_forecasts and len(series) >= 5 and pct > 0:
                 try:
                     t0 = time.perf_counter()
-                    steps = effective_steps
+                    steps = _steps_for_history_rows(len(series))
+                    if steps <= 0:
+                        continue
                     app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
 
                     # Unified pipeline - use cached helper for cross-view performance
@@ -475,11 +513,16 @@ def handle_analyze_file(filename):
                     dt = time.perf_counter() - t0
                     forecast_done += 1
                     app.logger.info("Forecast done col=%s took=%.2fs steps=%s points=%s", column, dt, steps, len(series))
-                    # Enforce budgets
-                    if (time.perf_counter() - request_start) > budget_s or forecast_done >= cols_limit:
-                        skip_forecasts = True
+                    # Enforce per-column forecast budget to skip ONLY repeated forecasting;
+                    # distribution plots and remaining columns still run.
+                    if (
+                        (not forecast_force_full)
+                        and ((time.perf_counter() - request_start) > budget_s or forecast_done >= cols_limit)
+                    ):
+                        skip_forecasts = True  # Skip forecast computation for subsequent columns
                         app.logger.info(
-                            "Forecast budget reached: elapsed=%.2fs limit=%.2fs cols=%d/%d",
+                            "Forecast budget reached: elapsed=%.2fs limit=%.2fs cols=%d/%d - "
+                            "distribution plots for remaining columns will continue.",
                             time.perf_counter() - request_start, budget_s, forecast_done, cols_limit
                         )
                 except Exception as e:
@@ -499,6 +542,7 @@ def handle_analyze_file(filename):
                 
                 # Generate distribution histogram for this column
                 try:
+                    from data_analysis.analysis.plot import _format_stat_value, _apply_sci_formatter
                     fig, ax = plt.subplots(figsize=(6, 4))
                     series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
                     ax.hist(series_arr, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
@@ -515,9 +559,9 @@ def handle_analyze_file(filename):
                     stats_median = stats['median']
                     stats_std = stats['std']
                     
-                    # Avg and Median vertical lines
-                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {stats_mean:.2f}')
-                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {stats_median:.2f}')
+                    # Avg and Median vertical lines — use _format_stat_value for sci notation on huge numbers
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_stat_value(stats_mean)}')
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {_format_stat_value(stats_median)}')
 
                     # Avg/Med labels next to their lines (like before), but with a mixed transform
                     # to avoid altering y-axis scale.
@@ -526,14 +570,14 @@ def handle_analyze_file(filename):
                     x_offset = (xlim[1] - xlim[0]) * 0.01
                     top_lane = 0.985
                     if stats_mean <= stats_median:
-                        ax.text(stats_mean - x_offset, top_lane, f'Avg: {stats_mean:.2f}', transform=xaxis_transform,
+                        ax.text(stats_mean - x_offset, top_lane, f'Avg: {_format_stat_value(stats_mean)}', transform=xaxis_transform,
                                 va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
-                        ax.text(stats_median + x_offset, top_lane, f'Med: {stats_median:.2f}', transform=xaxis_transform,
+                        ax.text(stats_median + x_offset, top_lane, f'Med: {_format_stat_value(stats_median)}', transform=xaxis_transform,
                                 va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
                     else:
-                        ax.text(stats_median - x_offset, top_lane, f'Med: {stats_median:.2f}', transform=xaxis_transform,
+                        ax.text(stats_median - x_offset, top_lane, f'Med: {_format_stat_value(stats_median)}', transform=xaxis_transform,
                                 va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
-                        ax.text(stats_mean + x_offset, top_lane, f'Avg: {stats_mean:.2f}', transform=xaxis_transform,
+                        ax.text(stats_mean + x_offset, top_lane, f'Avg: {_format_stat_value(stats_mean)}', transform=xaxis_transform,
                                 va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
 
                     ylim = ax.get_ylim()
@@ -559,15 +603,27 @@ def handle_analyze_file(filename):
                         min_xytext = (min_xytext[0], 12)
                         max_xytext = (max_xytext[0], 22)
 
-                    ax.scatter([stats_min], [marker_y], color=min_color, s=100, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {stats_min:.2f}')
-                    ax.scatter([stats_max], [marker_y], color=max_color, s=100, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {stats_max:.2f}')
-                    ax.annotate(f'{stats_min:.2f}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    ax.annotate(f'{stats_max:.2f}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.scatter([stats_min], [marker_y], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}')
+                    ax.scatter([stats_max], [marker_y], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}')
+                    ax.annotate(f'{_format_stat_value(stats_min)}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{_format_stat_value(stats_max)}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
                     
                     # Std in legend only, single-line legend
-                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {stats_std:.2f}')
+                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_stat_value(stats_std)}')
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.34), ncol=6, frameon=False, columnspacing=0.5)
                     fig.subplots_adjust(bottom=0.28, right=0.84)
+                    
+                    # Apply compact B/T y-axis labels for large values.
+                    _apply_sci_formatter(ax)
+                    # Also apply to x-axis for distribution (x = value)
+                    try:
+                        import matplotlib.ticker as _mticker
+                        xmin, xmax = ax.get_xlim()
+                        if max(abs(xmin), abs(xmax)) >= 1e9:
+                            xfmt = _mticker.FuncFormatter(lambda val, _pos: _format_stat_value(float(val)))
+                            ax.xaxis.set_major_formatter(xfmt)
+                    except Exception:
+                        pass
                     
                     buf = io.BytesIO()
                     fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
@@ -669,9 +725,11 @@ def handle_analyze_file(filename):
             # fc_x removed as it was unused
             fc_y = ci_lower = ci_upper = split_x = None
             # Generate forecasts and CI for interactive plots (removed is_timeseries requirement)
-            if build_interactive and not skip_forecasts and len(series) >= 5:
+            if build_interactive and not skip_forecasts and len(series) >= 5 and pct > 0:
                 try:
-                    steps = effective_steps
+                    steps = _steps_for_history_rows(len(series))
+                    if steps <= 0:
+                        continue
                     # Use cached forecast - may already be computed in forecast view
                     fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
                     
@@ -790,10 +848,12 @@ def handle_analyze_file(filename):
                 series = full_series
                 if data_range_rows > 0:
                     series = full_series.tail(data_range_rows)
-                if len(series) >= 5:
+                if len(series) >= 5 and pct > 0:
                     # Detect anomalies for fallback forecast
                     an_idx_fb, _ = get_cached_anomalies(filename, column, full_series, user_contam)
-                    steps = effective_steps
+                    steps = _steps_for_history_rows(len(series))
+                    if steps <= 0:
+                        continue
                     fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
                     title_fc = f"Forecast for {column}"
                     s_hist = series
@@ -943,9 +1003,10 @@ def handle_analyze_file(filename):
     analysis['ai_summary'] = ai_summary
     analysis['ai_answer'] = ai_answer
     
-    fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
-    ai_summary_model = ai_summary_model or fallback_model
-    ai_answer_model = ai_answer_model or fallback_model
+    summary_fallback_model = AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+    answer_fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+    ai_summary_model = ai_summary_model or summary_fallback_model
+    ai_answer_model = ai_answer_model or answer_fallback_model
     
     ai_summary_model_display = _clean_model_name(ai_summary_model)
     ai_answer_model_display = _clean_model_name(ai_answer_model)

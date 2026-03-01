@@ -1,6 +1,8 @@
 
 import io
+import json
 import os
+import re
 import sys
 import time
 import zipfile
@@ -108,6 +110,15 @@ def test_generate_plot_returns_base64():
     img = generate_plot(series, "Trend", "Index", "Value")
     assert isinstance(img, str)
     assert len(img) > 0
+
+
+def test_format_stat_value_uses_billion_trillion_suffixes():
+    """Large numeric labels should use B/T compact notation."""
+    from data_analysis.analysis.plot import _format_stat_value
+
+    assert _format_stat_value(123_456_000_000_000.0) == "123.456T"
+    assert _format_stat_value(1_234_560_000.0) == "1.235B"
+    assert _format_stat_value(12_345.0) == "12345.00"
 
 
 def test_generate_forecast_plot_returns_base64():
@@ -500,6 +511,40 @@ def test_analyze_forecast_data_range_parsing_ratio_and_rows(monkeypatch):
         assert controls_rows["data_range_rows"] == 25
 
 
+def test_analyze_forecast_pct_does_not_overshoot_requested_share(monkeypatch):
+    """For forecast_pct=5%, effective_steps should not exceed 5% visual share target."""
+    filename = "u" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(100, dtype=float)})
+    DATAFRAME_CACHE.set(filename, df)
+
+    captured = {}
+
+    def fake_render_template(_template, **kwargs):
+        captured["analysis"] = kwargs.get("analysis", {})
+        return "ok"
+
+    monkeypatch.setattr(app_module, "render_template", fake_render_template)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "generate_forecast_plot", lambda *_args, **_kwargs: "x")
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _filename, _column, _series, steps: (
+            pd.Series(np.zeros(int(steps), dtype=float), index=pd.RangeIndex(int(steps))),
+            None,
+        ),
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=forecast&forecast_pct=0.05")
+
+    assert response.status_code == 200
+    controls = captured["analysis"]["controls"]
+    assert controls["effective_steps"] == 5
+
+
 def test_upload_redirect_keeps_contamination_param():
     """Upload form settings should propagate contamination into analyze redirect URL."""
     payload = {
@@ -858,6 +903,77 @@ def test_download_full_report_pdf_small_series_includes_trend_and_forecast(monke
     assert any(t.startswith("Forecast: air_temp_c") for t in titles)
 
 
+def test_download_full_report_pdf_forecast_steps_use_non_null_history(monkeypatch):
+    """PDF forecast steps should be computed per column from non-null history rows."""
+    filename = "3" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.concatenate([np.arange(1, 61, dtype=float), np.full(40, np.nan)])})
+    captured_steps: list[int] = []
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    def fake_get_cached_column_forecast(_filename, _column, _series, steps):
+        captured_steps.append(int(steps))
+        idx = pd.RangeIndex(int(steps))
+        fc = pd.Series(np.zeros(int(steps), dtype=float), index=idx)
+        ci = pd.DataFrame({"lower": fc - 0.1, "upper": fc + 0.1}, index=idx)
+        return fc, ci
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0.2")
+
+    assert response.status_code == 200
+    assert captured_steps
+    # 60 non-null rows => floor(60 * 0.2 / 0.8) = 15
+    assert captured_steps[0] == 15
+
+
+def test_download_full_report_pdf_complex_ai_summary_renders(monkeypatch):
+    """Complex heading/list AI summaries should still render as PDF without errors."""
+    filename = "6" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(1, 51, dtype=float)})
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+
+    ai_html = (
+        "<h3>Prognosis &amp; Future Outlook</h3>"
+        "<p>Based on observed trends and patterns, several plausible future directions can be identified:</p>"
+        "<ul>"
+        "<li><strong>Expected Continuations:</strong>"
+        "<ul>"
+        "<li>Continuation A with confidence high.</li>"
+        "<li>Continuation B with confidence medium.</li>"
+        "<li>Continuation C with confidence medium.</li>"
+        "</ul>"
+        "</li>"
+        "<li><strong>Potential Risks:</strong>"
+        "<ul>"
+        "<li>Risk A that may influence forecast reliability.</li>"
+        "<li>Risk B related to data quality and temporal context.</li>"
+        "</ul>"
+        "</li>"
+        "</ul>"
+        "<h3>Actionable Observations</h3>"
+        "<ul><li>Recommendation 1</li><li>Recommendation 2</li></ul>"
+    )
+    monkeypatch.setattr(app_module, "_get_clean_ai_summary_from_cache", lambda _filename: ai_html)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0.05")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert response.data.startswith(b"%PDF")
+
+
 def test_api_interactive_returns_cached_payload_when_available():
     """Interactive API should return cached data without recomputing when cache is warm."""
     filename = "a" * 40 + ".csv"
@@ -901,6 +1017,161 @@ def test_api_interactive_returns_full_history_and_distribution(monkeypatch):
         assert len(history_trace["x"]) == 250
         assert len(history_trace["y"]) == 250
         assert len(first["distribution"]["values"]) == 250
+
+
+def test_analyze_interactive_large_dataset_defers_inline_payload(monkeypatch):
+    """Large interactive datasets should skip inline payload and load via async API."""
+    filename = "9" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(0, 60001, dtype=float)})
+
+    DATAFRAME_CACHE.set(filename, df)
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=interactive&forecast_pct=0.05&contamination=0.02")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    match = re.search(r'<script id="interactivePayload" type="application/json">(.*?)</script>', html, flags=re.DOTALL)
+    assert match is not None
+    payload = json.loads(match.group(1))
+    assert payload == []
+
+
+def test_api_interactive_forecast_visual_share_matches_pct(monkeypatch):
+    """forecast_pct should map to approximately the same x-axis share in interactive charts."""
+    filename = "8" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.arange(1, 101, dtype=float)})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    def _fake_forecast(_f, _c, _s, steps):
+        idx = pd.RangeIndex(int(steps))
+        fc = pd.Series(np.linspace(0.0, 1.0, int(steps), dtype=float), index=idx)
+        ci = pd.DataFrame({"lower": fc - 0.1, "upper": fc + 0.1}, index=idx)
+        return fc, ci
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", _fake_forecast)
+
+    with app.test_client() as client:
+        response = client.get(f"/api/interactive/{filename}?forecast_pct=0.05&contamination=0.02")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    first = payload["data"][0]
+    history_n = len(first["traces"][0]["x"])
+    x_range = first["layout"]["xaxis"]["range"]
+    total_extent = float(x_range[1]) if isinstance(x_range, list) and len(x_range) >= 2 else float(history_n)
+    forecast_span = max(0.0, total_extent - float(history_n))
+    share = forecast_span / total_extent if total_extent > 0 else 0.0
+    assert 0.045 <= share <= 0.05
+
+
+def test_api_interactive_forecast_share_uses_non_null_history_length(monkeypatch):
+    """20% forecast should not overshoot when a column has many NaN values."""
+    filename = "5" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    values = np.concatenate([np.arange(1, 61, dtype=float), np.full(40, np.nan)])
+    df = pd.DataFrame({"value": values})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    captured_steps: list[int] = []
+
+    def _fake_forecast(_f, _c, _s, steps):
+        s = int(steps)
+        captured_steps.append(s)
+        idx = pd.RangeIndex(s)
+        fc = pd.Series(np.linspace(0.0, 1.0, s, dtype=float), index=idx)
+        ci = pd.DataFrame({"lower": fc - 0.1, "upper": fc + 0.1}, index=idx)
+        return fc, ci
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", _fake_forecast)
+
+    with app.test_client() as client:
+        response = client.get(f"/api/interactive/{filename}?forecast_pct=0.2&contamination=0.02")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    first = payload["data"][0]
+    assert captured_steps
+
+    # Non-null history length is 60; for 20% target we expect floor(60 * 0.2 / 0.8) = 15.
+    assert captured_steps[0] == 15
+
+    history_n = len(first["traces"][0]["x"])
+    x_range = first["layout"]["xaxis"]["range"]
+    total_extent = float(x_range[1]) if isinstance(x_range, list) and len(x_range) >= 2 else float(history_n)
+    forecast_span = max(0.0, total_extent - float(history_n))
+    share = forecast_span / total_extent if total_extent > 0 else 0.0
+    assert share <= 0.2 + 1e-9
+
+
+def test_api_interactive_returns_all_numeric_columns_not_first_eight(monkeypatch):
+    """Interactive API should include all numeric columns by default."""
+    filename = "7" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    data = {f"col_{i}": np.arange(1, 41, dtype=float) + i for i in range(12)}
+    df = pd.DataFrame(data)
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/api/interactive/{filename}?forecast_pct=0&contamination=0.02")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    cols = [item.get("column") for item in payload["data"]]
+    assert len(cols) == 12
+    assert set(cols) == set(df.columns)
+
+
+def test_api_interactive_anomalies_snap_to_displayed_history_points(monkeypatch):
+    """Anomaly markers should stay on visible history points after downsampling."""
+    filename = "6" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.arange(0, 20001, dtype=float)})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    an_idx = pd.Index([3, 15001], dtype="int64", name="__pos__")
+    an_score = pd.Series([0.9, 0.8], index=an_idx)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (an_idx, an_score))
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/api/interactive/{filename}?forecast_pct=0&contamination=0.02")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    first = payload["data"][0]
+    traces = first.get("traces", [])
+    hist = next(t for t in traces if str(t.get("name", "")).lower() == "history")
+    anom = next(t for t in traces if str(t.get("name", "")).lower() == "anomaly")
+    hist_x = set(int(v) for v in hist.get("x", []))
+    anom_x = [int(v) for v in anom.get("x", [])]
+    assert anom_x
+    assert all(x in hist_x for x in anom_x)
 
 
 def test_api_interactive_cache_key_includes_request_params(monkeypatch):
@@ -971,6 +1242,38 @@ def test_static_plots_zip_caps_forecast_steps(monkeypatch):
         assert response.status_code == 200
 
     assert captured.get("steps") == 120
+
+
+def test_static_plots_zip_forecast_pct_uses_non_null_history(monkeypatch):
+    """ZIP forecast steps should honor forecast_pct per column history length."""
+    filename = "4" * 40 + ".csv"
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.concatenate([np.arange(1, 61, dtype=float), np.full(40, np.nan)])})
+    captured: dict[str, int] = {}
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    def fake_get_cached_column_forecast(_filename, _column, _series, steps):
+        captured["steps"] = int(steps)
+        idx = pd.RangeIndex(int(steps))
+        return pd.Series(np.zeros(int(steps)), index=idx), None
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+    monkeypatch.setattr(
+        app_module,
+        "generate_forecast_plot",
+        lambda *_args, **_kwargs: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII=",
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip?forecast_pct=0.2")
+        assert response.status_code == 200
+
+    # 60 non-null rows => floor(60 * 0.2 / 0.8) = 15
+    assert captured.get("steps") == 15
 
 
 def test_static_plots_zip_includes_category_images(monkeypatch):

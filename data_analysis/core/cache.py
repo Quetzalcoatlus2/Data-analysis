@@ -13,7 +13,7 @@ _MISSING = object()
 class TinyLRU(OrderedDict[Any, Any]):
     """Small LRU cache with optional memory-size based eviction."""
 
-    def __init__(self, max_items: int = 6, max_size_mb: int | None = None):
+    def __init__(self, max_items: int = 6, max_size_mb: float | None = None):
         super().__init__()
         self.max_items = max_items
         self.max_size_mb = max_size_mb

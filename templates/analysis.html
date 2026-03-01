@@ -9,14 +9,14 @@
   <!-- Preconnect to CDN for faster Plotly loading -->
   <link rel="preconnect" href="https://cdn.plot.ly" crossorigin>
   <link rel="dns-prefetch" href="https://cdn.plot.ly">
-  
-  
+
+
   {% set active_view = request.args.get('view', 'overview') %}
   {% if active_view in ['interactive', 'correlation'] %}
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   {% endif %}
-  
-  
+
+
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260228-scrollfix') }}">
   <script src="{{ url_for('static', filename='js/analysis.js', v='20260228-scrollfix') }}" defer></script>
@@ -67,7 +67,7 @@
           report
           (PDF)</a>
         <a class="pill" title="Download all static plots as ZIP"
-          href="{{ url_for('api.download_static_plots_zip', filename=filename, display=display_name, contamination=contam, data_range=data_range, selected_col=selected_col) }}">Images
+          href="{{ url_for('api.download_static_plots_zip', filename=filename, display=display_name, forecast_pct=pct, contamination=contam, data_range=data_range, selected_col=selected_col) }}">Images
           ZIP</a>
         <a class="pill" title="Download AI summary (HTML)"
           href="{{ url_for('api.download_ai_summary_html', filename=filename, display=display_name, contamination=contam, data_range=data_range, selected_col=selected_col) }}">AI
@@ -87,7 +87,7 @@
   <main class="container" style="width:100%; margin:0; padding:0">
 
     {% if active_view == 'interactive' %}
-    
+
     {% endif %}
 
 
@@ -182,7 +182,7 @@
           style="flex:1; background: var(--panel); color: var(--text); border:1px solid var(--border); border-radius:8px; padding:8px" />
         <button id="askBtn" type="submit" class="btn" disabled>Ask</button>
       </form>
-      
+
 
       {% if analysis.user_question %}
       <div id="ai-question-display" class="muted" style="margin-top:8px">Question: {{ analysis.user_question }}</div>
@@ -196,7 +196,7 @@
       {% endif %}
 
       <!-- Scroll-to-answer script - placed AFTER the elements it needs to find -->
-      
+
     </section>
 
     {# Note: Scroll position is preserved via sessionStorage, so we don't auto-scroll anymore #}
@@ -509,7 +509,19 @@
 
     <script>
       const ipEl = document.getElementById('interactivePayload');
-      let interactivePayload = JSON.parse((ipEl && ipEl.textContent) || '[]');
+      const payloadText = (ipEl && ipEl.textContent) || '[]';
+      const maxInlinePayloadChars = 2_000_000; // avoid parsing oversized inline JSON blobs
+      let interactivePayload = [];
+      try {
+        if (payloadText.length <= maxInlinePayloadChars) {
+          interactivePayload = JSON.parse(payloadText);
+        } else {
+          console.warn('Inline interactive payload too large, falling back to async API load.');
+        }
+      } catch (e) {
+        console.warn('Inline interactive payload parse failed, falling back to async API load.', e);
+        interactivePayload = [];
+      }
       const cfgEl = document.getElementById('interactiveConfig');
       const config = JSON.parse((cfgEl && cfgEl.textContent) || '{}');
       const filename = config.filename || null;
@@ -645,10 +657,39 @@
         }
         return `rgba(90,90,160,${alpha || 1})`;
       }
+
+      /**
+       * Format a numeric statistic value for display.
+       * Values >= 1e14 (100 trillion) use scientific notation (e.g. 9.756e+17)
+       * to avoid long raw numbers overflowing chart labels.
+       */
+      function formatStat(v, decimals) {
+        if (!Number.isFinite(v)) return String(v);
+        if (Math.abs(v) >= 1e14) return v.toExponential(3);
+        return v.toFixed(decimals !== undefined ? decimals : 2);
+      }
       // Helper function to get the selected data range percentage
       function getDataRangePct() {
         const el = document.getElementById('dataRangePick');
         return el ? parseFloat(el.value) || 1.0 : 1.0;
+      }
+
+      function getForecastPct() {
+        const ids = ['forecastPctSelect', 'forecastPctSelectTop'];
+        for (const id of ids) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          const parsed = parseFloat(el.value || '');
+          if (Number.isFinite(parsed)) return Math.max(0, Math.min(0.5, parsed));
+        }
+        try {
+          const raw = new URLSearchParams(window.location.search).get('forecast_pct');
+          const parsed = parseFloat(raw || '0.05');
+          if (Number.isFinite(parsed)) return Math.max(0, Math.min(0.5, parsed));
+        } catch (e) {
+          // ignore
+        }
+        return 0.05;
       }
 
       function applyDataRangeFromUrl() {
@@ -969,6 +1010,8 @@
         // Strictly filter to main data traces - ignore CI, Avg/Med, stat markers, anomalies
         let yMin = Infinity, yMax = -Infinity;
         let xMin = null, xMax = null;
+        let historyXMin = null, historyXMax = null;
+        let forecastXMax = null;
         traces.forEach((tr, idx) => {
           const nm = (tr.name || '').toLowerCase();
           // ONLY include History and Forecast traces
@@ -988,6 +1031,15 @@
           if (xVals.length > 0) {
             if (xMin === null || xVals[0] < xMin) xMin = xVals[0];
             if (xMax === null || xVals[xVals.length - 1] > xMax) xMax = xVals[xVals.length - 1];
+            if (isHistory) {
+              if (historyXMin === null || xVals[0] < historyXMin) historyXMin = xVals[0];
+              if (historyXMax === null || xVals[xVals.length - 1] > historyXMax) historyXMax = xVals[xVals.length - 1];
+            }
+            if (isForecast) {
+              if (forecastXMax === null || xVals[xVals.length - 1] > forecastXMax) {
+                forecastXMax = xVals[xVals.length - 1];
+              }
+            }
           }
         });
         // Apply a 5% padding to the range for visual breathing room (smaller padding = bigger data)
@@ -996,6 +1048,28 @@
           layout.yaxis = layout.yaxis || {};
           layout.yaxis.range = [yMin - padding, yMax + padding];
           layout.yaxis.autorange = false;  // Disable Plotly's autorange
+          if (Math.max(Math.abs(yMin), Math.abs(yMax)) >= 1e14) {
+            layout.yaxis.exponentformat = 'e';
+            layout.yaxis.showexponent = 'all';
+          }
+        }
+
+        // Keep forecast span at or below selected forecast_pct in the visible window.
+        // This prevents range-filtered views from visually stretching forecast beyond target.
+        const forecastPct = getForecastPct();
+        if (
+          Number.isFinite(forecastPct) &&
+          forecastPct > 0 &&
+          forecastPct < 1 &&
+          historyXMin !== null &&
+          historyXMax !== null &&
+          forecastXMax !== null
+        ) {
+          const historySpan = Math.max(0, historyXMax - historyXMin);
+          const pctDen = Math.max(1e-9, 1 - forecastPct);
+          const maxForecastSpan = historySpan * (forecastPct / pctDen);
+          const maxAllowedX = historyXMax + maxForecastSpan;
+          if (xMax !== null) xMax = Math.min(xMax, maxAllowedX);
         }
 
         // Always fit X-axis to the visible data range
@@ -1040,7 +1114,7 @@
           traces.push({
             type: 'scatter',
             mode: 'lines',
-            name: `Avg: ${s.mean.toFixed(2)}`,
+            name: `Avg: ${formatStat(s.mean)}`,
             x: [chartXMin, chartXMax],
             y: [s.mean, s.mean],
             line: { color: avgColor, width: 2, dash: 'dot' },
@@ -1052,7 +1126,7 @@
           traces.push({
             type: 'scatter',
             mode: 'lines',
-            name: `Med: ${s.median.toFixed(2)}`,
+            name: `Med: ${formatStat(s.median)}`,
             x: [chartXMin, chartXMax],
             y: [s.median, s.median],
             line: { color: medColor, width: 1.5, dash: 'dashdot' },
@@ -1064,7 +1138,7 @@
           traces.push({
             type: 'scatter',
             mode: 'markers',
-            name: `Std: ${s.std.toFixed(2)}`,
+            name: `Std: ${formatStat(s.std)}`,
             x: [chartXMin],
             y: [s.mean],
             marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
@@ -1091,11 +1165,11 @@
             traces.push({
               type: 'scatter',
               mode: 'markers+text',
-              name: `Min: ${filteredMin.toFixed(2)}`,
+              name: `Min: ${formatStat(filteredMin)}`,
               x: [xVals[minIdx]],
               y: [filteredMin],
-              marker: { color: minColor, size: 12, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
-              text: [filteredMin.toFixed(2)],
+              marker: { color: minColor, size: 7, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
+              text: [formatStat(filteredMin)],
               textposition: 'bottom right',
               textfont: { size: 9, color: minColor },
               hoverinfo: 'name+y',
@@ -1107,11 +1181,11 @@
             traces.push({
               type: 'scatter',
               mode: 'markers+text',
-              name: `Max: ${filteredMax.toFixed(2)}`,
+              name: `Max: ${formatStat(filteredMax)}`,
               x: [xVals[maxIdx]],
               y: [filteredMax],
-              marker: { color: maxColor, size: 12, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
-              text: [filteredMax.toFixed(2)],
+              marker: { color: maxColor, size: 7, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
+              text: [formatStat(filteredMax)],
               textposition: 'top right',
               textfont: { size: 9, color: maxColor },
               hoverinfo: 'name+y',
@@ -1126,14 +1200,14 @@
           if (s.mean > s.median) {
             // Mean is higher - Avg on top (yanchor: bottom), Med below (yanchor: top)
             layout.annotations.push(
-              { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' },
-              { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top', name: 'med-annot' }
+              { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' },
+              { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top', name: 'med-annot' }
             );
           } else {
             // Median is higher - Med on top (yanchor: bottom), Avg below (yanchor: top)
             layout.annotations.push(
-              { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' },
-              { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'top', name: 'avg-annot' }
+              { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' },
+              { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'top', name: 'avg-annot' }
             );
           }
 
@@ -1304,6 +1378,18 @@
             hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
           };
 
+          const distAbsMax = distValues.reduce((acc, v) => {
+            const n = Number(v);
+            if (!Number.isFinite(n)) return acc;
+            return Math.max(acc, Math.abs(n));
+          }, 0);
+          if (distAbsMax >= 1e14) {
+            distLayout.xaxis = Object.assign({}, distLayout.xaxis || {}, {
+              exponentformat: 'e',
+              showexponent: 'all'
+            });
+          }
+
           // Build traces array starting with histogram
           const distTraces = [{
             type: 'histogram',
@@ -1338,7 +1424,7 @@
             distTraces.push({
               type: 'scatter',
               mode: 'lines',
-              name: `Avg: ${s.mean.toFixed(2)}`,
+              name: `Avg: ${formatStat(s.mean)}`,
               x: [s.mean, s.mean],
               y: [0.95, 1],  // Short segment at top (paper coords won't work, but this gives legend styling)
               yaxis: 'y2',  // Use secondary y-axis to avoid interfering with histogram
@@ -1352,7 +1438,7 @@
             distTraces.push({
               type: 'scatter',
               mode: 'lines',
-              name: `Med: ${s.median.toFixed(2)}`,
+              name: `Med: ${formatStat(s.median)}`,
               x: [s.median, s.median],
               y: [0.95, 1],  // Short segment at top
               yaxis: 'y2',  // Use secondary y-axis
@@ -1379,11 +1465,11 @@
             distTraces.push({
               type: 'scatter',
               mode: 'markers+text',
-              name: `Min: ${s.min.toFixed(2)}`,
+              name: `Min: ${formatStat(s.min)}`,
               x: [s.min],
               y: [0],
               marker: { color: minColor, size: 12, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
-              text: [`Min: ${s.min.toFixed(2)}`],
+              text: [`Min: ${formatStat(s.min)}`],
               textposition: 'bottom center',
               textfont: { size: 9, color: minColor },
               hoverinfo: 'text',
@@ -1393,11 +1479,11 @@
             distTraces.push({
               type: 'scatter',
               mode: 'markers+text',
-              name: `Max: ${s.max.toFixed(2)}`,
+              name: `Max: ${formatStat(s.max)}`,
               x: [s.max],
               y: [0],
               marker: { color: maxColor, size: 12, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
-              text: [`Max: ${s.max.toFixed(2)}`],
+              text: [`Max: ${formatStat(s.max)}`],
               textposition: 'bottom center',
               textfont: { size: 9, color: maxColor },
               hoverinfo: 'text',
@@ -1407,7 +1493,7 @@
             distTraces.push({
               type: 'scatter',
               mode: 'markers',
-              name: `Std: ${s.std.toFixed(2)}`,
+              name: `Std: ${formatStat(s.std)}`,
               x: [s.mean],
               y: [0],
               marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
@@ -1422,14 +1508,14 @@
             if (s.mean <= s.median) {
               // Mean is on the left, Median is on the right
               distLayout.annotations = [
-                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'right', yanchor: 'bottom', name: 'avg-annot' },
-                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' }
+                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'right', yanchor: 'bottom', name: 'avg-annot' },
+                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' }
               ];
             } else {
               // Median is on the left, Mean is on the right
               distLayout.annotations = [
-                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${s.median.toFixed(1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'right', yanchor: 'bottom', name: 'med-annot' },
-                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${s.mean.toFixed(1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' }
+                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'right', yanchor: 'bottom', name: 'med-annot' },
+                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' }
               ];
             }
 
