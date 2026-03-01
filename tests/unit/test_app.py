@@ -1175,7 +1175,7 @@ def test_api_interactive_anomalies_snap_to_displayed_history_points(monkeypatch)
     traces = first.get("traces", [])
     hist = next(t for t in traces if str(t.get("name", "")).lower() == "history")
     anom = next(t for t in traces if str(t.get("name", "")).lower() == "anomaly")
-    hist_x = set(int(v) for v in hist.get("x", []))
+    hist_x = {int(v) for v in hist.get("x", [])}
     anom_x = [int(v) for v in anom.get("x", [])]
     assert anom_x
     assert all(x in hist_x for x in anom_x)

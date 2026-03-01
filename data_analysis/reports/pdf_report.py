@@ -716,7 +716,7 @@ def handle_download_full_report_pdf(filename):
                     pdf.set_font(default_font, '', font_size_int)  # data is regular
                     max_rows_for_width = 150
                     data_widths: list[float] = []
-                    for col_pos, col_name in enumerate(chunk_headers):
+                    for col_pos, _ in enumerate(chunk_headers):
                         source_col = chunk_cols[col_pos]
                         series_values = [str(v) for v in df_display[source_col].iloc[:max_rows_for_width]]
                         max_data_w = max((pdf.get_string_width(v) for v in series_values), default=0.0) + 2.0

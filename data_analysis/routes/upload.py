@@ -72,7 +72,7 @@ def handle_upload_file():
                 try:
                     size_bytes = os.path.getsize(final_path)
                     if size_bytes <= app.config['AI_FULL_UPLOAD_MAX_MB'] * 1024 * 1024:
-                        uploaded = getattr(_get_genai(), "upload_file")(
+                        uploaded = _get_genai().upload_file(
                             path=final_path,
                             mime_type="text/csv",
                             display_name=orig_name,

@@ -4,9 +4,11 @@ import json
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Any, Callable, Iterable
+from typing import Any
+from collections.abc import Callable, Iterable
 
 import pandas as pd
+import contextlib
 
 SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
 
@@ -14,7 +16,7 @@ SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
 def _load_name_map(name_map_path: str, logger: Any | None = None) -> dict[str, Any] | None:
     try:
         if os.path.exists(name_map_path):
-            with open(name_map_path, "r", encoding="utf-8") as handle:
+            with open(name_map_path, encoding="utf-8") as handle:
                 loaded = json.load(handle)
             return loaded if isinstance(loaded, dict) else {}
     except Exception as exc:
@@ -110,23 +112,23 @@ def read_json_fallback(path: str, *, supported_encodings: Iterable[str] | None =
     encodings = list(supported_encodings or SUPPORTED_ENCODINGS)
     for enc in encodings:
         try:
-            with open(path, "r", encoding=enc, errors="strict") as handle:
+            with open(path, encoding=enc, errors="strict") as handle:
                 return pd.read_json(handle, orient="records")
         except UnicodeDecodeError as exc:
             last_err = exc
             continue
         except ValueError:
             try:
-                with open(path, "r", encoding=enc, errors="strict") as handle:
+                with open(path, encoding=enc, errors="strict") as handle:
                     return pd.read_json(handle, lines=True)
             except Exception:
                 continue
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        with open(path, encoding="utf-8", errors="replace") as handle:
             return pd.read_json(handle, orient="records")
     except ValueError:
         try:
-            with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            with open(path, encoding="utf-8", errors="replace") as handle:
                 return pd.read_json(handle, lines=True)
         except Exception:
             pass
@@ -153,10 +155,8 @@ def read_excel_smart(path: str) -> pd.DataFrame:
                                             df[cand] = dt
                                     except Exception:
                                         pass
-                                try:
+                                with contextlib.suppress(Exception):
                                     df = df.set_index(cand)
-                                except Exception:
-                                    pass
                                 break
                         else:
                             first_col = df.columns[0]
@@ -347,10 +347,8 @@ def get_dataframe_for(
                 logger.info("get_dataframe_for: reader returned non-DataFrame for %s", filename)
             return None
 
-        try:
+        with contextlib.suppress(Exception):
             df = df.dropna(axis=1, how="all")
-        except Exception:
-            pass
 
         try:
             if isinstance(df.index, pd.DatetimeIndex) and len(df.index) >= 20:
@@ -436,10 +434,8 @@ def get_dataframe_for(
                     # Do not drop the column so it remains available in tables
                     df.index = ts
                     df.index.name = picked
-                    try:
+                    with contextlib.suppress(Exception):
                         df = df[ts.notna()].sort_index()
-                    except Exception:
-                        pass
         except Exception as exc:
             if logger is not None:
                 logger.debug("get_dataframe_for: datetime inference skipped: %s", exc)

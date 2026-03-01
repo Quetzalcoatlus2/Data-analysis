@@ -863,7 +863,7 @@ if __name__ == "__main__":
     rate_limit = os.getenv("RATE_LIMIT")
     if Limiter and rate_limit:
         try:
-            limiter = Limiter(get_remote_address, app=app, default_limits=[rate_limit])
+            Limiter(get_remote_address, app=app, default_limits=[rate_limit])
             app.logger.info("Rate limiting enabled: %s", rate_limit)
         except Exception as e:
             app.logger.warning("Limiter init failed: %s", e)

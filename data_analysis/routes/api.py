@@ -399,7 +399,7 @@ def handle_api_interactive_data(filename):
         extent_int = int(max(1, total_x_extent))
         if extent_int > tick_count:
             raw_ticks = np.linspace(0, extent_int - 1, num=tick_count, dtype=float).tolist()
-            tv_num = sorted(set(int(round(v)) for v in raw_ticks))
+            tv_num = sorted({int(round(v)) for v in raw_ticks})
             if tv_num[-1] != extent_int - 1:
                 tv_num.append(extent_int - 1)
         else:

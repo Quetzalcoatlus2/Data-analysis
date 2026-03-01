@@ -11,6 +11,7 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from matplotlib.transforms import blended_transform_factory
+import contextlib
 
 
 # ---------------------------------------------------------------------------
@@ -575,10 +576,8 @@ def generate_forecast_plot(
     ax.grid(True, alpha=0.3)
 
     # Keep headroom/side room so value tags can stay fully visible.
-    try:
+    with contextlib.suppress(Exception):
         ax.margins(x=0.06)
-    except Exception:
-        pass
     
     # Improve X-axis readability
     try:
@@ -683,10 +682,8 @@ def generate_forecast_plot(
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_stat_value(hist_std)}')
 
         # Reserve space for the right-side Avg/Med label lane.
-        try:
+        with contextlib.suppress(Exception):
             fig.subplots_adjust(right=0.84)
-        except Exception:
-            pass
 
         # Legend on single line - below x-axis title (Index)
         legend_anchor = -0.30 if legend_y is None else legend_y
@@ -957,10 +954,8 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
     except Exception as e:
         if fig is not None:
             plt.close(fig)
-        try:
+        with contextlib.suppress(Exception):
             rt.app.logger.debug("generate_correlation_heatmap failed (%s): %s", method, e)
-        except Exception:
-            pass
         return None
 
 

@@ -113,7 +113,7 @@ def test_get_dataframe_for_year_index_uses_real_years_not_epoch_ns(tmp_path):
 
     assert df is not None
     if isinstance(df.index, pd.DatetimeIndex):
-        years = set(int(y) for y in df.index.year.tolist())
+        years = {int(y) for y in df.index.year.tolist()}
         assert years == {2000, 2001, 2002}
     elif 'year' not in [str(c).lower() for c in df.columns]:
         # Year was absorbed into index by datetime inference — check index values

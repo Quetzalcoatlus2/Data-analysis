@@ -3,7 +3,8 @@ from __future__ import annotations
 import io
 import json
 import html as htmllib
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd

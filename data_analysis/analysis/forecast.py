@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from data_analysis.runtime_app import *
+import contextlib
 
 _LOCAL_SYMBOLS = {
     '_LOCAL_SYMBOLS',
@@ -180,10 +181,8 @@ def _infer_future_index(idx, steps):
             offset = pd.Timedelta(hours=1)
         
         # Debug logging
-        try:
+        with contextlib.suppress(Exception):
             app.logger.debug("Forecast: %d steps, offset=%s, last_date=%s, forecast_end=%s", steps, offset, idx[-1], idx[-1] + offset * steps)
-        except Exception:
-            pass
         
         # Generate future timestamps manually to ensure correct spacing
         start = idx[-1]
@@ -208,9 +207,7 @@ def _infer_seasonal_period(idx, min_seasons=2):
     f = freq.upper()
     if f.startswith("H"):
         period = 24
-    elif f.startswith("T") or f.startswith("MIN"):
-        period = 60
-    elif f.startswith("S"):
+    elif f.startswith("T") or f.startswith("MIN") or f.startswith("S"):
         period = 60
     elif f.startswith("D"):
         period = 7

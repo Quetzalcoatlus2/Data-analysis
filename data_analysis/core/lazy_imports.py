@@ -93,7 +93,7 @@ def get_isolation_forest() -> Any:
         with _SKLEARN_LOCK:
             if _ISOLATION_FOREST is None:
                 module = importlib.import_module("sklearn.ensemble")
-                _ISOLATION_FOREST = getattr(module, "IsolationForest")
+                _ISOLATION_FOREST = module.IsolationForest
     return _ISOLATION_FOREST
 
 
@@ -104,7 +104,7 @@ def get_stl() -> Any:
         with _STL_LOCK:
             if _STL_CLASS is None:
                 module = importlib.import_module("statsmodels.tsa.seasonal")
-                _STL_CLASS = getattr(module, "STL")
+                _STL_CLASS = module.STL
     return _STL_CLASS
 
 
