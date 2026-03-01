@@ -32,8 +32,13 @@ _LOCAL_SYMBOLS = {
 }
 
 
+
 def _bind_runtime_globals():
     import data_analysis.runtime_app as rt
+
+    sync = getattr(rt, "_sync_ai_engine_state", None)
+    if callable(sync):
+        sync()
 
     g = globals()
     for key, value in rt.__dict__.items():
@@ -442,16 +447,28 @@ def handle_download_full_report_pdf(filename):
             return text
 
         def _format_plot_value(value: float) -> str:
-            """Compact stat labels for charts with B/T suffixes for large values."""
+            """Compact stat labels for charts with K/M/B/T suffixes."""
             try:
                 v = float(value)
-                if math.isfinite(v):
-                    mag = abs(v)
-                    if mag >= 1e12:
-                        return f"{v / 1e12:.3f}T"
-                    if mag >= 1e9:
-                        return f"{v / 1e9:.3f}B"
-                return f"{v:.2f}"
+                if not math.isfinite(v):
+                    return f"{v:.2f}"
+                mag = abs(v)
+                if mag >= 1e15:
+                    return f"{v:.3e}"
+                if mag >= 1e12:
+                    raw = f"{v / 1e12:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "T"
+                if mag >= 1e9:
+                    raw = f"{v / 1e9:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "B"
+                if mag >= 1e6:
+                    raw = f"{v / 1e6:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "M"
+                if mag >= 1e3:
+                    raw = f"{v / 1e3:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "K"
+                raw = f"{v:.2f}"
+                return raw.rstrip("0").rstrip(".")
             except Exception:
                 return str(value)
 
@@ -512,33 +529,33 @@ def handle_download_full_report_pdf(filename):
                         body_plain = re.sub(r"<[^>]+>", " ", body_html)
                         body_plain = re.sub(r"\s+", " ", body_plain).strip()
 
-                        # If the heading has no meaningful body, skip it to avoid
-                        # creating a near-empty page with a single title line.
-                        if len(body_plain) <= 2:
-                            cursor = end_of_block
-                            continue
-
                         first_context_text, is_list_context = _extract_first_context_text(body_html)
                         if not first_context_text:
-                            cursor = end_of_block
-                            continue
+                            first_context_text = body_plain
 
                         available_width = float(pdf.w - pdf.l_margin - pdf.r_margin - 1.0)
-                        first_context_lines = _estimate_wrapped_lines(pdf, first_context_text, available_width)
-                        first_context_lines = max(1, min(6, first_context_lines))
+                        if first_context_text:
+                            first_context_lines = _estimate_wrapped_lines(pdf, first_context_text, available_width)
+                            first_context_lines = max(1, min(6, first_context_lines))
+                        else:
+                            first_context_lines = 0
 
                         heading_mm = 8.0
                         heading_gap_mm = 2.0
                         line_mm = 5.0
-                        # Extra context guard: if only heading + one short paragraph fits,
-                        # defer section to next page.
-                        extra_context_mm = 4.0 if is_list_context else 5.0
-                        min_block_space = (
-                            heading_mm
-                            + heading_gap_mm
-                            + (line_mm * float(first_context_lines))
-                            + extra_context_mm
-                        )
+                        if first_context_lines > 0:
+                            # Extra context guard: if only heading + one short paragraph fits,
+                            # defer section to next page.
+                            extra_context_mm = 4.0 if is_list_context else 5.0
+                            min_block_space = (
+                                heading_mm
+                                + heading_gap_mm
+                                + (line_mm * float(first_context_lines))
+                                + extra_context_mm
+                            )
+                        else:
+                            # Heading-only blocks should still render, but avoid orphaning near footer.
+                            min_block_space = heading_mm + heading_gap_mm + 8.0
 
                         # Preserve nested list structure but keep at least one bullet with
                         # heading+intro when body pattern is paragraph -> list.

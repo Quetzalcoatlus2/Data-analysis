@@ -18,8 +18,13 @@ _LOCAL_SYMBOLS = {
 }
 
 
+
 def _bind_runtime_globals():
     import data_analysis.runtime_app as rt
+
+    sync = getattr(rt, "_sync_ai_engine_state", None)
+    if callable(sync):
+        sync()
 
     g = globals()
     for key, value in rt.__dict__.items():

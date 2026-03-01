@@ -147,17 +147,36 @@ apply_default_config(app)
 os.environ.setdefault("NO_COLOR", "1")
 log_level = configure_logging(app)
 
-DEFAULT_AI_MODEL = ai_engine.DEFAULT_AI_MODEL
-MODEL_CACHE = ai_engine.MODEL_CACHE
-CURRENT_MODEL_NAME = ai_engine.CURRENT_MODEL_NAME
-AI_STATUS = ai_engine.AI_STATUS
-AI_ENABLED = ai_engine.AI_ENABLED
-model = ai_engine.model
-AI_CONFIG_ATTEMPTED = ai_engine.AI_CONFIG_ATTEMPTED
+# AI state variables - synchronized from ai_engine at runtime
+DEFAULT_AI_MODEL: str = cast(str, None)
+MODEL_CACHE: dict = cast(dict, None)
+CURRENT_MODEL_NAME: str = cast(str, None)
+AI_STATUS: dict = cast(dict, None)
+AI_ENABLED: bool = cast(bool, None)
+model: Any = cast(Any, None)
+AI_CONFIG_ATTEMPTED: bool = cast(bool, None)
+RATE_LIMITED_MODELS: set = cast(set, None)
+RATE_LIMIT_COOLDOWN_SECONDS: int = cast(int, None)
 
-# Track rate-limited models with cooldown timestamps
-RATE_LIMITED_MODELS = ai_engine.RATE_LIMITED_MODELS
-RATE_LIMIT_COOLDOWN_SECONDS = ai_engine.RATE_LIMIT_COOLDOWN_SECONDS
+
+def _sync_ai_engine_state() -> None:
+    """Mirror mutable AI engine state into runtime_app globals."""
+    global DEFAULT_AI_MODEL, MODEL_CACHE, CURRENT_MODEL_NAME, AI_STATUS
+    global AI_ENABLED, model, AI_CONFIG_ATTEMPTED
+    global RATE_LIMITED_MODELS, RATE_LIMIT_COOLDOWN_SECONDS
+
+    DEFAULT_AI_MODEL = ai_engine.DEFAULT_AI_MODEL
+    MODEL_CACHE = ai_engine.MODEL_CACHE
+    CURRENT_MODEL_NAME = ai_engine.CURRENT_MODEL_NAME
+    AI_STATUS = ai_engine.AI_STATUS
+    AI_ENABLED = ai_engine.AI_ENABLED
+    model = ai_engine.model
+    AI_CONFIG_ATTEMPTED = ai_engine.AI_CONFIG_ATTEMPTED
+    RATE_LIMITED_MODELS = ai_engine.RATE_LIMITED_MODELS
+    RATE_LIMIT_COOLDOWN_SECONDS = ai_engine.RATE_LIMIT_COOLDOWN_SECONDS
+
+
+_sync_ai_engine_state()
 
 
 def _get_genai():
@@ -179,10 +198,16 @@ def _make_model(name):
     return ai_engine._make_model(name, logger=app.logger)
 
 def get_or_create_model(preferred=None):
-    return ai_engine.get_or_create_model(preferred, logger=app.logger)
+    try:
+        return ai_engine.get_or_create_model(preferred, logger=app.logger)
+    finally:
+        _sync_ai_engine_state()
 
 def configure_ai():
-    return ai_engine.configure_ai(logger=app.logger)
+    try:
+        return ai_engine.configure_ai(logger=app.logger)
+    finally:
+        _sync_ai_engine_state()
 
 def ensure_ai_ready():
     # Preserve compatibility with tests/integrations that monkeypatch app.ensure_ai_ready.
@@ -190,13 +215,19 @@ def ensure_ai_ready():
     override = getattr(app_module, "ensure_ai_ready", None) if app_module is not None else None
     if callable(override) and override is not ensure_ai_ready:
         return override()
-    return ai_engine.ensure_ai_ready(logger=app.logger)
+    try:
+        return ai_engine.ensure_ai_ready(logger=app.logger)
+    finally:
+        _sync_ai_engine_state()
 
 def _call_gemini(prompt, file_asset=None, *, timeout=None, retries=None, generation_config=None):
-    return ai_engine._call_gemini(
-        prompt, file_asset, timeout=timeout, retries=retries,
-        generation_config=generation_config,
-    )
+    try:
+        return ai_engine._call_gemini(
+            prompt, file_asset, timeout=timeout, retries=retries,
+            generation_config=generation_config,
+        )
+    finally:
+        _sync_ai_engine_state()
 
 
 from data_analysis.core.cache import TinyLRU  # noqa: E402
@@ -396,7 +427,7 @@ def _resolve_app_override(name: str):
 
 
 def _is_offline_html(html: str) -> bool:
-    return ai_service._is_offline_html(html)
+    return ai_engine._is_offline_html(html)
 
 
 def _build_qna_cache_key(*args, **kwargs):

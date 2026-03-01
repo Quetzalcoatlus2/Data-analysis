@@ -113,12 +113,17 @@ def test_generate_plot_returns_base64():
 
 
 def test_format_stat_value_uses_billion_trillion_suffixes():
-    """Large numeric labels should use B/T compact notation."""
+    """Numeric labels should use K/M/B/T compact notation with trailing-zero stripping."""
     from data_analysis.analysis.plot import _format_stat_value
 
     assert _format_stat_value(123_456_000_000_000.0) == "123.456T"
+    assert _format_stat_value(1_200_000_000.0) == "1.2B"
     assert _format_stat_value(1_234_560_000.0) == "1.235B"
-    assert _format_stat_value(12_345.0) == "12345.00"
+    assert _format_stat_value(12_345.0) == "12.345K"
+    assert _format_stat_value(1_500_000.0) == "1.5M"
+    assert _format_stat_value(8.0) == "8"
+    assert _format_stat_value(8.50) == "8.5"
+    assert _format_stat_value(1e16) == "1.000e+16"
 
 
 def test_generate_forecast_plot_returns_base64():

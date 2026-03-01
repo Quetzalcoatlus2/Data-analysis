@@ -3,27 +3,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from flask import Request
-
 from data_analysis.runtime_app import *
 
 _LOCAL_SYMBOLS = {
     "_LOCAL_SYMBOLS",
     "_bind_runtime_globals",
-    "parse_controls",
-    "build_fast_path_payload",
-    "build_forecast_payload",
-    "build_interactive_payload",
-    "resolve_ai_summary",
-    "finalize_analysis_response",
     "handle_analyze_file",
     "analyze_file",
     "__all__",
 }
 
 
+
 def _bind_runtime_globals():
     import data_analysis.runtime_app as rt
+
+    sync = getattr(rt, "_sync_ai_engine_state", None)
+    if callable(sync):
+        sync()
 
     g = globals()
     for key, value in rt.__dict__.items():
@@ -47,43 +44,6 @@ def _extract_model_and_strip_comments(html: str | None) -> tuple[str | None, str
 def _clean_model_name(model_name: str | None) -> str:
     model_str = str(model_name) if model_name else 'gemini-3.0-flash'
     return model_str[7:] if model_str.startswith('models/') else model_str
-
-
-def parse_controls(request: Request) -> dict[str, Any]:
-    rt = _bind_runtime_globals()
-    default_steps = int(rt.app.config.get("DEFAULT_FORECAST_STEPS", 40))
-    return {
-        "view": (request.args.get("view") or request.form.get("view") or "overview").strip().lower(),
-        "forecast_horizon": rt._get_arg_int("forecast_horizon", default_steps),
-        "forecast_pct_raw": request.args.get("forecast_pct") or request.form.get("forecast_pct"),
-        "contamination": rt._get_arg_float(
-            "contamination",
-            float(rt.app.config.get("DEFAULT_CONTAMINATION", 0.02)),
-        ),
-        "data_range": request.args.get("data_range") or request.form.get("data_range"),
-    }
-
-
-def build_fast_path_payload(filename: str) -> dict[str, Any]:
-    return {"filename": filename, "mode": "fast-path", "source": "runtime"}
-
-
-def build_forecast_payload(filename: str) -> dict[str, Any]:
-    return {"filename": filename, "mode": "forecast", "source": "runtime"}
-
-
-def build_interactive_payload(filename: str) -> dict[str, Any]:
-    return {"filename": filename, "mode": "interactive", "source": "runtime"}
-
-
-def resolve_ai_summary(filename: str) -> str:
-    rt = _bind_runtime_globals()
-    summary = rt.AI_SUMMARY_CACHE.get(filename)
-    return summary if isinstance(summary, str) else ""
-
-
-def finalize_analysis_response(filename: str):
-    return handle_analyze_file(filename)
 
 
 def handle_analyze_file(filename):
@@ -1040,12 +1000,6 @@ def handle_analyze_file(filename):
 analyze_file = handle_analyze_file
 
 __all__ = [
-    "parse_controls",
-    "build_fast_path_payload",
-    "build_forecast_payload",
-    "build_interactive_payload",
-    "resolve_ai_summary",
-    "finalize_analysis_response",
     "handle_analyze_file",
     "analyze_file",
 ]

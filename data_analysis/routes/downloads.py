@@ -27,8 +27,13 @@ _LOCAL_SYMBOLS = {
 }
 
 
+
 def _bind_runtime_globals():
     import data_analysis.runtime_app as rt
+
+    sync = getattr(rt, "_sync_ai_engine_state", None)
+    if callable(sync):
+        sync()
 
     g = globals()
     for key, value in rt.__dict__.items():
@@ -145,6 +150,7 @@ def handle_download_static_plots_zip(filename):
         pct_den = max(1e-9, 1.0 - float(forecast_pct))
         return max(1, int(math.floor(float(history_rows) * float(forecast_pct) / pct_den)))
 
+
     is_timeseries = _is_reliable_timeseries_index(df.index)
     numeric_df_cached = get_cached_numeric_df(filename, df)
     numeric_cols = {
@@ -156,6 +162,39 @@ def handle_download_static_plots_zip(filename):
     total_rows = len(df)
     static_zip_max_forecast_steps = int(os.getenv("STATIC_ZIP_MAX_FORECAST_STEPS", "120"))
     max_forecast_steps_used = 0
+    processed_numeric_cols = 0
+
+    try:
+        from data_analysis.analysis.plot import (
+            _apply_sci_formatter as _plot_apply_sci_formatter,
+            _format_stat_value as _plot_format_stat_value,
+        )
+    except Exception:
+        def _plot_format_stat_value(v: float) -> str:
+            try:
+                value = float(v)
+                mag = abs(value)
+                if mag >= 1e15:
+                    return f"{value:.3e}"
+                if mag >= 1e12:
+                    raw = f"{value / 1e12:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "T"
+                if mag >= 1e9:
+                    raw = f"{value / 1e9:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "B"
+                if mag >= 1e6:
+                    raw = f"{value / 1e6:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "M"
+                if mag >= 1e3:
+                    raw = f"{value / 1e3:.3f}"
+                    return raw.rstrip("0").rstrip(".") + "K"
+                raw = f"{value:.2f}"
+                return raw.rstrip("0").rstrip(".")
+            except Exception:
+                return str(v)
+
+        def _plot_apply_sci_formatter(ax: Any) -> None:
+            return None
     
     with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
         # Generate correlation heatmaps
@@ -179,6 +218,7 @@ def handle_download_static_plots_zip(filename):
         for col in df.columns:
             if col not in numeric_cols:
                 continue
+
             try:
                 s = numeric_df_cached[col].dropna()
             except Exception as series_err:
@@ -186,6 +226,8 @@ def handle_download_static_plots_zip(filename):
                 s = pd.Series(dtype=float)
             if s.empty or len(s) < 3:
                 continue
+
+            processed_numeric_cols += 1
             
             # Detect anomalies for this column
             raw_an_idx, raw_an_score = get_cached_anomalies(filename, col, s, user_contam)
@@ -235,30 +277,9 @@ def handle_download_static_plots_zip(filename):
                     stats_mean = float(s.mean())
                     stats_std = float(s.std())
                     
-                    try:
-                        from data_analysis.analysis.plot import (
-                            _apply_sci_formatter,
-                            _format_stat_value,
-                        )
-                    except Exception:
-                        def _format_stat_value(v: float) -> str:
-                            try:
-                                value = float(v)
-                                mag = abs(value)
-                                if mag >= 1e12:
-                                    return f"{value / 1e12:.3f}T"
-                                if mag >= 1e9:
-                                    return f"{value / 1e9:.3f}B"
-                                return f"{value:.2f}"
-                            except Exception:
-                                return str(v)
-
-                        def _apply_sci_formatter(ax: Any) -> None:
-                            return None
-                    
                     # Draw vertical lines for Avg and Median
-                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_stat_value(stats_mean)}')
-                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {_format_stat_value(stats_median)}')
+                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_plot_format_stat_value(stats_mean)}')
+                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {_plot_format_stat_value(stats_median)}')
                     
                     # Avg/Median value tags - both on RIGHT side of their lines, staggered vertically to avoid overlap
                     ylim = ax.get_ylim()
@@ -267,11 +288,11 @@ def handle_download_static_plots_zip(filename):
                     y_pos = ylim[1] * 0.985
                     # Place Avg and Med at the same height on opposite sides
                     if stats_mean <= stats_median:
-                        ax.text(stats_mean - x_offset, y_pos, f'Avg: {_format_stat_value(stats_mean)}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
-                        ax.text(stats_median + x_offset, y_pos, f'Med: {_format_stat_value(stats_median)}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean - x_offset, y_pos, f'Avg: {_plot_format_stat_value(stats_mean)}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median + x_offset, y_pos, f'Med: {_plot_format_stat_value(stats_median)}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                     else:
-                        ax.text(stats_median - x_offset, y_pos, f'Med: {_format_stat_value(stats_median)}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
-                        ax.text(stats_mean + x_offset, y_pos, f'Avg: {_format_stat_value(stats_mean)}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
+                        ax.text(stats_median - x_offset, y_pos, f'Med: {_plot_format_stat_value(stats_median)}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
+                        ax.text(stats_mean + x_offset, y_pos, f'Avg: {_plot_format_stat_value(stats_mean)}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
                     
                     # Min/Max markers at bottom - BOTH tags ABOVE their symbols
                     y_lim = ax.get_ylim()
@@ -280,8 +301,8 @@ def handle_download_static_plots_zip(filename):
                     min_color = '#ff3b30'
                     max_color = '#00BCD4'  # Cyan - works on both light and dark backgrounds
                     edge_color = '#0b1220'
-                    ax.scatter([stats_min], [marker_y], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}')
-                    ax.scatter([stats_max], [marker_y], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}')
+                    ax.scatter([stats_min], [marker_y], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_plot_format_stat_value(stats_min)}')
+                    ax.scatter([stats_max], [marker_y], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_plot_format_stat_value(stats_max)}')
 
                     # Match Detailed Analysis: min tag slightly left, max tag slightly right.
                     xlim = ax.get_xlim()
@@ -291,23 +312,23 @@ def handle_download_static_plots_zip(filename):
                         min_xytext = (min_xytext[0], 12)
                         max_xytext = (max_xytext[0], 22)
 
-                    ax.annotate(f'{_format_stat_value(stats_min)}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    ax.annotate(f'{_format_stat_value(stats_max)}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{_plot_format_stat_value(stats_min)}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
+                    ax.annotate(f'{_plot_format_stat_value(stats_max)}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
                     
                     # Std in legend only
-                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_stat_value(stats_std)}')
+                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_plot_format_stat_value(stats_std)}')
                     
                     # Legend on single line - just below x-axis title
                     ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
                     fig.subplots_adjust(bottom=0.30)
                     
                     # Apply compact B/T axis labels for large values.
-                    _apply_sci_formatter(ax)
+                    _plot_apply_sci_formatter(ax)
                     try:
                         import matplotlib.ticker as _mticker
                         xmin, xmax = ax.get_xlim()
                         if max(abs(xmin), abs(xmax)) >= 1e9:
-                            xfmt = _mticker.FuncFormatter(lambda val, _pos: _format_stat_value(float(val)))
+                            xfmt = _mticker.FuncFormatter(lambda val, _pos: _plot_format_stat_value(float(val)))
                             ax.xaxis.set_major_formatter(xfmt)
                     except Exception:
                         pass
@@ -343,15 +364,6 @@ def handle_download_static_plots_zip(filename):
                     max_forecast_steps_used = max(max_forecast_steps_used, int(col_forecast_steps))
 
                     xlab = 'Timestamp' if is_timeseries else 'Index'
-                    
-                    # Ensure an_idx and an_score are capped for forecast plot (in case it wasn't already)
-                    raw_an_idx, raw_an_score = get_cached_anomalies(filename, col, s, user_contam)
-                    try:
-                        max_pts = int(app.config.get('ANOMALY_MARKER_CAP', 20))
-                    except Exception:
-                        max_pts = 20
-                    an_idx_fc = _cap_anomalies_for_display(raw_an_idx, raw_an_score, max_points=max_pts)
-                    an_score_fc = raw_an_score[an_idx_fc] if not raw_an_score.empty else raw_an_score
 
                     fc_b64 = generate_forecast_plot(
                         s,
@@ -361,8 +373,8 @@ def handle_download_static_plots_zip(filename):
                         col,
                         conf_int=ci,
                         history_tail=None,
-                        anomalies_idx=an_idx_fc,
-                        anomalies_score=an_score_fc,
+                        anomalies_idx=an_idx,
+                        anomalies_score=an_score,
                         legend_y=-0.38
                     )
                     raw = base64.b64decode(fc_b64.encode('utf-8'))
@@ -463,6 +475,7 @@ def handle_download_static_plots_zip(filename):
             except Exception as cat_err:
                 app.logger.debug("ZIP categories plot skipped for %s/%s: %s", filename, col, cat_err)
 
+
     bio.seek(0)
     display = request.args.get('display') or filename
     base = os.path.splitext(display)[0]
@@ -543,13 +556,24 @@ def handle_download_full_report_html(filename):
     except Exception:
         user_contam = float(app.config.get('DEFAULT_CONTAMINATION', 0.02))
     user_contam = max(0.001, min(0.2, user_contam))
+
+    raw_pct = request.args.get('forecast_pct', '0.05')
+    try:
+        forecast_pct = float(raw_pct) if raw_pct not in (None, "") else 0.05
+    except Exception:
+        forecast_pct = 0.05
+    forecast_pct = max(0.0, min(0.5, forecast_pct))
+
+    def _steps_for_history_rows(history_rows: int) -> int:
+        if forecast_pct <= 0 or history_rows <= 0:
+            return 0
+        pct_den = max(1e-9, 1.0 - float(forecast_pct))
+        return max(1, int(math.floor(float(history_rows) * float(forecast_pct) / pct_den)))
+
     distribution_sections = []
     stl_sections = []
     forecast_sections = []
-    
-    # Calculate forecast steps as 10% of dataset size
-    total_rows = len(df)
-    forecast_steps = max(10, int(total_rows * 0.1))
+    forecast_pct_label = f"{forecast_pct * 100:.0f}%"
     
     for col in df.columns:
         try:
@@ -605,9 +629,10 @@ def handle_download_full_report_html(filename):
             except Exception as stl_err:
                 app.logger.debug("HTML report STL section skipped for %s/%s: %s", filename, col, stl_err)
         
-        # Forecast (for timeseries) - use 10% of data as forecast horizon
-        if is_ts and len(s) >= 10:
-            fc_mean, ci = _forecast_with_fallback(s, forecast_steps, filename=filename, col=col)
+        # Forecast (for timeseries) - use selected forecast_pct as horizon share.
+        col_forecast_steps = _steps_for_history_rows(len(s))
+        if is_ts and len(s) >= 10 and col_forecast_steps > 0:
+            fc_mean, ci = _forecast_with_fallback(s, col_forecast_steps, filename=filename, col=col)
             
             if fc_mean is not None and len(fc_mean) > 0:
                 try:
@@ -615,7 +640,7 @@ def handle_download_full_report_html(filename):
                     fc_b64 = generate_forecast_plot(
                         s,
                         fc_mean,
-                        f"Forecast: {col} ({forecast_steps} steps = 10%)",
+                        f"Forecast: {col} ({col_forecast_steps} steps = {forecast_pct_label})",
                         'Timestamp',
                         col,
                         conf_int=ci,
@@ -623,7 +648,11 @@ def handle_download_full_report_html(filename):
                         anomalies_idx=an_idx,
                         anomalies_score=an_score,
                     )
-                    forecast_sections.append(f'<figure><figcaption><strong>Forecast: {col}</strong> ({forecast_steps} steps, 10% of data)</figcaption><img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>')
+                    forecast_sections.append(
+                        f'<figure><figcaption><strong>Forecast: {col}</strong> '
+                        f'({col_forecast_steps} steps, {forecast_pct_label} of data)</figcaption>'
+                        f'<img style="max-width:100%" src="data:image/png;base64,{fc_b64}" /></figure>'
+                    )
                     app.logger.debug("Successfully created forecast plot for %s", col)
                 except Exception:
                     app.logger.exception("Forecast plot error for %s", col)

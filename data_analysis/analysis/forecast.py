@@ -21,15 +21,36 @@ _LOCAL_SYMBOLS = {
     '__all__',
 }
 
+_RUNTIME_BOUND = False
+_DYNAMIC_RUNTIME_KEYS = {
+    "DEFAULT_AI_MODEL",
+    "CURRENT_MODEL_NAME",
+    "AI_STATUS",
+    "AI_ENABLED",
+    "AI_CONFIG_ATTEMPTED",
+    "model",
+}
+
 
 def _bind_runtime_globals():
     import data_analysis.runtime_app as rt
 
+    global _RUNTIME_BOUND
+    sync = getattr(rt, "_sync_ai_engine_state", None)
+    if callable(sync):
+        sync()
+
     g = globals()
-    for key, value in rt.__dict__.items():
-        if key.startswith("__") or key in _LOCAL_SYMBOLS:
-            continue
-        g[key] = value
+    if not _RUNTIME_BOUND:
+        for key, value in rt.__dict__.items():
+            if key.startswith("__") or key in _LOCAL_SYMBOLS:
+                continue
+            g[key] = value
+        _RUNTIME_BOUND = True
+    else:
+        for key in _DYNAMIC_RUNTIME_KEYS:
+            if hasattr(rt, key):
+                g[key] = getattr(rt, key)
     return rt
 
 

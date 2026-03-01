@@ -20,31 +20,50 @@ from matplotlib.transforms import blended_transform_factory
 def _format_stat_value(v: float) -> str:
     """Return a compact string for a statistic value.
 
-    Values >= 1e9 (1 billion) switch to B/T compact notation so they fit
-    inside chart labels without overflowing.
+    Uses K/M/B/T suffixes for values > 999.  Falls back to scientific
+    notation for magnitudes > 999.999 T.  Trailing fractional zeros are
+    stripped so ``1.200B`` becomes ``1.2B`` and ``8.00`` becomes ``8``.
     """
     try:
         value = float(v)
         mag = abs(value)
+        if mag >= 1e15:                       # > 999.999 T
+            return f"{value:.3e}"
         if mag >= 1e12:
-            return f"{value / 1e12:.3f}T"
+            raw = f"{value / 1e12:.3f}"
+            return raw.rstrip("0").rstrip(".") + "T"
         if mag >= 1e9:
-            return f"{value / 1e9:.3f}B"
-        return f"{value:.2f}"
+            raw = f"{value / 1e9:.3f}"
+            return raw.rstrip("0").rstrip(".") + "B"
+        if mag >= 1e6:
+            raw = f"{value / 1e6:.3f}"
+            return raw.rstrip("0").rstrip(".") + "M"
+        if mag >= 1e3:
+            raw = f"{value / 1e3:.3f}"
+            return raw.rstrip("0").rstrip(".") + "K"
+        raw = f"{value:.2f}"
+        return raw.rstrip("0").rstrip(".")
     except Exception:
         return str(v)
 
 
 def _apply_sci_formatter(ax) -> None:
-    """Apply compact B/T y-axis formatter when values are very large.
+    """Apply compact K/M/B/T axis formatter when values exceed 999.
 
-    Inspects the current y-axis limits and applies B/T labels when needed.
+    Inspects both x-axis and y-axis limits and applies the formatter to
+    each axis independently when needed.
     """
+    _fmt = mticker.FuncFormatter(lambda val, _pos: _format_stat_value(float(val)))
     try:
         ymin, ymax = ax.get_ylim()
-        if max(abs(ymin), abs(ymax)) >= 1e9:
-            formatter = mticker.FuncFormatter(lambda val, _pos: _format_stat_value(float(val)))
-            ax.yaxis.set_major_formatter(formatter)
+        if max(abs(ymin), abs(ymax)) > 999:
+            ax.yaxis.set_major_formatter(_fmt)
+    except Exception:
+        pass
+    try:
+        xmin, xmax = ax.get_xlim()
+        if max(abs(xmin), abs(xmax)) > 999:
+            ax.xaxis.set_major_formatter(_fmt)
     except Exception:
         pass
 
@@ -69,8 +88,13 @@ _LOCAL_SYMBOLS = {
 }
 
 
+
 def _bind_runtime_globals():
     import data_analysis.runtime_app as rt
+
+    sync = getattr(rt, "_sync_ai_engine_state", None)
+    if callable(sync):
+        sync()
 
     g = globals()
     for key, value in rt.__dict__.items():
