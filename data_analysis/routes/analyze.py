@@ -502,7 +502,10 @@ def handle_analyze_file(filename):
                 
                 # Generate distribution histogram for this column
                 try:
-                    from data_analysis.analysis.plot import _format_stat_value, _apply_sci_formatter
+                    from data_analysis.analysis.plot import (
+                        _apply_sci_formatter,
+                        _format_stat_value,
+                    )
                     fig, ax = plt.subplots(figsize=(6, 4))
                     series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
                     ax.hist(series_arr, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)

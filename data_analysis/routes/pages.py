@@ -1,7 +1,7 @@
 from flask import Blueprint
 
-from data_analysis.routes.upload import handle_upload_file
 from data_analysis.routes.analyze import handle_analyze_file
+from data_analysis.routes.upload import handle_upload_file
 
 pages_bp = Blueprint('pages', __name__)
 

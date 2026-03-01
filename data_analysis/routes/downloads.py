@@ -167,6 +167,8 @@ def handle_download_static_plots_zip(filename):
     try:
         from data_analysis.analysis.plot import (
             _apply_sci_formatter as _plot_apply_sci_formatter,
+        )
+        from data_analysis.analysis.plot import (
             _format_stat_value as _plot_format_stat_value,
         )
     except Exception:

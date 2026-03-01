@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
+from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta
 from typing import Any
-from collections.abc import Callable, Iterable
 
 import pandas as pd
-import contextlib
 
 SUPPORTED_ENCODINGS = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
 

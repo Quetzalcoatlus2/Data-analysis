@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import html as htmllib
 import io
 import json
-import html as htmllib
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd

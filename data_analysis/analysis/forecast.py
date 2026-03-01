@@ -2,8 +2,9 @@
 # ruff: noqa: F401,F403,F405
 from __future__ import annotations
 
-from data_analysis.runtime_app import *
 import contextlib
+
+from data_analysis.runtime_app import *
 
 _LOCAL_SYMBOLS = {
     '_LOCAL_SYMBOLS',

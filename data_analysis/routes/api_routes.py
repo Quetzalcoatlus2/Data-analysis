@@ -1,18 +1,18 @@
 from flask import Blueprint
 
+from data_analysis.reports.pdf_report import handle_download_full_report_pdf
 from data_analysis.routes.api import (
-    handle_health,
     handle_api_ai_summary,
     handle_api_interactive_data,
     handle_full_history_json,
+    handle_health,
 )
 from data_analysis.routes.downloads import (
-    handle_download_cleaned_csv,
     handle_download_ai_summary_html,
-    handle_download_static_plots_zip,
+    handle_download_cleaned_csv,
     handle_download_full_report_html,
+    handle_download_static_plots_zip,
 )
-from data_analysis.reports.pdf_report import handle_download_full_report_pdf
 
 api_bp = Blueprint('api', __name__)
 

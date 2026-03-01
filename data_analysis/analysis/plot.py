@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: F821
 import base64
+import contextlib
 import io
 from collections import Counter
 from typing import Any, Literal, cast
@@ -11,8 +12,6 @@ import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 from matplotlib.transforms import blended_transform_factory
-import contextlib
-
 
 # ---------------------------------------------------------------------------
 # Helpers

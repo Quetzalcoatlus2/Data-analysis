@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 from collections.abc import Callable
-
+from typing import Any
 
 _HEADERS_MIDDLEWARE_KEY = "data_analysis_headers_middleware_registered"
 
