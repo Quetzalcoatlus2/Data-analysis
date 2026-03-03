@@ -511,7 +511,7 @@ def offline_answer(
                             parts.append(
                                 f"<li><strong>{htmllib.escape(str(col))}</strong>: "
                                 f"mean={float(s.mean()):.4g}, median={float(s.median()):.4g}, "
-                                f"std={float(s.std(ddof=1)):.4g}, min={float(s.min()):.4g}, max={float(s.max()):.4g}</li>"
+                                f"std={float(s.std(ddof=1)) if len(s) > 1 else 0.0:.4g}, min={float(s.min()):.4g}, max={float(s.max()):.4g}</li>"
                             )
                         except Exception:
                             parts.append(

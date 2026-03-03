@@ -639,8 +639,8 @@ def test_forecast_matches_historical_variation():
     fc_vals = fc.to_numpy(dtype=float, copy=False)
     hist_diffs = np.diff(hist_vals)
     fc_diffs = np.diff(fc_vals)
-    std_hist = float(np.std(hist_diffs, ddof=1))
-    std_fc = float(np.std(fc_diffs, ddof=1))
+    std_hist = float(np.std(hist_diffs, ddof=1)) if len(hist_diffs) > 1 else 0.0
+    std_fc = float(np.std(fc_diffs, ddof=1)) if len(fc_diffs) > 1 else 0.0
 
     assert std_fc > 0, "Forecast is completely flat (zero variation)"
     ratio = std_fc / std_hist

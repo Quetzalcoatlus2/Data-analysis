@@ -272,8 +272,8 @@ def _match_amplitude(
         fc_arr = np.asarray(fc.to_numpy(dtype=float), dtype=float)
         hist_diffs = np.diff(y_win_arr)
         fc_diffs = np.diff(fc_arr)
-        std_hist = float(np.nanstd(hist_diffs, ddof=1)) if len(hist_diffs) else 0.0
-        std_fc = float(np.nanstd(fc_diffs, ddof=1)) if len(fc_diffs) else 0.0
+        std_hist = float(np.nanstd(hist_diffs, ddof=1)) if len(hist_diffs) > 1 else 0.0
+        std_fc = float(np.nanstd(fc_diffs, ddof=1)) if len(fc_diffs) > 1 else 0.0
         if not np.isfinite(std_hist) or not np.isfinite(std_fc) or std_hist <= 0:
             return forecast_series, conf_df
         # If forecast is perfectly flat, synthesize deviations from historical increments
@@ -518,7 +518,7 @@ def _compute_forecast(series: pd.Series, steps: int) -> tuple[pd.Series, pd.Data
 
         if resid_from_stl is not None:
 
-            noise_sigma = float(np.nanstd(resid_from_stl, ddof=1))
+            noise_sigma = float(np.nanstd(resid_from_stl, ddof=1)) if len(resid_from_stl) > 1 else 0.0
 
             resid_std = noise_sigma  # also use for CI
 
@@ -534,7 +534,7 @@ def _compute_forecast(series: pd.Series, steps: int) -> tuple[pd.Series, pd.Data
 
                 residuals = recent - (slope_lr * x_fit + intercept)
 
-                resid_std = float(np.std(residuals, ddof=1))
+                resid_std = float(np.std(residuals, ddof=1)) if len(residuals) > 1 else 0.0
 
             except Exception:
 
