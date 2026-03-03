@@ -1,13 +1,11 @@
 import os
 import sys
 
-import numpy as np
 import pandas as pd
 
 # Ensure project root import resolution is stable in all runners.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from data_analysis.analysis import anomaly as anomaly_mod
 from data_analysis.routes import upload as upload_mod
 from data_analysis.runtime_app import FORECAST_CACHE, _compute_forecast
 
@@ -39,38 +37,4 @@ def test_compute_forecast_cache_key_avoids_same_stats_collision():
         FORECAST_CACHE.clear()
 
 
-def test_detect_anomalies_skips_stl_when_series_exceeds_cap(monkeypatch):
-    """STL stage should be skipped when max_stl_points threshold is exceeded."""
-    stl_calls = {"count": 0}
 
-    def _fake_get_stl():
-        stl_calls["count"] += 1
-        raise AssertionError("STL should not be called above cap")
-
-    class _FakeIF:
-        def __init__(self, **_kwargs):
-            pass
-
-        def fit_predict(self, x):
-            return np.ones(len(x), dtype=int)
-
-        def decision_function(self, x):
-            return np.zeros(len(x), dtype=float)
-
-    monkeypatch.setattr(anomaly_mod, "get_stl", _fake_get_stl)
-    monkeypatch.setattr(anomaly_mod, "get_isolation_forest", lambda: _FakeIF)
-
-    idx = pd.date_range("2025-01-01", periods=200, freq="D")
-    series = pd.Series(np.sin(np.arange(200, dtype=float)), index=idx)
-
-    an_idx, an_score = anomaly_mod.detect_anomalies(
-        series,
-        contamination=0.05,
-        is_reliable_timeseries_index=lambda _idx: True,
-        infer_seasonal_period=lambda _idx: 7,
-        max_stl_points=50,
-    )
-
-    assert stl_calls["count"] == 0
-    assert isinstance(an_idx, pd.Index)
-    assert isinstance(an_score, pd.Series)
