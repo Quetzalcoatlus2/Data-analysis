@@ -715,7 +715,8 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
         Plotly chart data dict or None when insufficient categories.
     """
     _bind_runtime_globals()
-    s_cat = s_cat.astype(str).dropna()
+    # Drop missing values before string conversion so NaN/NaT do not become literal labels.
+    s_cat = s_cat.dropna().astype(str)
     if len(s_cat) < 3:
         return None
 
@@ -729,8 +730,8 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
     min_count = int(all_counts.min())
     avg_count = float(all_counts.mean())
     med_count = float(all_counts.median())
-    most_freq = str(all_counts.index[0])[:20]
-    least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
+    most_freq = str(all_counts.index[0])
+    least_freq = str(all_counts.index[-1]) if len(all_counts) > 0 else "N/A"
 
     if len(all_counts) > 50:
         chart_title = f"Categories: {col} (Top 50 of {total_unique})"
@@ -796,7 +797,7 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor": "rgba(0,0,0,0)",
         "font": {"color": "#d0d0d0"},
-        "hoverlabel": {"bgcolor": "#1e1e1e", "font": {"color": "#e0e0e0"}, "bordercolor": "#4a4a4a"},
+        "hoverlabel": {"bgcolor": "#1e1e1e", "font": {"color": "#e0e0e0"}, "bordercolor": "#4a4a4a", "namelength": -1},
         "shapes": [
             {
                 "type": "line",
