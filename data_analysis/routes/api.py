@@ -54,7 +54,7 @@ def handle_api_ai_summary(filename):
             m_name = _m.group(1).strip()
             if m_name.startswith('models/'):
                 m_name = m_name[7:]
-        model_display = m_name or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        model_display = m_name or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
         display_html = re.sub(r'<!--.*?-->', '', str(cached), flags=re.DOTALL)
         return jsonify({"ok": True, "html": display_html, "cached": True, "model": model_display})
     
@@ -79,7 +79,7 @@ def handle_api_ai_summary(filename):
                     if m_name.startswith('models/'):
                         m_name = m_name[7:]
             
-            model_display = m_name or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+            model_display = m_name or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
             
             display_html = re.sub(r'<!--.*?-->', '', str(summary), flags=re.DOTALL) if isinstance(summary, str) else summary
             

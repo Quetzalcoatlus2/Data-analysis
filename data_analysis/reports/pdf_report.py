@@ -901,7 +901,7 @@ def handle_download_full_report_pdf(filename):
 
             # Always include model attribution at the bottom of the summary section.
             try:
-                model_name = model_name_used or CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+                model_name = model_name_used or CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
                 if isinstance(model_name, str) and model_name.startswith('models/'):
                     model_name = model_name[7:]
                 is_valid_summary = not _is_offline_html(clean_html)

@@ -32,7 +32,7 @@ def _extract_model_and_strip_comments(html: str | None) -> tuple[str | None, str
 
 
 def _clean_model_name(model_name: str | None) -> str:
-    model_str = str(model_name) if model_name else 'gemini-3.0-flash'
+    model_str = str(model_name) if model_name else 'gemini-3-flash-preview'
     return model_str[7:] if model_str.startswith('models/') else model_str
 
 
@@ -326,8 +326,8 @@ def handle_analyze_file(filename):
         )
         _log_cache_stats_if_needed("analyze-fast")
         
-        summary_fallback_model = AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
-        answer_fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+        summary_fallback_model = AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
+        answer_fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
         ai_summary_model, ai_summary_clean = _extract_model_and_strip_comments(ai_summary)
         ai_answer_model, ai_answer_clean = _extract_model_and_strip_comments(ai_answer)
 
@@ -947,8 +947,8 @@ def handle_analyze_file(filename):
     analysis['ai_summary'] = ai_summary
     analysis['ai_answer'] = ai_answer
     
-    summary_fallback_model = AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
-    answer_fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3.0-flash'
+    summary_fallback_model = AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
+    answer_fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
     ai_summary_model = ai_summary_model or summary_fallback_model
     ai_answer_model = ai_answer_model or answer_fallback_model
     
