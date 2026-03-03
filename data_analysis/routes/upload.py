@@ -1,6 +1,9 @@
 # ruff: noqa: F401,F403,F405
 from __future__ import annotations
 
+import mimetypes
+
+from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
 
 _LOCAL_SYMBOLS = {
@@ -14,18 +17,23 @@ _LOCAL_SYMBOLS = {
 
 
 def _bind_runtime_globals():
-    import data_analysis.runtime_app as rt
+    return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
 
-    sync = getattr(rt, "_sync_ai_engine_state", None)
-    if callable(sync):
-        sync()
 
-    g = globals()
-    for key, value in rt.__dict__.items():
-        if key.startswith("__") or key in _LOCAL_SYMBOLS:
-            continue
-        g[key] = value
-    return rt
+def _mime_type_for_upload(filename: str) -> str:
+    """Return best-effort MIME type for Gemini file uploads."""
+    ext = os.path.splitext(str(filename or ""))[1].lower()
+    explicit_map = {
+        ".csv": "text/csv",
+        ".txt": "text/plain",
+        ".json": "application/json",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+    if ext in explicit_map:
+        return explicit_map[ext]
+
+    guessed, _ = mimetypes.guess_type(str(filename or ""))
+    return guessed or "application/octet-stream"
 
 
 def handle_upload_file():
@@ -72,9 +80,10 @@ def handle_upload_file():
                 try:
                     size_bytes = os.path.getsize(final_path)
                     if size_bytes <= app.config['AI_FULL_UPLOAD_MAX_MB'] * 1024 * 1024:
+                        upload_mime = _mime_type_for_upload(orig_name)
                         uploaded = _get_genai().upload_file(
                             path=final_path,
-                            mime_type="text/csv",
+                            mime_type=upload_mime,
                             display_name=orig_name,
                         )
                         AI_FILE_MAP[storage_name] = uploaded

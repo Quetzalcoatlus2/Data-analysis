@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
 
 _LOCAL_SYMBOLS = {
@@ -16,18 +17,7 @@ _LOCAL_SYMBOLS = {
 
 
 def _bind_runtime_globals():
-    import data_analysis.runtime_app as rt
-
-    sync = getattr(rt, "_sync_ai_engine_state", None)
-    if callable(sync):
-        sync()
-
-    g = globals()
-    for key, value in rt.__dict__.items():
-        if key.startswith("__") or key in _LOCAL_SYMBOLS:
-            continue
-        g[key] = value
-    return rt
+    return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
 
 
 def _extract_model_and_strip_comments(html: str | None) -> tuple[str | None, str]:
@@ -319,14 +309,14 @@ def handle_analyze_file(filename):
                 try:
                     if numeric_non_na_counts.get(col, 0) >= 3:
                         continue  # Skip - numeric column
-                    s_cat = df[col].astype(str).dropna()
+                    s_cat = df[col].dropna()
                     if len(s_cat) < 3:
                         continue
                     chart_data = _build_category_plotly_chart(s_cat, col)
                     if chart_data is not None:
                         category_charts[col] = chart_data
-                except Exception:
-                    pass
+                except Exception as cat_err:
+                    app.logger.debug("Category chart build skipped for %s: %s", col, cat_err)
             analysis['category_charts'] = category_charts
         
         total_dt = time.perf_counter() - request_start
@@ -416,8 +406,8 @@ def handle_analyze_file(filename):
                          an_score = raw_an_score[an_idx] if not raw_an_score.empty else raw_an_score
                          
                          anomalies_found[str(column)] = [str(i) for i in an_idx]
-                     except Exception:
-                        pass
+                     except Exception as cap_err:
+                         app.logger.debug("Anomaly display cap skipped for %s: %s", column, cap_err)
 
 
             # Stop forecasting if time/column limits are exceeded
@@ -467,8 +457,8 @@ def handle_analyze_file(filename):
                     try:
                         fc_points = len(fc_mean) if isinstance(fc_mean, pd.Series) else -1
                         app.logger.info("Forecast plot ready col=%s forecast_points=%d", column, fc_points)
-                    except Exception:
-                        pass
+                    except Exception as fc_log_err:
+                        app.logger.debug("Forecast points logging skipped for %s: %s", column, fc_log_err)
 
                     dt = time.perf_counter() - t0
                     forecast_done += 1
@@ -619,8 +609,8 @@ def handle_analyze_file(filename):
                             stl_img = get_cached_stl_plot(filename, column, series, sp)
                             if stl_img:
                                 forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
-                    except Exception:
-                        pass
+                    except Exception as stl_err:
+                        app.logger.debug("Interactive STL plot skipped for %s: %s", column, stl_err)
 
             
             if build_interactive and len(an_idx):
@@ -882,8 +872,8 @@ def handle_analyze_file(filename):
         for fp in forecast_plots:
             if isinstance(fp, dict) and 'title' in fp:
                 app.logger.info("Forecast plot: %s", fp['title'])
-    except Exception:
-        pass
+    except Exception as fp_log_err:
+        app.logger.debug("Forecast plot logging skipped: %s", fp_log_err)
 
     # Organize forecast_plots by column for grouped display
     forecast_plots_by_column = {}

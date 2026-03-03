@@ -12,6 +12,7 @@ from typing import Any, cast
 import emoji
 from fpdf import FPDF
 
+from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *  # pyright: ignore[reportAssignmentType]
 from data_analysis.runtime_app import (
     _cap_anomalies_for_display,
@@ -34,18 +35,7 @@ _LOCAL_SYMBOLS = {
 
 
 def _bind_runtime_globals():
-    import data_analysis.runtime_app as rt
-
-    sync = getattr(rt, "_sync_ai_engine_state", None)
-    if callable(sync):
-        sync()
-
-    g = globals()
-    for key, value in rt.__dict__.items():
-        if key.startswith("__") or key in _LOCAL_SYMBOLS:
-            continue
-        g[key] = value
-    return rt
+    return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
 
 
 _bind_runtime_globals()

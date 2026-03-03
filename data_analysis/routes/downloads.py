@@ -1,6 +1,7 @@
 # ruff: noqa: F401,F403,F405
 from __future__ import annotations
 
+from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
 from data_analysis.runtime_app import (
     _cap_anomalies_for_display,
@@ -29,18 +30,7 @@ _LOCAL_SYMBOLS = {
 
 
 def _bind_runtime_globals():
-    import data_analysis.runtime_app as rt
-
-    sync = getattr(rt, "_sync_ai_engine_state", None)
-    if callable(sync):
-        sync()
-
-    g = globals()
-    for key, value in rt.__dict__.items():
-        if key.startswith("__") or key in _LOCAL_SYMBOLS:
-            continue
-        g[key] = value
-    return rt
+    return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
 
 
 def handle_download_cleaned_csv(filename):
@@ -381,7 +371,7 @@ def handle_download_static_plots_zip(filename):
                     continue  # Skip - already processed as numeric
                 
                 # Process as categorical
-                s_cat = df[col].astype(str).dropna()
+                s_cat = df[col].dropna().astype(str)
                 if len(s_cat) < 3:
                     continue
                 
@@ -397,7 +387,7 @@ def handle_download_static_plots_zip(filename):
                 min_count = int(all_counts.min())
                 avg_count = float(all_counts.mean())
                 med_count = float(all_counts.median())
-                most_freq = str(all_counts.index[0])[:20]
+                most_freq = str(all_counts.index[0])
                     
                 fig, ax = plt.subplots(figsize=(12, 5))
                 top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black', label='Count')
@@ -449,7 +439,7 @@ def handle_download_static_plots_zip(filename):
                 ax.text(1.005, med_y, f'Med: {med_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
                 
                 # Get least frequent item name
-                least_freq = str(all_counts.index[-1])[:20] if len(all_counts) > 0 else "N/A"
+                least_freq = str(all_counts.index[-1]) if len(all_counts) > 0 else "N/A"
                 
                 # Add Most/Least as legend entries (invisible traces)
                 ax.plot([], [], color='#27ae60', marker='s', linestyle='', markersize=8, label=f"Most: '{most_freq}' ({max_count})")

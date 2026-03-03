@@ -1,7 +1,19 @@
 # ruff: noqa: F401,F403,F405
 from __future__ import annotations
 
+from bisect import bisect_left
+
+from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
+from data_analysis.runtime_app import (
+    _anomaly_positions_for_index,
+    _build_interactive_cache_key,
+    _cap_anomalies_for_display,
+    _get_clean_ai_summary_from_cache,
+    _is_reliable_timeseries_index,
+    _log_cache_stats_if_needed,
+    _try_parse_numeric_series,
+)
 
 _LOCAL_SYMBOLS = {
     "_LOCAL_SYMBOLS",
@@ -20,18 +32,7 @@ _LOCAL_SYMBOLS = {
 
 
 def _bind_runtime_globals():
-    import data_analysis.runtime_app as rt
-
-    sync = getattr(rt, "_sync_ai_engine_state", None)
-    if callable(sync):
-        sync()
-
-    g = globals()
-    for key, value in rt.__dict__.items():
-        if key.startswith("__") or key in _LOCAL_SYMBOLS:
-            continue
-        g[key] = value
-    return rt
+    return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
 
 
 def handle_health():
@@ -97,21 +98,6 @@ def handle_api_ai_summary(filename):
 _MAX_INTERACTIVE_POINTS = 10_000  # max history trace points
 _MAX_DIST_POINTS = 5_000          # max distribution values
 _MAX_INTERACTIVE_FORECAST_POINTS = 2_000  # max forecast/CI trace points
-
-
-def _downsample_series(x_list: list, y_list: list, max_pts: int) -> tuple[list, list]:
-    """Uniformly downsample parallel x/y lists to at most max_pts points."""
-    n = len(x_list)
-    if n <= max_pts:
-        return x_list, y_list
-    step = max(1, n // max_pts)
-    xs = x_list[::step]
-    ys = y_list[::step]
-    # Always keep the last point for continuity
-    if xs[-1] != x_list[-1]:
-        xs = xs + [x_list[-1]]
-        ys = ys + [y_list[-1]]
-    return xs, ys
 
 
 def _downsample_indices(length: int, max_pts: int) -> list[int]:
@@ -222,29 +208,35 @@ def handle_api_interactive_data(filename):
         s_tail = series
         n_hist = len(s_tail)
         
-        # Use numeric indices 0, 1, 2... for history
-        x_hist_numeric_full = list(range(n_hist))
-        y_hist_full = [_safe_number(v) for v in s_tail.values]
-        original_labels_full = [str(i) for i in s_tail.index]
-        
-        # Downsample history for large series to keep JSON payload manageable.
-        # This prevents browser hangs on 700k+ row datasets.  The downsampled
-        # positions still represent the same proportional numeric x-axis so
-        # the forecast proportion is preserved.
-        x_hist_numeric, y_hist = _downsample_series(
-            x_hist_numeric_full, y_hist_full, _MAX_INTERACTIVE_POINTS
-        )
-        # Reconstruct original_labels for hover text at the sampled positions
-        ds_step = max(1, n_hist // _MAX_INTERACTIVE_POINTS)
-        original_labels = original_labels_full[::ds_step]
-        if original_labels[-1] != original_labels_full[-1]:
-            original_labels = original_labels + [original_labels_full[-1]]
-        # Trim to match x_hist_numeric length (rounding may cause ±1 off)
-        min_len = min(len(x_hist_numeric), len(y_hist), len(original_labels))
-        x_hist_numeric = x_hist_numeric[:min_len]
-        y_hist = y_hist[:min_len]
-        original_labels = original_labels[:min_len]
+        # Downsample history positions first, then materialize only sampled points.
+        hist_sample_idx = _downsample_indices(n_hist, _MAX_INTERACTIVE_POINTS)
+        hist_values = np.asarray(s_tail.to_numpy(dtype=float), dtype=float)
+        hist_index = s_tail.index
+
+        x_hist_numeric = [int(i) for i in hist_sample_idx]
+        y_hist = [_safe_number(hist_values[i]) for i in hist_sample_idx]
+        original_labels = [str(hist_index[i]) for i in hist_sample_idx]
         sampled_y_by_pos = {int(xv): y_hist[i] for i, xv in enumerate(x_hist_numeric)}
+        sampled_positions_set = set(x_hist_numeric)
+
+        def _nearest_displayed_position(raw_pos: int) -> int | None:
+            """Map an index to the nearest rendered x-position using binary search."""
+            if not x_hist_numeric:
+                return None
+            if raw_pos in sampled_positions_set:
+                return raw_pos
+
+            insert_idx = bisect_left(x_hist_numeric, raw_pos)
+            if insert_idx <= 0:
+                return int(x_hist_numeric[0])
+            if insert_idx >= len(x_hist_numeric):
+                return int(x_hist_numeric[-1])
+
+            left = int(x_hist_numeric[insert_idx - 1])
+            right = int(x_hist_numeric[insert_idx])
+            if abs(raw_pos - left) <= abs(right - raw_pos):
+                return left
+            return right
         
         traces = [{
             "type": "scatter",
@@ -283,12 +275,8 @@ def handle_api_interactive_data(filename):
                 if pos_raw < 0 or pos_raw >= n_hist:
                     continue
 
-                if pos_raw in sampled_y_by_pos:
-                    pos_display = pos_raw
-                elif x_hist_numeric:
-                    # Keep anomaly markers on displayed history points for downsampled traces.
-                    pos_display = min(x_hist_numeric, key=lambda p: abs(int(p) - pos_raw))
-                else:
+                pos_display = _nearest_displayed_position(pos_raw)
+                if pos_display is None:
                     continue
 
                 if pos_display in seen_positions:
@@ -344,20 +332,19 @@ def handle_api_interactive_data(filename):
                 
                 # Forecast uses indices n_hist, n_hist+1, n_hist+2...
                 n_fc_total = int(len(fc_mean))
-                fc_x_numeric_full = list(range(n_hist, n_hist + n_fc_total))
-                fc_y_full = [_safe_number(v) for v in fc_mean.values]
-                fc_labels_full = [str(i) for i in fc_mean.index]
+                fc_values = np.asarray(fc_mean.to_numpy(dtype=float), dtype=float)
+                fc_index = fc_mean.index
 
                 sample_idx = _downsample_indices(n_fc_total, _MAX_INTERACTIVE_FORECAST_POINTS)
-                fc_x_numeric = [fc_x_numeric_full[i] for i in sample_idx]
-                fc_y = [fc_y_full[i] for i in sample_idx]
-                fc_labels = [fc_labels_full[i] for i in sample_idx]
+                fc_x_numeric = [n_hist + int(i) for i in sample_idx]
+                fc_y = [_safe_number(fc_values[i]) for i in sample_idx]
+                fc_labels = [str(fc_index[i]) for i in sample_idx]
                 
                 if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
-                    ci_lower_full = [_safe_number(v) for v in conf_df.iloc[:, 0].values]
-                    ci_upper_full = [_safe_number(v) for v in conf_df.iloc[:, 1].values]
-                    ci_lower = [ci_lower_full[i] for i in sample_idx]
-                    ci_upper = [ci_upper_full[i] for i in sample_idx]
+                    ci_lower_arr = np.asarray(conf_df.iloc[:, 0].to_numpy(dtype=float), dtype=float)
+                    ci_upper_arr = np.asarray(conf_df.iloc[:, 1].to_numpy(dtype=float), dtype=float)
+                    ci_lower = [_safe_number(ci_lower_arr[i]) for i in sample_idx]
+                    ci_upper = [_safe_number(ci_upper_arr[i]) for i in sample_idx]
                     
                     # Add CI traces
                     traces.append({
