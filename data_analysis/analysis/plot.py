@@ -782,7 +782,7 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
 
     layout = {
         "title": {"text": chart_title, "x": 0.5, "xanchor": "center", "font": {"color": "#e0e0e0"}},
-        "xaxis": {"title": col, "tickangle": -45, "tickfont": {"size": 9, "color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
+        "xaxis": {"title": col, "type": "category", "tickangle": -45, "tickfont": {"size": 9, "color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
         "yaxis": {"title": "Count", "showgrid": True, "gridcolor": "rgba(128,128,128,0.3)", "tickfont": {"color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
         "showlegend": True,
         "legend": {
