@@ -54,7 +54,6 @@ def detect_anomalies(
     *,
     is_reliable_timeseries_index: Callable[[pd.Index], bool] | None = None,
     infer_seasonal_period: Callable[[pd.Index], int | None] | None = None,
-    max_stl_points: int | None = None,
     logger: Any | None = None,
 ) -> tuple[pd.Index, pd.Series]:
     """Detect anomalies with IsolationForest and optional STL prefiltering for time series."""
@@ -81,29 +80,16 @@ def detect_anomalies(
     infer_sp_fn = infer_seasonal_period or (lambda _idx: None)
 
     try:
-        stl_cap = int(max_stl_points) if max_stl_points is not None else 0
-    except Exception:
-        stl_cap = 0
-
-    try:
         s_for_model = s
         if is_ts_fn(s.index):
             seasonal_period = infer_sp_fn(s.index)
             if isinstance(seasonal_period, int) and seasonal_period >= 2 and len(s) >= max(28, seasonal_period * 2):
                 try:
-                    if stl_cap > 0 and len(s) > stl_cap:
-                        if logger is not None:
-                            logger.debug(
-                                "detect_anomalies STL skipped (len=%d > cap=%d)",
-                                len(s),
-                                stl_cap,
-                            )
-                    else:
-                        stl_cls = get_stl()
-                        stl_result = stl_cls(s.astype(float), period=int(seasonal_period), robust=True).fit()
-                        resid = pd.to_numeric(pd.Series(stl_result.resid, index=s.index), errors="coerce").dropna()
-                        if len(resid) >= max(20, seasonal_period * 2):
-                            s_for_model = resid
+                    stl_cls = get_stl()
+                    stl_result = stl_cls(s.astype(float), period=int(seasonal_period), robust=True).fit()
+                    resid = pd.to_numeric(pd.Series(stl_result.resid, index=s.index), errors="coerce").dropna()
+                    if len(resid) >= max(20, seasonal_period * 2):
+                        s_for_model = resid
                 except Exception as e:
                     if logger is not None:
                         logger.debug("detect_anomalies STL residual fallback used: %s", e)
@@ -199,19 +185,12 @@ def get_cached_anomalies(
     logger: Any | None = None,
     is_reliable_timeseries_index: Callable[[pd.Index], bool] | None = None,
     infer_seasonal_period: Callable[[pd.Index], int | None] | None = None,
-    max_stl_points: int | None = None,
 ) -> tuple[pd.Index, pd.Series]:
     """Get anomaly detection results from cache or compute and cache them."""
-    try:
-        stl_cap_key = int(max_stl_points) if max_stl_points is not None else None
-    except Exception:
-        stl_cap_key = None
-
     cache_key = (
         filename,
         str(column),
         round(float(contamination), 6),
-        stl_cap_key,
         _anomaly_series_signature(series),
     )
     if cache is not None:
@@ -228,7 +207,6 @@ def get_cached_anomalies(
         contamination=contamination,
         is_reliable_timeseries_index=is_reliable_timeseries_index,
         infer_seasonal_period=infer_seasonal_period,
-        max_stl_points=max_stl_points,
         logger=logger,
     )
     if cache is not None:
