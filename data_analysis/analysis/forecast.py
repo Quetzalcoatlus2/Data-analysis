@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 
 from data_analysis.runtime_app import *
 
@@ -69,8 +70,8 @@ def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
             try:
                 if out.index[-1] != s.index[-1]:
                     out = pd.concat([out, s.iloc[np.array([-1], dtype=int)]])
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.debug("_thin_series continuity append skipped: %s", e)
             return out
         return s
     except Exception as e:
@@ -103,7 +104,6 @@ def _thin_series_keep_extrema(s: pd.Series, max_points: int, keep_idx: pd.Index 
                 keep_pos.extend([int(p) for p in bonus_pos if p >= 0])
             except Exception as e:
                 app.logger.debug("_thin_series_keep_extrema keep_idx mapping skipped: %s", e)
-                pass
 
         keep_pos = sorted(set(keep_pos))
         return s.iloc[np.array(keep_pos, dtype=int)]
@@ -661,6 +661,50 @@ def _compute_forecast(series: pd.Series, steps: int) -> tuple[pd.Series, pd.Data
 
 
 
+    def _series_cache_fingerprint(s_in: pd.Series, max_points: int = 512) -> tuple[Any, ...]:
+        """Build a low-collision fingerprint for in-process forecast caching."""
+        try:
+            s_num = pd.to_numeric(s_in, errors='coerce').dropna()
+        except Exception:
+            s_num = pd.Series(dtype=float)
+
+        if s_num.empty:
+            return ("empty", 0)
+
+        values = np.asarray(s_num.to_numpy(dtype=float), dtype=float)
+        n = int(values.size)
+
+        if n > max_points:
+            sample_pos = np.linspace(0, n - 1, num=max_points, dtype=int)
+            sampled = values[sample_pos]
+        else:
+            sampled = values
+
+        digest = hashlib.blake2b(digest_size=16)
+        digest.update(np.ascontiguousarray(sampled, dtype=np.float64).tobytes())
+
+        try:
+            idx = s_num.index
+            idx_type = type(idx).__name__
+            idx_start = str(idx[0])
+            idx_end = str(idx[-1])
+        except Exception:
+            idx_type = "unknown"
+            idx_start = "?"
+            idx_end = "?"
+
+        first_val = float(values[0]) if n > 0 else float('nan')
+        last_val = float(values[-1]) if n > 0 else float('nan')
+        return (
+            n,
+            idx_type,
+            idx_start,
+            idx_end,
+            None if not np.isfinite(first_val) else round(first_val, 8),
+            None if not np.isfinite(last_val) else round(last_val, 8),
+            digest.hexdigest(),
+        )
+
     try:
         s = pd.to_numeric(series, errors='coerce').dropna()
         if s.empty:
@@ -668,16 +712,10 @@ def _compute_forecast(series: pd.Series, steps: int) -> tuple[pd.Series, pd.Data
             zero = pd.Series(np.zeros(len(idx), dtype=float), index=idx)
             return zero, pd.DataFrame({"lower": zero, "upper": zero})
         
-        # Build cache key from series shape, steps, AND actual values
-        # Include summary stats to ensure different columns get different forecasts
+        # Build a robust cache key from series fingerprint + horizon.
         try:
-            values_hash = hash((
-                float(s.iloc[0]) if len(s) > 0 else 0.0,
-                float(s.iloc[-1]) if len(s) > 0 else 0.0,
-                float(s.mean()),
-                float(s.std())
-            ))
-            cache_key = (tuple(s.shape) if hasattr(s, 'shape') else (len(s),), int(steps), values_hash)
+            series_fp = _series_cache_fingerprint(s)
+            cache_key = (series_fp, int(steps))
             cached = FORECAST_CACHE.get(cache_key)
             if cached is not None:
                 return cached
