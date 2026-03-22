@@ -261,8 +261,8 @@ def _match_amplitude(
     """
     _bind_runtime_globals()
     try:
-        y = pd.to_numeric(history, errors='coerce').dropna()
-        fc = pd.to_numeric(forecast_series, errors='coerce')
+        y = pd.Series(history).dropna()
+        fc = pd.Series(forecast_series).dropna()
         if len(y) < 6 or len(fc) < 2:
             return forecast_series, conf_df
         n = len(y)
@@ -350,7 +350,7 @@ def _compute_forecast(series: pd.Series, steps: int) -> tuple[pd.Series, pd.Data
 
         """
 
-        s = pd.to_numeric(s, errors='coerce').dropna()
+        s = pd.Series(s).dropna()
 
         idx = _infer_future_index(s.index if hasattr(s, 'index') else pd.RangeIndex(0, 1), k)
 
@@ -729,7 +729,7 @@ def _compute_forecast(series: pd.Series, steps: int) -> tuple[pd.Series, pd.Data
         fc, ci = _natural_forecast(s, steps)
         
         # Post-processing: scale forecast amplitude to match recent history dynamics
-        fc, ci = _match_amplitude(series, fc, conf_df=ci)
+        fc, ci = _match_amplitude(s, fc, conf_df=ci)
 
         data_min = float(s.min())
         data_max = float(s.max())
