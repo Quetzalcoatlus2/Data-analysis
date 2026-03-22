@@ -273,7 +273,7 @@ def coerce_numeric_df(
             res[col] = ser.astype(float)
         else:
             coerced = parse_numeric_series_fn(ser)
-            if coerced.notna().sum() >= pd.to_numeric(ser, errors="coerce").notna().sum():
+            if coerced.notna().any():
                 res[col] = coerced
     return pd.DataFrame(res, index=df.index)
 
@@ -313,6 +313,18 @@ def get_dataframe_for(
 
         target_uploads_dir = uploads_dir or upload_folder
         path = os.path.join(target_uploads_dir, filename)
+
+        # Security: reject path-traversal attempts (e.g. "../outside.csv")
+        try:
+            real_path = os.path.realpath(path)
+            real_uploads = os.path.realpath(target_uploads_dir)
+            if not real_path.startswith(real_uploads + os.sep) and real_path != real_uploads:
+                if logger is not None:
+                    logger.warning("get_dataframe_for: path traversal blocked: %s", filename)
+                return None
+        except Exception:
+            return None
+
         if not os.path.exists(path):
             if logger is not None:
                 logger.info("get_dataframe_for: file not found on disk: %s", path)
