@@ -22,7 +22,7 @@ def _install_fast_forecast_stubs(monkeypatch):
 
 
 def test_analyze_get_defers_ai_summary_generation_for_forecast_view(monkeypatch):
-    filename = "g" * 40 + ".csv"
+    filename = "a" * 40 + ".csv"
     df = pd.DataFrame({"value": np.arange(100, dtype=float)})
     DATAFRAME_CACHE.set(filename, df)
     AI_SUMMARY_CACHE.pop(filename, None)
@@ -45,7 +45,7 @@ def test_analyze_get_defers_ai_summary_generation_for_forecast_view(monkeypatch)
 
 
 def test_analyze_post_still_generates_ai_summary(monkeypatch):
-    filename = "p" * 40 + ".csv"
+    filename = "b" * 40 + ".csv"
     df = pd.DataFrame({"value": np.arange(80, dtype=float)})
     DATAFRAME_CACHE.set(filename, df)
     AI_SUMMARY_CACHE.pop(filename, None)
