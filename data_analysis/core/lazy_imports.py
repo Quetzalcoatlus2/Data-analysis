@@ -1,10 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import importlib
 import warnings
 from threading import Lock
 from types import ModuleType
-from typing import Any
+from typing import Any, Final, cast
 
 _NO_COLOR_SET = False
 _MATPLOTLIB_READY = False
@@ -108,10 +108,31 @@ def get_stl() -> Any:
     return _STL_CLASS
 
 
+_SHAP_LOCK = Lock()
+_SHAP_UNSET: Final = object()
+_SHAP_MODULE: ModuleType | None | object = _SHAP_UNSET
+
+
+def get_shap() -> ModuleType | None:
+    """Thread-safe lazy loader for shap. Returns None if not installed."""
+    global _SHAP_MODULE
+    if _SHAP_MODULE is not _SHAP_UNSET:
+        return cast(ModuleType | None, _SHAP_MODULE)
+    with _SHAP_LOCK:
+        if _SHAP_MODULE is not _SHAP_UNSET:
+            return cast(ModuleType | None, _SHAP_MODULE)
+        try:
+            _SHAP_MODULE = importlib.import_module("shap")
+        except ImportError:
+            _SHAP_MODULE = None
+    return _SHAP_MODULE
+
+
 __all__ = [
     "get_genai",
     "get_matplotlib",
     "get_pyplot",
     "get_isolation_forest",
+    "get_shap",
     "get_stl",
 ]
