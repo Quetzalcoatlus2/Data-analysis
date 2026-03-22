@@ -47,6 +47,8 @@ def apply_default_config(app: Any) -> None:
             app.logger.warning("Invalid UPLOAD_RETENTION_DAYS; ignoring")
 
     app.config.setdefault("MAX_CACHE_ITEMS", int(os.getenv("MAX_CACHE_ITEMS", "6")))
+    app.config.setdefault("LAB_CACHE_MAX_ITEMS", int(os.getenv("LAB_CACHE_MAX_ITEMS", "32")))
+    app.config.setdefault("LAB_CACHE_MAX_MB", int(os.getenv("LAB_CACHE_MAX_MB", "64")))
     app.config.setdefault("DEFAULT_FORECAST_STEPS", int(os.getenv("DEFAULT_FORECAST_STEPS", "30")))
     app.config.setdefault("INTERACTIVE_CACHE_MAX_MB", int(os.getenv("INTERACTIVE_CACHE_MAX_MB", "80")))
     app.config.setdefault("AI_TIMEOUT_SECONDS", int(os.getenv("AI_TIMEOUT_SECONDS", "30")))
