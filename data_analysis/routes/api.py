@@ -3,6 +3,10 @@ from __future__ import annotations
 
 from bisect import bisect_left
 
+from data_analysis.analysis.plot import (
+    _build_non_timeseries_tick_labels,
+    _resolve_plot_display_axis,
+)
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
 from data_analysis.runtime_app import (
@@ -153,10 +157,6 @@ def handle_api_interactive_data(filename):
     # Check cache first for instant response (keyed by request parameters)
     cache_key = _build_interactive_cache_key(filename, pct, user_contam)
     cached = INTERACTIVE_DATA_CACHE.get(cache_key)
-    if cached is None:
-        # Backward compatibility with legacy filename-only key for default params
-        if abs(pct - 0.05) < 1e-9 and abs(user_contam - 0.02) < 1e-9:
-            cached = INTERACTIVE_DATA_CACHE.get(filename)
     if cached is not None:
         _log_cache_stats_if_needed("interactive-cached")
         elapsed = time.perf_counter() - request_start
@@ -207,15 +207,19 @@ def handle_api_interactive_data(filename):
         # The UI Data Range control applies any user-requested reduction.
         s_tail = series
         n_hist = len(s_tail)
+        x_axis_title, display_history_index = _resolve_plot_display_axis(
+            s_tail,
+            source_df=df,
+            fallback_label="Timestamp" if is_timeseries else "Index",
+            prefer_first_column=True,
+        )
         
         # Downsample history positions first, then materialize only sampled points.
         hist_sample_idx = _downsample_indices(n_hist, _MAX_INTERACTIVE_POINTS)
         hist_values = np.asarray(s_tail.to_numpy(dtype=float), dtype=float)
-        hist_index = s_tail.index
-
         x_hist_numeric = [int(i) for i in hist_sample_idx]
         y_hist = [_safe_number(hist_values[i]) for i in hist_sample_idx]
-        original_labels = [str(hist_index[i]) for i in hist_sample_idx]
+        original_labels = [str(display_history_index[i]) for i in hist_sample_idx]
         sampled_y_by_pos = {int(xv): y_hist[i] for i, xv in enumerate(x_hist_numeric)}
         sampled_positions_set = set(x_hist_numeric)
 
@@ -381,33 +385,52 @@ def handle_api_interactive_data(filename):
         total_x_extent = n_hist + (n_fc_total if split_x else 0)
         x_axis_range = [0, total_x_extent]
 
-        # Build uniform tick values across the full numeric x range (20 ticks max)
-        tick_count = 20
-        extent_int = int(max(1, total_x_extent))
-        if extent_int > tick_count:
-            raw_ticks = np.linspace(0, extent_int - 1, num=tick_count, dtype=float).tolist()
-            tv_num = sorted({int(round(v)) for v in raw_ticks})
-            if tv_num[-1] != extent_int - 1:
-                tv_num.append(extent_int - 1)
+        history_prefers_text_labels = False
+        try:
+            history_prefers_text_labels = (
+                not is_timeseries
+                and not bool(pd.api.types.is_numeric_dtype(display_history_index))
+                and split_x is not None
+                and n_fc_total > 0
+                and bool(fc_labels)
+            )
+        except Exception:
+            history_prefers_text_labels = False
+
+        if history_prefers_text_labels:
+            tv, tt = _build_non_timeseries_tick_labels(
+                display_history_index,
+                fc_mean.index if fc_mean is not None else None,
+                max_tick_labels=20,
+            )
         else:
-            tv_num = list(range(extent_int))
-
-        # Map numeric positions back to original index labels for tick text
-        def _idx_label(pos: int) -> str:
-            if pos < n_hist:
-                # map sampled position back to original: pos is in numeric full-history space
-                orig_pos = min(pos, len(s_tail.index) - 1)
-                return str(s_tail.index[orig_pos])
+            # Build uniform tick values across the full numeric x range (20 ticks max)
+            tick_count = 20
+            extent_int = int(max(1, total_x_extent))
+            if extent_int > tick_count:
+                raw_ticks = np.linspace(0, extent_int - 1, num=tick_count, dtype=float).tolist()
+                tv_num = sorted({int(round(v)) for v in raw_ticks})
+                if tv_num[-1] != extent_int - 1:
+                    tv_num.append(extent_int - 1)
             else:
-                if split_x and n_fc_total > 0 and fc_labels:
-                    fc_pos = min(max(int(pos - n_hist), 0), n_fc_total - 1)
-                    rel = fc_pos / max(1, n_fc_total - 1)
-                    label_idx = min(int(round(rel * (len(fc_labels) - 1))), len(fc_labels) - 1)
-                    return fc_labels[label_idx]
-                return str(pos)
+                tv_num = list(range(extent_int))
 
-        tv = tv_num
-        tt = [_idx_label(p) for p in tv_num]
+            # Map numeric positions back to original index labels for tick text
+            def _idx_label(pos: int) -> str:
+                if pos < n_hist:
+                    # map sampled position back to original: pos is in numeric full-history space
+                    orig_pos = min(pos, len(display_history_index) - 1)
+                    return str(display_history_index[orig_pos])
+                else:
+                    if split_x and n_fc_total > 0 and fc_labels:
+                        fc_pos = min(max(int(pos - n_hist), 0), n_fc_total - 1)
+                        rel = fc_pos / max(1, n_fc_total - 1)
+                        label_idx = min(int(round(rel * (len(fc_labels) - 1))), len(fc_labels) - 1)
+                        return fc_labels[label_idx]
+                    return str(pos)
+
+            tv = tv_num
+            tt = [_idx_label(p) for p in tv_num]
 
         def _format_large_tick(v: float) -> str:
             try:
@@ -460,7 +483,7 @@ def handle_api_interactive_data(filename):
         layout = {
             "title": {"text": f"{column} (interactive)", "x": 0.02},
             "xaxis": {
-                "title": str(df.index.name) if df.index.name else ("Timestamp" if is_timeseries else "Index"),
+                "title": x_axis_title,
                 "showgrid": True,
                 "tickmode": "array",
                 "tickvals": tv,
@@ -473,12 +496,9 @@ def handle_api_interactive_data(filename):
                 "x0": split_x, "x1": split_x, "y0": 0, "y1": 1,
                 "line": {"color": "gray", "width": 1, "dash": "dot"}
             }],
-            "legend": {"orientation": "h"},
-            "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
+            "legend": {"orientation": "h", "yanchor": "top", "y": -0.15, "xanchor": "center", "x": 0.5},
+            "margin": {"l": 40, "r": 10, "t": 40, "b": 100}
         }
-        
-        if is_timeseries:
-            layout["xaxis"]["rangeslider"] = {"visible": True}
         
         # Downsample distribution values to keep JSON payload small
         dist_raw = [v for v in (_safe_number(x) for x in series.dropna().values) if v is not None]
@@ -555,9 +575,16 @@ def handle_full_history_json():
 
         is_ts = _is_reliable_timeseries_index(df.index)
 
+        axis_probe = pd.Series(np.arange(len(df), dtype=float), index=df.index)
+        display_x_title, display_axis_index = _resolve_plot_display_axis(
+            axis_probe,
+            source_df=df,
+            fallback_label="Timestamp" if is_ts else "Index",
+        )
+
         
         if is_ts:
-            idx = pd.DatetimeIndex(df.index)
+            idx = pd.DatetimeIndex(display_axis_index)
             
             try:
                 idx = idx.tz_convert(None)
@@ -575,7 +602,7 @@ def handle_full_history_json():
         else:
             
             try:
-                x_all_raw = df.index.tolist()
+                x_all_raw = display_axis_index.tolist()
                 x_all = []
                 for v in x_all_raw:
                     if isinstance(v, (int, float, str)):
@@ -635,6 +662,7 @@ def handle_full_history_json():
             "message": None,
             "is_timeseries": bool(is_ts),
             "display": display,
+            "x_title": display_x_title,
             "length": len(x_vals),
             "columns": numeric_cols,
             "x": x_vals,
