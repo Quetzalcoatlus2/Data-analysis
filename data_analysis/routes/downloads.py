@@ -1,6 +1,18 @@
 # ruff: noqa: F401,F403,F405
 from __future__ import annotations
 
+import math
+import textwrap
+
+from data_analysis.analysis.plot import (
+    _add_static_distribution_overlays,
+    _apply_sci_formatter,
+    _build_static_category_chart,
+    _format_stat_value,
+    _resolve_plot_display_axis,
+    _resolve_static_tick_policy,
+    _sample_numeric_axis_ticks,
+)
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
 from data_analysis.runtime_app import (
@@ -33,6 +45,19 @@ def _bind_runtime_globals():
     return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
 
 
+def _wrap_category_tick_label(label: str, width: int = 18, max_lines: int = 4) -> str:
+    """Wrap long category labels for static export charts."""
+    raw = str(label or "")
+    if not raw:
+        return raw
+    wrapped = textwrap.wrap(raw, width=width, break_long_words=False, break_on_hyphens=False) or [raw]
+    if len(wrapped) > max_lines:
+        wrapped = wrapped[: max_lines - 1] + [
+            textwrap.shorten(" ".join(wrapped[max_lines - 1 :]), width=width, placeholder="…")
+        ]
+    return "\n".join(wrapped)
+
+
 def handle_download_cleaned_csv(filename):
     _bind_runtime_globals()
     
@@ -58,9 +83,7 @@ def handle_download_cleaned_csv(filename):
                 cleaned[col] = pd.to_numeric(ser, errors='coerce')
             else:
                 coerced = _try_parse_numeric_series(ser)
-                
-
-                if coerced.notna().sum() >= pd.to_numeric(ser, errors='coerce').notna().sum():
+                if coerced.notna().any():
                     cleaned[col] = coerced
         
         if isinstance(cleaned.index, pd.DatetimeIndex):
@@ -154,37 +177,6 @@ def handle_download_static_plots_zip(filename):
     max_forecast_steps_used = 0
     processed_numeric_cols = 0
 
-    try:
-        from data_analysis.analysis.plot import (
-            generate_plot, 
-            _format_stat_value as _plot_format_stat_value,
-            _apply_sci_formatter as _plot_apply_sci_formatter
-        )
-    except Exception:
-        def _plot_format_stat_value(v: float) -> str:
-            try:
-                value = float(v)
-                mag = abs(value)
-                if mag >= 1e15:
-                    return f"{value:.3e}"
-                if mag >= 1e12:
-                    raw = f"{value / 1e12:.3f}"
-                    return raw.rstrip("0").rstrip(".") + "T"
-                if mag >= 1e9:
-                    raw = f"{value / 1e9:.3f}"
-                    return raw.rstrip("0").rstrip(".") + "B"
-                if mag >= 1e6:
-                    raw = f"{value / 1e6:.3f}"
-                    return raw.rstrip("0").rstrip(".") + "M"
-                if mag >= 1e3:
-                    raw = f"{value / 1e3:.2f}"
-                    return raw.rstrip("0").rstrip(".") + "K"
-                raw = f"{value:.2f}"
-                return raw.rstrip("0").rstrip(".")
-            except Exception:
-                return str(v)
-
-    
     with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
         # Generate correlation heatmaps
         try:
@@ -217,6 +209,11 @@ def handle_download_static_plots_zip(filename):
                 continue
 
             processed_numeric_cols += 1
+            resolved_x_axis_label, display_index = _resolve_plot_display_axis(
+                s,
+                source_df=df,
+                fallback_label='Timestamp' if _is_reliable_timeseries_index(s.index) else 'Index',
+            )
             
             # Detect anomalies for this column
             raw_an_idx, raw_an_score = get_cached_anomalies(filename, col, s, user_contam)
@@ -234,14 +231,13 @@ def handle_download_static_plots_zip(filename):
                     s,
                     None,
                     title,
-                    'Timestamp' if is_timeseries else 'Index',
+                    resolved_x_axis_label,
                     col,
                     conf_int=None,
                     history_tail=None,
                     anomalies_idx=an_idx,
                     anomalies_score=an_score,
-                    legend_y=-0.38,
-                    xlabel_labelpad=10
+                    display_index=display_index,
                 )
                 raw = base64.b64decode(img_b64.encode('utf-8'))
                 zf.writestr(f"{secure_filename(str(col))}_trend.png", raw)
@@ -250,69 +246,48 @@ def handle_download_static_plots_zip(filename):
             
             # Distribution histogram - HIGH QUALITY: Larger figure and more bins
             try:
-                fig, ax = plt.subplots(figsize=(8, 5))
+                from matplotlib.figure import Figure
+                fig = Figure(figsize=(8, 5))
+                ax = fig.subplots()
                 s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
                 ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
                 ax.set_title(f"Distribution: {col}", fontsize=10)
-                ax.set_xlabel(col, fontsize=9, labelpad=8)
+                ax.set_xlabel(col, fontsize=9, labelpad=10)
                 ax.set_ylabel("Frequency", fontsize=9)
                 ax.grid(True, alpha=0.3)
+
+                finite_unique_values = np.unique(s_arr[np.isfinite(s_arr)]) if s_arr.size else np.asarray([], dtype=float)
+                tick_policy = _resolve_static_tick_policy(
+                    finite_unique_values.tolist(),
+                    chart_type='distribution',
+                )
+                tick_values, tick_labels = _sample_numeric_axis_ticks(
+                    s_arr.tolist(),
+                    max_tick_labels=int(tick_policy['max_tick_labels']),
+                    min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
+                )
+                if tick_values:
+                    ax.set_xticks(tick_values)
+                    ax.set_xticklabels(
+                        tick_labels,
+                        rotation=int(tick_policy['tick_angle']),
+                        ha=str(tick_policy['tick_ha']),
+                        fontsize=float(tick_policy['tick_fontsize']),
+                    )
                 
                 # Add vertical stat lines on the histogram
                 try:
-                    stats_min = float(s.min())
-                    stats_max = float(s.max())
-                    stats_median = float(s.median())
-                    stats_mean = float(s.mean())
-                    stats_std = float(s.std())
-                    
-                    # Draw vertical lines for Avg and Median
-                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_plot_format_stat_value(stats_mean)}')
-                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {_plot_format_stat_value(stats_median)}')
-                    
-                    # Avg/Median value tags - both on RIGHT side of their lines, staggered vertically to avoid overlap
-                    ylim = ax.get_ylim()
-                    xlim = ax.get_xlim()
-                    x_offset = (xlim[1] - xlim[0]) * 0.01  # 1% offset to position text just right of line
-                    y_pos = ylim[1] * 0.985
-                    # Place Avg and Med at the same height on opposite sides
-                    if stats_mean <= stats_median:
-                        ax.text(stats_mean - x_offset, y_pos, f'Avg: {_plot_format_stat_value(stats_mean)}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
-                        ax.text(stats_median + x_offset, y_pos, f'Med: {_plot_format_stat_value(stats_median)}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
-                    else:
-                        ax.text(stats_median - x_offset, y_pos, f'Med: {_plot_format_stat_value(stats_median)}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
-                        ax.text(stats_mean + x_offset, y_pos, f'Avg: {_plot_format_stat_value(stats_mean)}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
-                    
-                    # Min/Max markers at bottom - BOTH tags ABOVE their symbols
-                    y_lim = ax.get_ylim()
-                    marker_y = y_lim[0] + (y_lim[1] - y_lim[0]) * 0.05
-                    
-                    min_color = '#ff3b30'
-                    max_color = '#00BCD4'  # Cyan - works on both light and dark backgrounds
-                    edge_color = '#0b1220'
-                    ax.scatter([stats_min], [marker_y], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_plot_format_stat_value(stats_min)}')
-                    ax.scatter([stats_max], [marker_y], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_plot_format_stat_value(stats_max)}')
-
-                    # Match Detailed Analysis: min tag slightly left, max tag slightly right.
-                    xlim = ax.get_xlim()
-                    min_xytext, min_ha = (-3, 12), 'right'
-                    max_xytext, max_ha = (3, 12), 'left'
-                    if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
-                        min_xytext = (min_xytext[0], 12)
-                        max_xytext = (max_xytext[0], 22)
-
-                    ax.annotate(f'{_plot_format_stat_value(stats_min)}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    ax.annotate(f'{_plot_format_stat_value(stats_max)}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    
-                    # Std in legend only
-                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_plot_format_stat_value(stats_std)}')
-                    
-                    # Legend on single line - just below x-axis title
-                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.18), ncol=6, frameon=False, columnspacing=0.5)
-                    fig.subplots_adjust(bottom=0.30)
+                    _add_static_distribution_overlays(
+                        ax,
+                        s_arr,
+                        value_formatter=_format_stat_value,
+                        legend_fontsize=6,
+                        legend_columns=6,
+                    )
+                    fig.subplots_adjust(bottom=0.54, right=0.95, top=0.90)
                     
                     # Apply compact K/M/B/T axis labels for large values.
-                    _plot_apply_sci_formatter(ax)
+                    _apply_sci_formatter(ax)
                 except Exception as stats_err:
                     app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
                 
@@ -344,26 +319,24 @@ def handle_download_static_plots_zip(filename):
                     fc_mean, ci = _forecast_with_fallback(s, col_forecast_steps, filename=filename, col=col)
                     max_forecast_steps_used = max(max_forecast_steps_used, int(col_forecast_steps))
 
-                    xlab = 'Timestamp' if is_timeseries else 'Index'
-
                     fc_b64 = generate_forecast_plot(
                         s,
                         fc_mean,
                         f"Forecast: {col} ({col_forecast_steps} steps)",
-                        xlab,
+                        resolved_x_axis_label,
                         col,
                         conf_int=ci,
                         history_tail=None,
                         anomalies_idx=an_idx,
                         anomalies_score=an_score,
-                        legend_y=-0.38
+                        display_index=display_index,
                     )
                     raw = base64.b64decode(fc_b64.encode('utf-8'))
                     zf.writestr(f"{secure_filename(str(col))}_forecast.png", raw)
                 except Exception as fc_err:
                     app.logger.debug("ZIP forecast plot skipped for %s/%s: %s", filename, col, fc_err)
 
-        # Generate Categories bar charts for non-numeric columns (top 50)
+        # Generate Categories bar charts for non-numeric columns.
         for col in df.columns:
             try:
                 # Skip numeric columns already processed above
@@ -375,78 +348,14 @@ def handle_download_static_plots_zip(filename):
                 if len(s_cat) < 3:
                     continue
                 
-                # Generate Categories bar chart (top 50 for readability)
                 all_counts = s_cat.value_counts()
-                top_counts = all_counts.head(50)
-                if len(top_counts) < 2:
+                if len(all_counts) < 2:
                     continue
                 
-                # Calculate stats for annotation
-                total_unique = len(all_counts)
-                max_count = int(all_counts.max())
-                min_count = int(all_counts.min())
-                avg_count = float(all_counts.mean())
-                med_count = float(all_counts.median())
-                most_freq = str(all_counts.index[0])
-                    
-                fig, ax = plt.subplots(figsize=(12, 5))
-                top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black', label='Count')
-
-                # Add value labels above each bar
-                try:
-                    if ax.containers and isinstance(ax.containers[0], BarContainer):
-                        ax.bar_label(
-                            ax.containers[0],
-                            labels=[str(int(v)) for v in top_counts.values],
-                            padding=2,
-                            fontsize=7
-                        )
-                except Exception as bar_label_err:
-                    app.logger.debug("ZIP categories bar labels skipped for %s/%s: %s", filename, col, bar_label_err)
-                
-                if len(all_counts) > 50:
-                    ax.set_title(f"Categories: {col} (Top 50 of {total_unique})", fontsize=12)
-                else:
-                    ax.set_title(f"Categories: {col} ({total_unique} unique)", fontsize=12)
-                
-                ax.set_xlabel(col, fontsize=10)
-                ax.set_ylabel("Count", fontsize=10)
-                ax.grid(True, alpha=0.3, axis='y')
-                plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=8)
-                
-                # Add horizontal avg/med lines for counts
-                ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
-                ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
-                
-                # Add text labels for avg/med lines next to the chart
-                ylim = ax.get_ylim()
-                y_range = ylim[1] - ylim[0]
-                threshold = y_range * 0.03  # keep labels closer to their lines
-
-                if abs(avg_count - med_count) < threshold:
-                    offset = threshold * 0.4
-                    if avg_count >= med_count:
-                        avg_y = avg_count + offset
-                        med_y = med_count - offset
-                    else:
-                        avg_y = avg_count - offset
-                        med_y = med_count + offset
-                else:
-                    avg_y = avg_count
-                    med_y = med_count
-
-                ax.text(1.005, avg_y, f'Avg: {avg_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
-                ax.text(1.005, med_y, f'Med: {med_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
-                
-                # Get least frequent item name
-                least_freq = str(all_counts.index[-1]) if len(all_counts) > 0 else "N/A"
-                
-                # Add Most/Least as legend entries (invisible traces)
-                ax.plot([], [], color='#27ae60', marker='s', linestyle='', markersize=8, label=f"Most: '{most_freq}' ({max_count})")
-                ax.plot([], [], color='#e74c3c', marker='s', linestyle='', markersize=8, label=f"Least: '{least_freq}' ({min_count})")
-                
-                # Legend on top-right, vertical (line by line)
-                ax.legend(fontsize=8, loc='upper right', framealpha=0.9)
+                built_chart = _build_static_category_chart(all_counts, col)
+                if built_chart is None:
+                    continue
+                fig, _ax = built_chart
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
@@ -579,7 +488,9 @@ def handle_download_full_report_html(filename):
         
         # Generate distribution histogram for this column
         try:
-            fig, ax = plt.subplots(figsize=(10, 4))
+            from matplotlib.figure import Figure
+            fig = Figure(figsize=(10, 4))
+            ax = fig.subplots()
             s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
             ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
             ax.set_title(f"Distribution: {col}")
@@ -618,16 +529,22 @@ def handle_download_full_report_html(filename):
             if fc_mean is not None and len(fc_mean) > 0:
                 try:
                     app.logger.debug("Creating forecast plot for %s", col)
+                    resolved_x_axis_label, display_index = _resolve_plot_display_axis(
+                        s,
+                        source_df=df,
+                        fallback_label='Timestamp' if _is_reliable_timeseries_index(s.index) else 'Index',
+                    )
                     fc_b64 = generate_forecast_plot(
                         s,
                         fc_mean,
                         f"Forecast: {col} ({col_forecast_steps} steps = {forecast_pct_label})",
-                        'Timestamp',
+                        resolved_x_axis_label,
                         col,
                         conf_int=ci,
                         history_tail=None,
                         anomalies_idx=an_idx,
                         anomalies_score=an_score,
+                        display_index=display_index,
                     )
                     forecast_sections.append(
                         f'<figure><figcaption><strong>Forecast: {col}</strong> '

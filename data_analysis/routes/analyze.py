@@ -3,6 +3,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from data_analysis.analysis.plot import (
+    _add_static_distribution_overlays,
+    _build_non_timeseries_tick_labels,
+    _resolve_plot_display_axis,
+    _resolve_static_tick_policy,
+    _sample_numeric_axis_ticks,
+)
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
 
@@ -262,8 +269,9 @@ def handle_analyze_file(filename):
         else:
             used_cols = list(_num_df.columns)[:20] if _num_df is not None and not _num_df.empty else list(df.columns)[:20]
         
-        # Build minimal AI context without expensive operations
-        ai_context = describe_for_ai(df, filename=filename) if not build_interactive else ""
+        # Skip describe_for_ai on the fast path — overview defers AI summary
+        # to the AJAX endpoint, so building this expensive context is unnecessary.
+        ai_context = ""
         
         ai_summary = _get_clean_ai_summary_from_cache(filename)
         if ai_summary is None and active_view == 'overview':
@@ -417,24 +425,30 @@ def handle_analyze_file(filename):
                     t0 = time.perf_counter()
                     steps = _steps_for_history_rows(len(series))
                     if steps <= 0:
-                        continue
-                    app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
+                        pass
+                    else:
+                        app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
 
-                    # Unified pipeline - use cached helper for cross-view performance
-                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+                    if steps > 0:
+                        # Unified pipeline - use cached helper for cross-view performance
+                        fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
 
-                    title_fc = f"Forecast for {column} (with anomalies)"
-                    
-                    # Do not thin history for display to ensure anomaly positions 
-                    # perfectly match Interactive, PDF, and ZIP exports which use full series.
-                    s_hist = series
-                    fc_mean_thin = fc_mean
-                    conf_df_thin = conf_df
-                    
-                    # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
-                    fc_stats = _compute_basic_stats(series)
+                        title_fc = f"Forecast for {column} (with anomalies)"
+                        
+                        # Do not thin history for display to ensure anomaly positions 
+                        # perfectly match Interactive, PDF, and ZIP exports which use full series.
+                        s_hist = series
+                        fc_mean_thin = fc_mean
+                        conf_df_thin = conf_df
+                        
+                        # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
+                        fc_stats = _compute_basic_stats(series)
 
-                    xlab = 'Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index'
+                    xlab, display_index = _resolve_plot_display_axis(
+                        series,
+                        source_df=df,
+                        fallback_label='Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index',
+                    )
                     try:
                         # Pass anomaly indices to the forecast plot generation
                         img_fc = generate_forecast_plot(
@@ -448,8 +462,7 @@ def handle_analyze_file(filename):
                             anomalies_idx=an_idx,  # Add anomaly markers to forecast plot
                             anomalies_score=an_score,
                             stats=fc_stats,        # Pass stats for visualization
-                            legend_y=-0.42,
-                            xlabel_labelpad=6
+                            display_index=display_index,
                         )
                         forecast_plots.append({"img": img_fc, "title": title_fc, "column": column, "type": "forecast"})
                     except Exception as _e:
@@ -492,82 +505,41 @@ def handle_analyze_file(filename):
                 
                 # Generate distribution histogram for this column
                 try:
-                    from data_analysis.analysis.plot import (
-                        _apply_sci_formatter,
-                        _format_stat_value,
-                    )
-                    fig, ax = plt.subplots(figsize=(6, 4))
+                    fig, ax = plt.subplots(figsize=(7.2, 4.2))
                     series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
                     ax.hist(series_arr, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
                     ax.set_title(f"Distribution: {column}", fontsize=10)
-                    ax.set_xlabel(column, fontsize=9, labelpad=8)
+                    ax.set_xlabel(column, fontsize=9, labelpad=10)
                     ax.set_ylabel("Frequency", fontsize=9)
                     ax.grid(True, alpha=0.3)
+
+                    finite_unique_values = np.unique(series_arr[np.isfinite(series_arr)]) if series_arr.size else np.asarray([], dtype=float)
+                    tick_policy = _resolve_static_tick_policy(
+                        finite_unique_values.tolist(),
+                        chart_type='distribution',
+                    )
+                    tick_values, tick_labels = _sample_numeric_axis_ticks(
+                        series_arr.tolist(),
+                        max_tick_labels=int(tick_policy['max_tick_labels']),
+                        min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
+                    )
+                    if tick_values:
+                        ax.set_xticks(tick_values)
+                        ax.set_xticklabels(
+                            tick_labels,
+                            rotation=int(tick_policy['tick_angle']),
+                            ha=str(tick_policy['tick_ha']),
+                            fontsize=float(tick_policy['tick_fontsize']),
+                        )
+
+                    _add_static_distribution_overlays(
+                        ax,
+                        series_arr,
+                        legend_fontsize=6,
+                        legend_columns=6,
+                    )
+                    fig.subplots_adjust(bottom=0.54, right=0.95, top=0.90)
                     
-                    # Add stat markers
-                    stats = _compute_basic_stats(series)
-                    stats_min = stats['min']
-                    stats_max = stats['max']
-                    stats_mean = stats['mean']
-                    stats_median = stats['median']
-                    stats_std = stats['std']
-                    
-                    # Avg and Median vertical lines — use _format_stat_value for sci notation on huge numbers
-                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_stat_value(stats_mean)}')
-                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Median: {_format_stat_value(stats_median)}')
-
-                    # Avg/Med labels next to their lines (like before), but with a mixed transform
-                    # to avoid altering y-axis scale.
-                    xaxis_transform = blended_transform_factory(ax.transData, ax.transAxes)
-                    xlim = ax.get_xlim()
-                    x_offset = (xlim[1] - xlim[0]) * 0.01
-                    top_lane = 0.985
-                    if stats_mean <= stats_median:
-                        ax.text(stats_mean - x_offset, top_lane, f'Avg: {_format_stat_value(stats_mean)}', transform=xaxis_transform,
-                                va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
-                        ax.text(stats_median + x_offset, top_lane, f'Med: {_format_stat_value(stats_median)}', transform=xaxis_transform,
-                                va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
-                    else:
-                        ax.text(stats_median - x_offset, top_lane, f'Med: {_format_stat_value(stats_median)}', transform=xaxis_transform,
-                                va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold', clip_on=False)
-                        ax.text(stats_mean + x_offset, top_lane, f'Avg: {_format_stat_value(stats_mean)}', transform=xaxis_transform,
-                                va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold', clip_on=False)
-
-                    ylim = ax.get_ylim()
-                    
-                    # Min/Max markers at bottom - BOTH tags ABOVE their symbols
-                    marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
-                    min_color = '#ff3b30'
-                    max_color = '#00e5ff'
-                    edge_color = '#0b1220'
-
-                    # Add horizontal room and keep labels inside plot bounds.
-                    xlim = ax.get_xlim()
-                    x_range = max(xlim[1] - xlim[0], 1e-9)
-                    ax.set_xlim(xlim[0] - x_range * 0.04, xlim[1] + x_range * 0.04)
-                    xlim = ax.get_xlim()
-
-                    # Requirement: min tag on the LEFT, max tag on the RIGHT, but slightly closer to center.
-                    min_xytext, min_ha = (-3, 12), 'right'
-                    max_xytext, max_ha = (3, 12), 'left'
-
-                    # If min/max are close on x-axis, separate vertically to avoid overlap.
-                    if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
-                        min_xytext = (min_xytext[0], 12)
-                        max_xytext = (max_xytext[0], 22)
-
-                    ax.scatter([stats_min], [marker_y], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}')
-                    ax.scatter([stats_max], [marker_y], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}')
-                    ax.annotate(f'{_format_stat_value(stats_min)}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    ax.annotate(f'{_format_stat_value(stats_max)}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    
-                    # Std in legend only, single-line legend
-                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_stat_value(stats_std)}')
-                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.34), ncol=6, frameon=False, columnspacing=0.5)
-                    fig.subplots_adjust(bottom=0.28, right=0.84)
-                    
-                    # Apply compact K/M/B/T axis labels for large values.
-                    _apply_sci_formatter(ax)
                     
                     buf = io.BytesIO()
                     fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
@@ -585,9 +557,17 @@ def handle_analyze_file(filename):
 
                 # Use NUMERIC X-axis for proportional display (like in PDF)
                 n_hist = len(s_tail)
+                x_axis_title, display_history_index = _resolve_plot_display_axis(
+                    s_tail,
+                    source_df=df,
+                    fallback_label='Timestamp' if _is_reliable_timeseries_index(s_tail.index) else 'Index',
+                    prefer_first_column=True,
+                )
                 x_hist_numeric = list(range(n_hist))
                 y_hist = [float(v) for v in s_tail.values]
-                original_labels = [str(i) for i in s_tail.index]
+                original_labels = [str(i) for i in display_history_index]
+                fc_labels: list[str] = []
+                n_fc_total = 0
                 
                 traces = [{
                     "type": "scatter",
@@ -681,6 +661,7 @@ def handle_analyze_file(filename):
                     if fc_mean is None or len(fc_mean) == 0:
                         raise ValueError("Empty forecast")
                     n_fc = len(fc_mean)
+                    n_fc_total = n_fc
                     fc_x_numeric = list(range(n_hist, n_hist + n_fc))
                     fc_y = [float(v) for v in fc_mean.to_numpy(dtype=float)]
                     fc_labels = [str(i) for i in fc_mean.index]
@@ -738,7 +719,58 @@ def handle_analyze_file(filename):
             # Build layout and append to interactive list (moved outside the forecast condition)
             # This ensures interactive charts work even for non-timeseries or short series
             if build_interactive:
-                xaxis = {"title": ("Timestamp" if is_timeseries else "Index"), "showgrid": True}
+                total_x_extent = n_hist + (n_fc_total if split_x is not None else 0)
+                x_axis_range = [0, total_x_extent]
+
+                history_prefers_text_labels = False
+                try:
+                    history_prefers_text_labels = (
+                        not _is_reliable_timeseries_index(display_history_index)
+                        and not bool(pd.api.types.is_numeric_dtype(display_history_index))
+                        and split_x is not None
+                        and n_fc_total > 0
+                        and bool(fc_labels)
+                    )
+                except Exception:
+                    history_prefers_text_labels = False
+
+                if history_prefers_text_labels:
+                    tickvals, ticktext = _build_non_timeseries_tick_labels(
+                        display_history_index,
+                        fc_mean.index if 'fc_mean' in locals() and fc_mean is not None else None,
+                        max_tick_labels=20,
+                    )
+                else:
+                    tick_count = 20
+                    extent_int = int(max(1, total_x_extent))
+                    if extent_int > tick_count:
+                        raw_ticks = np.linspace(0, extent_int - 1, num=tick_count, dtype=float).tolist()
+                        tickvals = sorted({int(round(v)) for v in raw_ticks})
+                        if tickvals[-1] != extent_int - 1:
+                            tickvals.append(extent_int - 1)
+                    else:
+                        tickvals = list(range(extent_int))
+
+                    def _idx_label(pos: int) -> str:
+                        if pos < n_hist:
+                            orig_pos = min(pos, len(s_tail.index) - 1)
+                            return str(display_history_index[orig_pos])
+                        if split_x is not None and n_fc_total > 0 and fc_labels:
+                            fc_pos = min(max(int(pos - n_hist), 0), n_fc_total - 1)
+                            rel = fc_pos / max(1, n_fc_total - 1)
+                            label_idx = min(int(round(rel * (len(fc_labels) - 1))), len(fc_labels) - 1)
+                            return fc_labels[label_idx]
+                        return str(pos)
+
+                    ticktext = [_idx_label(pos) for pos in tickvals]
+                xaxis = {
+                    "title": x_axis_title,
+                    "showgrid": True,
+                    "tickmode": "array",
+                    "tickvals": tickvals,
+                    "ticktext": ticktext,
+                    "range": x_axis_range,
+                }
                 layout = {
                     "title": {"text": f"{column} (interactive)", "x": 0.02},
                     "xaxis": xaxis,
@@ -751,30 +783,17 @@ def handle_analyze_file(filename):
                     "legend": {"orientation": "h", "groupclick": "togglegroup"},
                     "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
                 }
-                if is_timeseries:
-                    layout["xaxis"].update({
-                        "rangeslider": {"visible": True},
-                        "rangeselector": {
-                            "buttons": [
-                                {"count": 1, "label": "1m", "step": "month", "stepmode": "backward"},
-                                {"count": 6, "label": "6m", "step": "month", "stepmode": "backward"},
-                                {"step": "year", "stepmode": "todate", "label": "YTD"},
-                                {"count": 1, "label": "1y", "step": "year", "stepmode": "backward"},
-                                {"step": "all", "label": "All"}
-                            ]
-                        }
-                    })
 
                 dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
                 
                 # Compute statistics for the column
                 try:
                     stats = {
-                        "min": float(series.min()),
-                        "max": float(series.max()),
-                        "mean": float(series.mean()),
-                        "median": float(series.median()),
-                        "std": float(series.std())
+                        "min": _safe_number(series.min()),
+                        "max": _safe_number(series.max()),
+                        "mean": _safe_number(series.mean()),
+                        "median": _safe_number(series.median()),
+                        "std": _safe_number(series.std())
                     }
                 except Exception:
                     stats = None
@@ -801,18 +820,22 @@ def handle_analyze_file(filename):
                     fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
                     title_fc = f"Forecast for {column}"
                     s_hist = series
+                    fallback_xlab, fallback_display_index = _resolve_plot_display_axis(
+                        series,
+                        source_df=df,
+                        fallback_label='Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index',
+                    )
                     forecast_plots.append({
                         "img": generate_forecast_plot(
                             s_hist,
                             fc_mean,
                             title_fc,
-                            'Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index',
+                            fallback_xlab,
                             column,
                             conf_int=conf_df,
                             history_tail=None,
                             anomalies_idx=an_idx_fb,
-                            legend_y=-0.42,
-                            xlabel_labelpad=6
+                            display_index=fallback_display_index,
                         ),
                         "title": title_fc
                     })

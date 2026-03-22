@@ -18,9 +18,38 @@
 
 
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260301-amoled') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260321-analysis-layout-v14') }}">
   <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'amoled');</script>
-  <script src="{{ url_for('static', filename='js/analysis.js', v='20260301-amoled') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/analysis.js', v='20260308-analysis-layout-v4') }}" defer></script>
+  {% if active_view == 'interactive' %}
+  <style>
+    html,
+    body {
+      overflow-y: hidden !important;
+      height: 100% !important;
+    }
+
+    main.container {
+      height: calc(100vh - var(--analysis-header-height, 73px)) !important;
+      min-height: calc(100vh - var(--analysis-header-height, 73px));
+      overflow: hidden !important;
+    }
+  </style>
+  <script>
+    (function () {
+      function syncAnalysisHeaderHeight() {
+        const header = document.querySelector('header');
+        const measured = header ? Math.ceil(header.getBoundingClientRect().height) : 73;
+        document.documentElement.style.setProperty('--analysis-header-height', `${Math.max(73, measured + 2)}px`);
+      }
+
+      window.syncAnalysisHeaderHeight = syncAnalysisHeaderHeight;
+      window.addEventListener('resize', syncAnalysisHeaderHeight);
+      window.addEventListener('load', syncAnalysisHeaderHeight);
+      document.addEventListener('DOMContentLoaded', syncAnalysisHeaderHeight);
+    })();
+  </script>
+  {% else %}
   <style>
     html,
     body {
@@ -34,6 +63,7 @@
       overflow: visible !important;
     }
   </style>
+  {% endif %}
 </head>
 
 
@@ -46,6 +76,7 @@
         {% set data_range = request.args.get('data_range', '1.0') %}
         {% set contam = request.args.get('contamination', analysis.controls.get('contamination', 0.02)) %}
         {% set selected_col = request.args.get('selected_col', '') %}
+        {% set labs_col = selected_col or (analysis.columns[0] if analysis.columns else '') %}
         <a title="Switch to overview summary" class="pill {{ 'active' if active_view == 'overview' else '' }}"
           href="{{ url_for('pages.analyze_file', filename=filename, display=display_name, view='overview', forecast_pct=pct, contamination=contam, data_range=data_range, selected_col=selected_col) }}">Overview</a>
         <a title="Explore interactively with zoom & hover"
@@ -60,6 +91,9 @@
         <a title="View top categories for non-numeric columns"
           class="pill {{ 'active' if active_view == 'categories' else '' }}"
           href="{{ url_for('pages.analyze_file', filename=filename, display=display_name, view='categories', forecast_pct=pct, contamination=contam, data_range=data_range, selected_col=selected_col) }}">Categories</a>
+        <a title="Open advanced feature pages for benchmarking, anomalies, data quality, and change points" class="pill"
+          href="{{ url_for('pages.labs_hub', filename=filename, display=display_name, column=labs_col) }}">Feature
+          Labs</a>
       </nav>
       <div class="spacer" style="flex:1 1 auto;"></div>
       <div class="actions">
@@ -85,7 +119,8 @@
     </div>
   </header>
 
-  <main class="container" style="width:100%; margin:0; padding:0">
+  <main class="container"
+    style="width:100%; max-width:100%; margin:0; padding:0 clamp(14px, 2vw, 28px); min-width:0; box-sizing:border-box; overflow-x:hidden;">
 
     {% if active_view == 'interactive' %}
 
@@ -240,60 +275,45 @@
     </div>
 
     {% elif active_view == 'forecast' %}
-    <section class="panel" style="width:100%; padding-top:4px;">
+    <section class="panel" style="width:100%; max-width:100%; min-width:0; box-sizing:border-box; padding-top:4px;">
       {% set forecast_visible_rows = analysis.controls.data_range_rows if analysis.controls.data_range_rows and
       analysis.controls.data_range_rows > 0 else analysis.controls.total_rows %}
-      <div class="row"
-        style="margin:0 0 4px 0; gap:18px; align-items:flex-start; justify-content:space-between; flex-wrap:nowrap;">
-        <div style="flex:1 1 auto; min-width:360px;">
+      <div class="row forecast-header-row"
+        style="margin:0 0 4px 0; gap:18px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; min-width:0; max-width:100%;">
+        <div style="flex:1 1 auto; min-width:250px;">
           <h3 style="margin:0 0 2px 0;">Detailed Analysis by Column</h3>
           <div class="muted" style="margin:0; line-height:1.35;">Comprehensive view: forecasts with 95% CI, trend
             analysis, and anomaly detection</div>
         </div>
         <div
-          style="display:flex; flex-direction:column; gap:6px; align-items:flex-start; margin-left:auto; margin-right:clamp(18px, 3vw, 56px); max-width:calc(100% - 24px);">
-          <div class="row"
-            style="gap:22px; align-items:center; justify-content:flex-start; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
-            <label for="dataRangeForecast"
-              style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Data Range</label>
-            {% set forecast_data_range = analysis.controls.get('data_range', 1.0) %}
-            <select id="dataRangeForecast" title="Limit detailed analysis to latest X% of rows (reloads page)"
-              style="width:138px; min-width:138px;">
-              {% for val,label in [(1.00,'All data (100%)'),(0.50,'Latest 50%'),(0.30,'Latest 30%'),(0.15,'Latest
-              15%'),(0.10,'Latest 10%'),(0.05,'Latest 5%'),(0.03,'Latest 3%'),(0.01,'Latest 1%')]
-              %}
-              <option value="{{ '%.2f'|format(val) }}" {% if (forecast_data_range|float)==val %}selected{% endif %}>{{
-                label }}</option>
-              {% endfor %}
-            </select>
-            <span id="dataRangeForecastHint" class="muted" style="white-space:nowrap;">Showing all rows.</span>
-          </div>
-          <div class="row"
-            style="gap:22px; align-items:center; justify-content:flex-start; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
-            <label for="forecastPctSelectTop"
-              style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Forecast horizon</label>
-            <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)"
-              style="width:112px; min-width:112px;">
-              {% for val,label in [(0.00,'0% (no
-              forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')]
-              %}
-              <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-            <span class="muted" style="white-space:nowrap;">= {{ analysis.controls.effective_steps }} steps of {{
-              analysis.controls.total_rows }} rows</span>
-          </div>
-          <div class="row"
-            style="gap:22px; align-items:center; justify-content:flex-start; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
-            <label for="contaminationForecast"
-              style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Anomaly contamination</label>
-            <input id="contaminationForecast" type="number" step="0.001" min="0.001" max="0.2"
-              value="{{ '%.3f'|format(contam|float) }}"
-              title="Expected outlier fraction used by IsolationForest detector (reloads page)"
-              style="width:88px; min-width:88px;" />
-            <span id="contaminationForecastHint" class="muted" style="white-space:nowrap;">Expected anomalies ≈ {{
-              '%.0f'|format((forecast_visible_rows * (contam|float))) }} per column ({{ forecast_visible_rows }} rows ×
-              {{ '%.3f'|format(contam|float) }}).</span>
+          style="margin-left:auto; margin-right:0; max-width:100%; min-width:0; box-sizing:border-box;">
+          <div class="forecast-controls-bar">
+            <div class="forecast-control-group forecast-control-group--range">
+              <label for="dataRangeForecast">Data Range</label>
+              {% set forecast_data_range = analysis.controls.get('data_range', 1.0) %}
+              <select id="dataRangeForecast" title="Limit detailed analysis to latest X% of rows (reloads page)">
+                {% for val,label in [(1.00,'All data (100%)'),(0.50,'Latest 50%'),(0.30,'Latest 30%'),(0.15,'Latest 15%'),(0.10,'Latest 10%'),(0.05,'Latest 5%'),(0.03,'Latest 3%'),(0.01,'Latest 1%')] %}
+                <option value="{{ '%.2f'|format(val) }}" {% if (forecast_data_range|float)==val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <span id="dataRangeForecastHint" class="muted">Showing all rows.</span>
+            </div>
+            <div class="forecast-control-group forecast-control-group--forecast">
+              <label for="forecastPctSelectTop">Forecast horizon</label>
+              <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
+                {% for val,label in [(0.00,'0% (no forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+                <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <span class="muted">= {{ analysis.controls.effective_steps }}/{{ analysis.controls.total_rows }} rows</span>
+            </div>
+            <div class="forecast-control-group forecast-control-group--contamination">
+              <label for="contaminationForecast">Anomaly contamination</label>
+              <input id="contaminationForecast" type="number" step="0.001" min="0.001" max="0.2"
+                value="{{ '%.3f'|format(contam|float) }}"
+                title="Expected outlier fraction used by IsolationForest detector (reloads page)" />
+              <span id="contaminationForecastHint" class="muted">{{ '%.0f'|format((forecast_visible_rows * (contam|float))) }}/{{ forecast_visible_rows }} rows</span>
+            </div>
           </div>
         </div>
       </div>
@@ -316,10 +336,7 @@
           function updateDataRangeHint() {
             if (!rangeHintEl) return;
             const rows = computeVisibleRows();
-            const ratio = rangeEl ? parseFloat(rangeEl.value || '1') : 1;
-            const safeRatio = Number.isFinite(ratio) ? ratio : 1;
-            const pctLabel = `${Math.round(safeRatio * 100)}%`;
-            rangeHintEl.textContent = `Showing latest ${pctLabel} (${rows} of ${totalRows} rows).`;
+            rangeHintEl.textContent = `${rows}/${totalRows} rows`;
           }
 
           function updateContaminationHint() {
@@ -328,7 +345,7 @@
             const safeCont = Number.isFinite(cont) ? Math.min(0.2, Math.max(0.001, cont)) : 0.02;
             const rows = computeVisibleRows();
             const expected = Math.round((rows || 0) * safeCont);
-            contamHintEl.textContent = `Expected anomalies ≈ ${expected} per column (${rows} rows × ${safeCont.toFixed(3)}).`;
+            contamHintEl.textContent = `${expected}/${rows} rows`;
           }
 
           if (!el) return;
@@ -421,84 +438,62 @@
 
     {% elif active_view == 'interactive' %}
     <section id="interactivePanel" class="panel"
-      style="width:100%; display:flex; flex-direction:column; padding-top:4px; margin-bottom:0; min-height:calc(100vh - 120px);">
-      <div class="row"
-        style="margin:0 0 4px 0; gap:18px; align-items:flex-start; justify-content:space-between; flex-wrap:nowrap;">
+      style="width:100%; max-width:100%; min-width:0; box-sizing:border-box; display:flex; flex-direction:column; padding:10px 14px 12px; margin-bottom:0; height:100%; min-height:0; overflow:hidden;">
+      <div class="interactive-panel-head" style="margin:0 0 2px 0; min-width:0; max-width:100%;">
         <h3 style="margin:0;">Interactive charts</h3>
-        <div
-          style="margin-left:auto; margin-right:clamp(18px, 3vw, 56px); display:grid; grid-template-columns: max-content max-content; gap:8px 44px; justify-content:end; align-items:start; max-width:calc(100% - 24px);">
-          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
-            <div class="row"
-              style="gap:22px; align-items:center; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
-              <label for="colPick"
-                style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Column</label>
-              <select id="colPick" style="width:280px; min-width:220px; max-width:280px;">
-                {% for col in analysis.columns %}
-                <option value="{{ col }}">{{ col }}</option>
-                {% endfor %}
-              </select>
-            </div>
+        <div class="interactive-controls-bar">
+          <div class="interactive-control-group interactive-control-group--column interactive-control-group--compact">
+            <label for="colPick">Column</label>
+            <select id="colPick">
+              {% for col in analysis.columns %}
+              <option value="{{ col }}">{{ col }}</option>
+              {% endfor %}
+            </select>
           </div>
-          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
-            <div class="row"
-              style="gap:22px; align-items:center; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
-              <label for="dataRangePick" style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Data
-                Range</label>
-              <select id="dataRangePick" title="Show only the latest X% of data points"
-                style="width:138px; min-width:138px;">
-                <option value="1.0" selected>All data (100%)</option>
-                <option value="0.5">Latest 50%</option>
-                <option value="0.3">Latest 30%</option>
-                <option value="0.15">Latest 15%</option>
-                <option value="0.1">Latest 10%</option>
-                <option value="0.05">Latest 5%</option>
-                <option value="0.03">Latest 3%</option>
-                <option value="0.01">Latest 1%</option>
-              </select>
-              <span id="dataRangeInteractiveHint" class="muted" style="white-space:nowrap;">Showing all rows.</span>
-            </div>
+          <div class="interactive-control-group interactive-control-group--range interactive-control-group--hint-left">
+            <label for="dataRangePick">Data Range</label>
+            <select id="dataRangePick" title="Show only the latest X% of data points">
+              <option value="1.0" selected>All data (100%)</option>
+              <option value="0.5">Latest 50%</option>
+              <option value="0.3">Latest 30%</option>
+              <option value="0.15">Latest 15%</option>
+              <option value="0.1">Latest 10%</option>
+              <option value="0.05">Latest 5%</option>
+              <option value="0.03">Latest 3%</option>
+              <option value="0.01">Latest 1%</option>
+            </select>
+            <span id="dataRangeInteractiveHint" class="muted interactive-control-hint">Showing all rows.</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
-            <div class="row"
-              style="gap:22px; align-items:center; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
-              <label for="forecastPctSelect"
-                style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Forecast horizon</label>
-              <select id="forecastPctSelect"
-                title="Set forecast length as percent of original rows (affects forecast view & AI summary)"
-                style="width:112px; min-width:112px;">
-                {% for val,label in [(0.00,'0% (no
-                forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')]
-                %}
-                <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}
-                </option>
-                {% endfor %}
-              </select>
-              <span class="muted" style="white-space:nowrap;">= {{ analysis.controls.effective_steps }} steps of {{
-                analysis.controls.total_rows }} rows</span>
-            </div>
+          <div class="interactive-control-group interactive-control-group--forecast interactive-control-group--hint-left">
+            <label for="forecastPctSelect">Forecast horizon</label>
+            <select id="forecastPctSelect"
+              title="Set forecast length as percent of original rows (affects forecast view & AI summary)">
+              {% for val,label in [(0.00,'0% (no
+              forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')]
+              %}
+              <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <span class="muted interactive-control-hint">{{ analysis.controls.effective_steps }}/{{ analysis.controls.total_rows }} rows</span>
           </div>
-          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
-            <div class="row"
-              style="gap:22px; align-items:center; flex-wrap:nowrap; white-space:nowrap; line-height:1.35;">
-              <label for="contaminationInteractive"
-                style="white-space:nowrap; width:150px; min-width:150px; text-align:left;">Anomaly contamination</label>
-              <input id="contaminationInteractive" type="number" step="0.001" min="0.001" max="0.2"
-                value="{{ '%.3f'|format(contam|float) }}"
-                title="Expected outlier fraction used by IsolationForest detector (reloads page)"
-                style="width:88px; min-width:88px;" />
-              <span id="contaminationInteractiveHint" class="muted" style="white-space:nowrap;">Filter to show recent
-                data points only.</span>
-            </div>
+          <div class="interactive-control-group interactive-control-group--contamination interactive-control-group--hint-left">
+            <label for="contaminationInteractive">Anomaly contamination</label>
+            <input id="contaminationInteractive" type="number" step="0.001" min="0.001" max="0.2"
+              value="{{ '%.3f'|format(contam|float) }}"
+              title="Expected outlier fraction used by IsolationForest detector (reloads page)" />
+            <span id="contaminationInteractiveHint" class="muted interactive-control-hint">≈ anomalies in view</span>
           </div>
         </div>
       </div>
       <!-- Side-by-side layout for chart and distribution - fills available space -->
       <div id="interactiveChartsRow"
-        style="display:flex; gap:10px; align-items:stretch; flex:1 1 auto; height:calc(100vh - 200px); min-height:440px; overflow:hidden; width:100%; margin-top:2px;">
-        <div id="chart" class="panel" style="flex: 2 1 60%; height: 100%; max-height: 100%; overflow: hidden;">
+        style="display:flex; gap:4px; align-items:stretch; flex:1 1 auto; height:100%; min-height:0; overflow:hidden; width:100%; margin-top:2px; min-width:0;">
+        <div id="chart" class="panel"
+          style="flex: 2.35 1 67%; height: 100%; max-height: 100%; min-height:0; min-width:0; overflow: hidden;">
           <div class="skeleton" style="height: 100%"></div>
         </div>
-        <div id="dist" class="panel" style="flex: 1 1 35%; height: 100%; max-height: 100%; overflow: visible;">
+        <div id="dist" class="panel"
+          style="flex: 0.95 1 33%; height: 100%; max-height: 100%; min-height:0; min-width:0; overflow: hidden;">
           <div class="skeleton" style="height: 100%"></div>
         </div>
       </div>
@@ -598,13 +593,14 @@
         const t = getThemeVars();
         const isDark = window.isDarkMode ? window.isDarkMode() : (t.bg && /^#0|^#1|^#2/i.test(t.bg.trim()));
         const gridColor = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.12)';
-        const sharedLegend = { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.14, yanchor: 'top' };
+        const isDateAxis = layout.xaxis && layout.xaxis.type === 'date';
+        const sharedLegend = { orientation: 'h', x: 0, xanchor: 'left', y: -0.22, yanchor: 'top' };
         layout.paper_bgcolor = t.panel;
         layout.plot_bgcolor = t.panel;
         layout.font = { color: t.text };
-        layout.margin = layout.margin || { l: 50, r: 20, t: 50, b: 90 }; // Keep legend close while preserving readability
+        layout.margin = Object.assign({ l: 50, r: 16, t: 40, b: 110 }, layout.margin || {});
         layout.height = layout.height || 500; // Explicit height for better aspect ratio
-        layout.legend = Object.assign(sharedLegend, layout.legend || {});
+        layout.legend = Object.assign({}, sharedLegend, layout.legend || {});
         layout.legend.font = Object.assign({ size: 10 }, layout.legend.font || {});
         layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
         // Position title at top LEFT to prevent cutoff for long titles
@@ -613,36 +609,47 @@
         } else if (layout.title && typeof layout.title === 'object') {
           layout.title = Object.assign({ x: 0.02, xref: 'paper', xanchor: 'left', y: 0.98, yanchor: 'top' }, layout.title);
         }
-        if (!layout.xaxis) layout.xaxis = {};
+        const xAxisTitleFallback = layout.xaxis && layout.xaxis.title
+          ? (typeof layout.xaxis.title === 'object' ? layout.xaxis.title.text : layout.xaxis.title)
+          : '';
+        layout.xaxis = normalizeAxisTitle(layout.xaxis, xAxisTitleFallback, 10);
         Object.assign(layout.xaxis, {
           showgrid: true,
           gridcolor: gridColor,
           gridwidth: 1,
           automargin: true,
-          nticks: 10,
+          tickangle: 0,
+          nticks: 24,
           rangeslider: { visible: false } // Disable rangeslider to save space
         });
-        if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
-        Object.assign(layout.xaxis.rangeselector, {
-          visible: true,
-          bgcolor: t.panel,
-          activecolor: t.border,
-          font: { color: t.text },
-          buttons: [
-            { count: 1, label: '1m', step: 'month', stepmode: 'backward' },
-            { count: 6, label: '6m', step: 'month', stepmode: 'backward' },
-            { step: 'year', stepmode: 'todate', label: 'YTD' },
-            { count: 1, label: '1y', step: 'year', stepmode: 'backward' },
-            { step: 'all', label: 'All' }
-          ]
-        });
-        if (!layout.yaxis) layout.yaxis = {};
+        if (isDateAxis) {
+          if (!layout.xaxis.rangeselector) layout.xaxis.rangeselector = {};
+          Object.assign(layout.xaxis.rangeselector, {
+            visible: true,
+            bgcolor: t.panel,
+            activecolor: t.border,
+            font: { color: t.text },
+            buttons: [
+              { count: 1, label: '1m', step: 'month', stepmode: 'backward' },
+              { count: 6, label: '6m', step: 'month', stepmode: 'backward' },
+              { step: 'year', stepmode: 'todate', label: 'YTD' },
+              { count: 1, label: '1y', step: 'year', stepmode: 'backward' },
+              { step: 'all', label: 'All' }
+            ]
+          });
+        } else if (layout.xaxis.rangeselector) {
+          delete layout.xaxis.rangeselector;
+        }
+        const yAxisTitleFallback = layout.yaxis && layout.yaxis.title
+          ? (typeof layout.yaxis.title === 'object' ? layout.yaxis.title.text : layout.yaxis.title)
+          : '';
+        layout.yaxis = normalizeAxisTitle(layout.yaxis, yAxisTitleFallback, 10);
         Object.assign(layout.yaxis, {
           showgrid: true,
           gridcolor: gridColor,
           gridwidth: 1,
           automargin: true,
-          nticks: 8
+          nticks: 14
         });
       }
 
@@ -659,15 +666,412 @@
         return `rgba(90,90,160,${alpha || 1})`;
       }
 
+      function getLegendEntryCount(traces) {
+        return (traces || []).filter((trace) => trace && trace.showlegend !== false).length;
+      }
+
+      function estimateLegendRows(traceCount, containerWidth, minItemWidth = 120) {
+        if (!traceCount) return 1;
+        const safeWidth = Math.max(320, Number(containerWidth) || 0);
+        const itemsPerRow = Math.max(1, Math.floor(safeWidth / minItemWidth));
+        return Math.max(1, Math.ceil(traceCount / itemsPerRow));
+      }
+
+      function getBottomLegendMargin(traceCount, containerWidth, options = {}) {
+        const rows = estimateLegendRows(traceCount, containerWidth, options.minItemWidth || 120);
+        const base = Number.isFinite(options.base) ? options.base : 102;
+        const rowHeight = Number.isFinite(options.rowHeight) ? options.rowHeight : 16;
+        const min = Number.isFinite(options.min) ? options.min : 112;
+        const max = Number.isFinite(options.max) ? options.max : 176;
+        return Math.max(min, Math.min(max, Math.round(base + Math.max(0, rows - 1) * rowHeight)));
+      }
+
+      function getLegendYOffset(rowCount, base = -0.34, rowStep = 0.048) {
+        return Math.max(-0.60, base - Math.max(0, rowCount - 1) * rowStep);
+      }
+
+      function getLegendEntryWidthFraction(traceCount, minFraction = 0.05, maxFraction = 1.0, fillRatio = 1.0) {
+        const count = Math.max(1, Number(traceCount) || 1);
+        return Math.max(minFraction, Math.min(maxFraction, fillRatio / count));
+      }
+
+      function stripNumericTrailingZeros(text) {
+        return String(text).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+      }
+
+      function formatPreciseNumericValue(value, decimals) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return String(value);
+        }
+        const resolvedDecimals = Number.isFinite(decimals)
+          ? Math.max(0, Math.min(4, Number(decimals)))
+          : (Math.abs(numeric) >= 100 ? 0 : (Math.abs(numeric) >= 10 ? 1 : (Math.abs(numeric) >= 1 ? 2 : 3)));
+        return stripNumericTrailingZeros(numeric.toFixed(resolvedDecimals));
+      }
+
+      function getFiniteMaxAbs(values) {
+        const list = Array.isArray(values) ? values : [];
+        return list.reduce((acc, value) => {
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) {
+            return acc;
+          }
+          return Math.max(acc, Math.abs(numeric));
+        }, 0);
+      }
+
+      function getTraceAxisMaxAbs(traces, axisKey) {
+        return (Array.isArray(traces) ? traces : []).reduce((acc, trace) => {
+          return Math.max(acc, getFiniteMaxAbs(trace && trace[axisKey]));
+        }, 0);
+      }
+
+      function formatCompactNumber(value, options = {}) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return String(value);
+        }
+
+        const scientificThreshold = Number.isFinite(options.scientificThreshold)
+          ? Number(options.scientificThreshold)
+          : 1e15;
+        const minCompactValue = Number.isFinite(options.minCompactValue)
+          ? Number(options.minCompactValue)
+          : 1e6;
+        const magnitude = Math.abs(numeric);
+        const forcedDecimals = Number.isFinite(options.decimals) ? Number(options.decimals) : null;
+
+        if (magnitude >= scientificThreshold) {
+          return numeric.toExponential(forcedDecimals === null ? 3 : forcedDecimals);
+        }
+
+        const suffixes = [
+          { value: 1e12, suffix: 'T' },
+          { value: 1e9, suffix: 'B' },
+          { value: 1e6, suffix: 'M' }
+        ];
+
+        for (const suffixInfo of suffixes) {
+          if (magnitude >= Math.max(minCompactValue, suffixInfo.value)) {
+            const scaled = numeric / suffixInfo.value;
+            const decimals = forcedDecimals === null
+              ? (Math.abs(scaled) >= 100 ? 0 : (Math.abs(scaled) >= 10 ? 1 : 2))
+              : forcedDecimals;
+            return `${stripNumericTrailingZeros(scaled.toFixed(decimals))}${suffixInfo.suffix}`;
+          }
+        }
+
+        return formatPreciseNumericValue(numeric, forcedDecimals);
+      }
+
+      function formatLegendStatLabel(label, value, options = {}) {
+        return `${label} ${formatCompactNumber(value, options)}`;
+      }
+
+      function relabelPlotlyCompactSISuffixes(rootEl) {
+        if (!rootEl || !rootEl.querySelectorAll) {
+          return;
+        }
+        rootEl.querySelectorAll('.xtick text, .ytick text').forEach((node) => {
+          const raw = String(node.textContent || '');
+          const compact = raw
+            .replace(/(\d)K\b/g, '$1k')
+            .replace(/(\d(?:[.,]\d+)?)G\b/g, '$1B');
+          if (compact !== raw) {
+            node.textContent = compact;
+          }
+        });
+      }
+
+      function enableCompactAxisTicks(axis, options = {}) {
+        const nextAxis = Object.assign({}, axis || {});
+        const axisType = String(nextAxis.type || '').toLowerCase();
+        if (axisType === 'date' || axisType === 'category') {
+          return nextAxis;
+        }
+        const minCompactValue = Number.isFinite(options.minCompactValue)
+          ? Number(options.minCompactValue)
+          : 1e6;
+        const maxAbsValue = Number.isFinite(options.maxAbsValue)
+          ? Math.abs(Number(options.maxAbsValue))
+          : 0;
+        if (maxAbsValue < minCompactValue) {
+          delete nextAxis.tickformat;
+          delete nextAxis.exponentformat;
+          delete nextAxis.showexponent;
+        } else {
+          nextAxis.tickformat = options.tickformat || '~s';
+          nextAxis.exponentformat = options.exponentformat || 'none';
+          nextAxis.showexponent = options.showexponent || 'none';
+        }
+
+        if (Array.isArray(nextAxis.ticktext) && nextAxis.ticktext.length) {
+          nextAxis.ticktext = nextAxis.ticktext.map((rawText, idx) => {
+            const rawTextStr = String(rawText ?? '');
+            const fromText = Number(rawText);
+            const hasExplicitNonNumericLabel = rawTextStr.trim() !== '' && !Number.isFinite(fromText);
+            if (hasExplicitNonNumericLabel) {
+              return rawText;
+            }
+
+            const fromTickVal = Array.isArray(nextAxis.tickvals) ? nextAxis.tickvals[idx] : undefined;
+            const numeric = Number(fromTickVal);
+            if (Number.isFinite(numeric)) {
+              if (maxAbsValue >= minCompactValue) {
+                return formatCompactNumber(numeric, { minCompactValue: minCompactValue });
+              }
+              return formatPreciseNumericValue(numeric, 0);
+            }
+            if (!Number.isFinite(fromText)) {
+              return rawText;
+            }
+            if (maxAbsValue >= minCompactValue) {
+              return formatCompactNumber(fromText, { minCompactValue: minCompactValue });
+            }
+            return formatPreciseNumericValue(fromText, 0);
+          });
+        }
+        return nextAxis;
+      }
+
+      function getInteractiveLegendConfig(traceCount, overrides = {}) {
+        const count = Math.max(1, Number(traceCount) || 1);
+        const yPos = Number.isFinite(overrides.y) ? Number(overrides.y) : -0.208;
+        const minEntry = Number.isFinite(overrides.minEntry) ? Number(overrides.minEntry) : 0.04;
+        const maxEntry = Number.isFinite(overrides.maxEntry) ? Math.max(0.33, Number(overrides.maxEntry)) : 1.0;
+        const fillRatio = Number.isFinite(overrides.fillRatio) ? Number(overrides.fillRatio) : 1.0;
+        const fontSize = Number.isFinite(overrides.fontSize) ? Number(overrides.fontSize) : 10.8;
+
+        return {
+          orientation: 'h',
+          x: 0,
+          xanchor: 'left',
+          yanchor: 'top',
+          y: yPos,
+          font: { size: fontSize },
+          entrywidthmode: 'fraction',
+          entrywidth: Math.max(minEntry, Math.min(maxEntry, fillRatio / count)),
+          tracegroupgap: 0,
+          itemwidth: 8,
+        };
+      }
+
+      function finalizeInteractiveMainLayout(layout, traces, chartContainer, options = {}) {
+        const nextLayout = Object.assign({}, layout || {});
+        const xaxis = Object.assign({}, nextLayout.xaxis || {});
+        const tickLabels = Array.isArray(xaxis.ticktext)
+          ? xaxis.ticktext.map((value) => String(value ?? ''))
+          : [];
+        const maxTickLength = tickLabels.reduce((max, label) => Math.max(max, label.length), 0);
+        const denseTicks = (String(xaxis.type || '').toLowerCase() !== 'date')
+          && (tickLabels.length > 9 || maxTickLength > 14);
+        const xAxisTitleText = xaxis && xaxis.title
+          ? (typeof xaxis.title === 'object' ? xaxis.title.text : xaxis.title)
+          : '';
+
+        nextLayout.xaxis = normalizeAxisTitle(xaxis, xAxisTitleText, 10);
+        const canFitHorizontal = tickLabels.length * (maxTickLength + 1) <= 120;
+        nextLayout.xaxis.tickangle = canFitHorizontal ? 0 : (maxTickLength < 12 ? -15 : -25);
+        if (nextLayout.xaxis.title) {
+            nextLayout.xaxis.title.standoff = 15;
+        }
+        const maxAllowedHorizontalTicks = Math.max(5, Math.floor((document.getElementById('chart') ? document.getElementById('chart').clientWidth : 800) / (maxTickLength * 7 + 24)));
+        nextLayout.xaxis.nticks = canFitHorizontal ? Math.min(40, maxAllowedHorizontalTicks) : Math.min(60, tickLabels.length);
+        nextLayout.xaxis.automargin = true;
+        nextLayout.xaxis.tickfont = Object.assign({}, nextLayout.xaxis.tickfont || {}, {
+          size: denseTicks ? (tickLabels.length > 24 ? 7.5 : 8.5) : 10.5,
+        });
+
+        nextLayout.xaxis = enableCompactAxisTicks(nextLayout.xaxis, {
+          maxAbsValue: getTraceAxisMaxAbs(traces, 'x'),
+          minCompactValue: 1e6,
+        });
+        nextLayout.yaxis = enableCompactAxisTicks(nextLayout.yaxis, {
+          maxAbsValue: getTraceAxisMaxAbs(traces, 'y'),
+          minCompactValue: 1e6,
+        });
+
+        const legendCfg = getInteractiveLegendConfig(getLegendEntryCount(traces), {
+          fontSize: 10.5,
+          y: -0.32,
+          minEntry: 0.032,
+          maxEntry: 0.12,
+          fillRatio: 0.92,
+        });
+        nextLayout.legend = Object.assign({}, nextLayout.legend || {}, legendCfg);
+
+        nextLayout.margin = Object.assign({}, nextLayout.margin || {});
+        nextLayout.margin.b = Math.max(nextLayout.margin.b || 0, denseTicks ? 120 : 110);
+
+        if (chartContainer) {
+          nextLayout.height = Math.max(360, (chartContainer.clientHeight || 400));
+        }
+        return nextLayout;
+      }
+
+      function finalizeInteractiveDistributionLayout(layout, traces, values, distName, distContainer, options = {}) {
+        const nextLayout = Object.assign({}, layout || {});
+        const tickConfig = getDistributionTickConfig(values, distContainer ? distContainer.clientWidth : 0, {
+          maxTicks: 8,
+          pxPerTick: 88,
+          minTicks: 4,
+        });
+        const axisTickConfig = Object.assign({}, tickConfig || {});
+        const tickFontSize = Number.isFinite(axisTickConfig.tickfontSize)
+          ? Math.min(axisTickConfig.tickfontSize, 7.2)
+          : 7.2;
+        delete axisTickConfig.tickfontSize;
+
+        nextLayout.xaxis = Object.assign({}, nextLayout.xaxis || {}, axisTickConfig);
+        nextLayout.xaxis.tickfont = Object.assign({}, nextLayout.xaxis.tickfont || {}, { size: tickFontSize });
+        nextLayout.xaxis = normalizeAxisTitle(nextLayout.xaxis, distName, 11);
+        nextLayout.xaxis = enableCompactAxisTicks(nextLayout.xaxis, {
+          maxAbsValue: getFiniteMaxAbs(values),
+          minCompactValue: 1e6,
+        });
+
+        nextLayout.yaxis = enableCompactAxisTicks(Object.assign({}, nextLayout.yaxis || {}), {
+          maxAbsValue: Array.isArray(values) ? values.length : 0,
+          minCompactValue: 1e6,
+        });
+
+        const legendCfg = getInteractiveLegendConfig(getLegendEntryCount(traces), {
+          fontSize: 10.3,
+          y: -0.210,
+          minEntry: 0.042,
+          maxEntry: 0.16,
+          fillRatio: 0.996,
+        });
+        nextLayout.legend = Object.assign({}, nextLayout.legend || {}, legendCfg);
+
+        nextLayout.margin = Object.assign({}, nextLayout.margin || {});
+        nextLayout.margin.b = Math.max(nextLayout.margin.b || 0, 90);
+
+        setFooterAxisTitleAnnotation(nextLayout, 'xaxis', distName, {
+          name: options.axisTitleName || 'dist-xaxis-title',
+          y: -0.164,
+          fontSize: 11,
+        });
+
+        if (distContainer) {
+          nextLayout.height = Math.max(360, (distContainer.clientHeight || 400));
+        }
+
+        return nextLayout;
+      }
+
+      function formatDistributionTickValue(value) {
+        return formatCompactNumber(value);
+      }
+
+      function getDistributionTickConfig(values, containerWidth, options = {}) {
+        const numericValues = (Array.isArray(values) ? values : [])
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value));
+        if (!numericValues.length) {
+          return null;
+        }
+
+        const minVal = Math.min(...numericValues);
+        const maxVal = Math.max(...numericValues);
+
+        if (maxVal - minVal < 1e-9) {
+          return null;
+        }
+
+        const pxPerTick = Number.isFinite(options.pxPerTick) ? options.pxPerTick : 85;
+        const maxTicks = Number.isFinite(options.maxTicks) ? options.maxTicks : 24;
+        const hardMaxTicks = 20;
+        const minTicks = Number.isFinite(options.minTicks) ? options.minTicks : 4;
+        const allowedTicks = Math.max(minTicks, Math.min(maxTicks, hardMaxTicks, Math.floor(Math.max(260, Number(containerWidth) || 0) / pxPerTick)));
+
+        const tickvals = [];
+        for (let i = 0; i < allowedTicks; i++) {
+          tickvals.push(minVal + (maxVal - minVal) * (i / (allowedTicks - 1)));
+        }
+
+        const compactLabels = tickvals.map((value) => formatDistributionTickValue(value));
+        const preciseLabels = tickvals.map((value) => formatPreciseNumericValue(value));
+        const usePreciseLabels = (new Set(compactLabels)).size !== compactLabels.length;
+        const ticktext = tickvals.map((value, idx) => {
+          return usePreciseLabels ? preciseLabels[idx] : compactLabels[idx];
+        });
+
+        return {
+          tickmode: 'array',
+          tickvals: tickvals,
+          ticktext: ticktext,
+          tickangle: 0,
+          tickfontSize: 7.5,
+        };
+      }
+
+      function normalizeAxisTitle(axis, fallbackText, standoffPx) {
+        const nextAxis = Object.assign({}, axis || {});
+        const rawTitle = nextAxis.title;
+        if (rawTitle && typeof rawTitle === 'object') {
+          nextAxis.title = Object.assign({ text: fallbackText || '' }, rawTitle);
+          nextAxis.title.text = nextAxis.title.text || fallbackText || '';
+          nextAxis.title.standoff = Math.max(standoffPx || 0, Number(nextAxis.title.standoff) || 0);
+        } else {
+          nextAxis.title = {
+            text: rawTitle || fallbackText || '',
+            standoff: standoffPx || 0,
+          };
+        }
+        return nextAxis;
+      }
+
+      function setFooterAxisTitleAnnotation(layout, axisKey, fallbackText, options = {}) {
+        const targetAxisKey = axisKey || 'xaxis';
+        const nextLayout = layout || {};
+        const targetAxis = Object.assign({}, nextLayout[targetAxisKey] || {});
+        const rawTitle = targetAxis.title;
+        const titleText = rawTitle
+          ? (typeof rawTitle === 'object' ? String(rawTitle.text || fallbackText || '') : String(rawTitle || fallbackText || ''))
+          : String(fallbackText || '');
+        const annotationName = options.name || `${targetAxisKey}-footer-title`;
+
+        nextLayout.annotations = Array.isArray(nextLayout.annotations) ? nextLayout.annotations.slice() : [];
+        nextLayout.annotations = nextLayout.annotations.filter((annotation) => {
+          return String(annotation && annotation.name || '') !== annotationName;
+        });
+
+        targetAxis.title = Object.assign({}, (rawTitle && typeof rawTitle === 'object') ? rawTitle : {}, {
+          text: '',
+          standoff: 0,
+        });
+        nextLayout[targetAxisKey] = targetAxis;
+
+        if (!titleText) {
+          return;
+        }
+
+        nextLayout.annotations.push({
+          x: 0.5,
+          y: Number.isFinite(options.y) ? options.y : -0.165,
+          xref: 'paper',
+          yref: 'paper',
+          text: titleText,
+          showarrow: false,
+          xanchor: 'center',
+          yanchor: 'top',
+          font: {
+            size: Number.isFinite(options.fontSize) ? options.fontSize : 10,
+            color: options.color || ((nextLayout.font && nextLayout.font.color) || '#c0c0c0'),
+          },
+          name: annotationName,
+        });
+      }
+
       /**
        * Format a numeric statistic value for display.
        * Values >= 1e14 (100 trillion) use scientific notation (e.g. 9.756e+17)
        * to avoid long raw numbers overflowing chart labels.
        */
       function formatStat(v, decimals) {
-        if (!Number.isFinite(v)) return String(v);
-        if (Math.abs(v) >= 1e14) return v.toExponential(3);
-        return v.toFixed(decimals !== undefined ? decimals : 2);
+        return formatCompactNumber(v, { decimals: decimals });
       }
       // Helper function to get the selected data range percentage
       function getDataRangePct() {
@@ -792,7 +1196,7 @@
         const rows = rangePct >= 1 ? totalRows : Math.max(1, Math.ceil(totalRows * rangePct));
         const contamination = getContaminationValue();
         const expected = Math.round(rows * contamination);
-        hint.textContent = `Expected anomalies ≈ ${expected} per column (${rows} rows × ${contamination.toFixed(3)}).`;
+        hint.textContent = `~${expected}/${rows} rows`;
       }
 
       function updateInteractiveDataRangeHint() {
@@ -801,8 +1205,7 @@
         const totalRows = Number('{{ analysis.controls.total_rows|default(0) }}');
         const rangePct = getDataRangePct();
         const rows = rangePct >= 1 ? totalRows : Math.max(1, Math.ceil(totalRows * rangePct));
-        const pctLabel = `${Math.round(rangePct * 100)}%`;
-        hint.textContent = `Showing latest ${pctLabel} (${rows} of ${totalRows} rows).`;
+        hint.textContent = `${rows}/${totalRows} rows`;
       }
 
       // Helper to filter traces to only show the latest X% of data
@@ -992,19 +1395,63 @@
           }
         });
 
-        const layout = Object.assign({}, item.layout || {});
+        let layout = Object.assign({}, item.layout || {});
         applyThemeLayoutDefaults(layout);
-        layout.legend = Object.assign({}, layout.legend || {}, { y: -0.1 });
-        layout.margin = Object.assign({}, layout.margin || {});
-        layout.margin.b = Math.max(layout.margin.b || 0, 115);
         // Clear skeleton loaders before rendering
         const chartContainer = document.getElementById('chart');
         const distContainer = document.getElementById('dist');
+        const chartWidth = chartContainer ? chartContainer.clientWidth : 0;
+        const chartTickLabels = Array.isArray(layout.xaxis && layout.xaxis.ticktext)
+          ? layout.xaxis.ticktext.map((value) => String(value ?? ''))
+          : [];
+        const chartMaxTickLength = chartTickLabels.reduce((max, label) => Math.max(max, label.length), 0);
+        const denseChartTicks = (!layout.xaxis || layout.xaxis.type !== 'date')
+          && (chartTickLabels.length > 9 || chartMaxTickLength > 14);
+        if (layout.xaxis) {
+          layout.xaxis.tickangle = 0;
+          const maxAllowedHorizontalTicks = Math.max(5, Math.floor(chartWidth / (chartMaxTickLength * 7 + 24)));
+          layout.xaxis.nticks = Math.min(30, maxAllowedHorizontalTicks);
+          layout.xaxis.automargin = true;
+          layout.xaxis.tickfont = Object.assign({}, layout.xaxis.tickfont || {}, {
+            size: denseChartTicks ? (chartTickLabels.length > 24 ? 7.5 : 8.5) : 10.5
+          });
+          layout.xaxis = normalizeAxisTitle(
+            layout.xaxis,
+            layout.xaxis && layout.xaxis.title
+              ? (typeof layout.xaxis.title === 'object' ? layout.xaxis.title.text : layout.xaxis.title)
+              : '',
+            12
+          );
+        }
+        layout.xaxis = enableCompactAxisTicks(layout.xaxis, { maxAbsValue: getTraceAxisMaxAbs(traces, 'x') });
+        layout.yaxis = enableCompactAxisTicks(layout.yaxis, { maxAbsValue: getTraceAxisMaxAbs(traces, 'y') });
+        const chartLegendEntries = getLegendEntryCount(traces);
+        const chartLegendRows = 1;
+        const chartLegendEntryWidth = Math.min(
+          1.0,
+          getLegendEntryWidthFraction(chartLegendEntries, 0.058, 1.0, 1.0)
+        );
+        layout.legend = Object.assign({}, layout.legend || {}, {
+          orientation: 'h',
+          x: 0,
+          xanchor: 'left',
+          yanchor: 'top',
+          y: getLegendYOffset(chartLegendRows, -0.255, 0),
+          font: Object.assign({}, (layout.legend && layout.legend.font) || {}, { size: 7.6 }),
+          entrywidthmode: 'fraction',
+          entrywidth: Math.min(1.0, getLegendEntryWidthFraction(chartLegendEntries, 0.048, 1.0, 1.0)),
+          tracegroupgap: 0
+        });
+        layout.margin = Object.assign({}, layout.margin || {});
+        layout.margin.b = Math.max(
+          layout.margin.b || 0,
+          denseChartTicks ? 102 : 96
+        );
         if (chartContainer) chartContainer.innerHTML = '';
         if (distContainer) distContainer.innerHTML = '';
         // Use container height minus padding for axis labels
         if (chartContainer) {
-          layout.height = (chartContainer.clientHeight - 30) || 400;
+          layout.height = Math.max(360, (chartContainer.clientHeight || 400));
         }
 
         // Calculate Y-axis range from ONLY History and Forecast traces
@@ -1076,7 +1523,10 @@
         // Always fit X-axis to the visible data range
         if (xMin !== null && xMax !== null) {
           layout.xaxis = layout.xaxis || {};
-          layout.xaxis.range = [xMin, xMax];
+          const xSpan = Math.max(1, xMax - xMin);
+          const leftPad = Math.max(0.35, xSpan * 0.004);
+          const rightPad = Math.max(0.45, xSpan * 0.012);
+          layout.xaxis.range = [Math.max(-0.5, xMin - leftPad), xMax + rightPad];
           layout.xaxis.autorange = false;
         }
 
@@ -1104,7 +1554,7 @@
           // Use theme-aware colors for visibility in both modes
           const avgColor = isDarkMode() ? '#ffc107' : '#d68910';  // Amber (brighter in dark, darker in light)
           const medColor = isDarkMode() ? '#ce93d8' : '#8e44ad';  // Purple (brighter in dark, darker in light)
-          const minColor = '#e53935';  // Red - works in both modes
+          const minColor = '#f1c40f';  // Bright yellow
           const maxColor = '#00BCD4';  // Cyan - works on both light and dark backgrounds
           const edgeColor = isDarkMode() ? '#ffffff' : '#0b1220';
           const stdColor = isDarkMode() ? '#94a3b8' : '#5d6d7e';  // Gray - adjusted for both modes
@@ -1115,7 +1565,7 @@
           traces.push({
             type: 'scatter',
             mode: 'lines',
-            name: `Avg: ${formatStat(s.mean)}`,
+            name: formatLegendStatLabel('Avg', s.mean),
             x: [chartXMin, chartXMax],
             y: [s.mean, s.mean],
             line: { color: avgColor, width: 2, dash: 'dot' },
@@ -1127,7 +1577,7 @@
           traces.push({
             type: 'scatter',
             mode: 'lines',
-            name: `Med: ${formatStat(s.median)}`,
+            name: formatLegendStatLabel('Med', s.median),
             x: [chartXMin, chartXMax],
             y: [s.median, s.median],
             line: { color: medColor, width: 1.5, dash: 'dashdot' },
@@ -1139,17 +1589,20 @@
           traces.push({
             type: 'scatter',
             mode: 'markers',
-            name: `Std: ${formatStat(s.std)}`,
+            name: 'Std',
             x: [chartXMin],
             y: [s.mean],
             marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
             hoverinfo: 'skip',
-            showlegend: true
+            showlegend: false
           });
 
           // Find the x-position of min and max values from the FILTERED History trace
           // Use the currently filtered history data, not the original stats
-          const historyTrace = traces.find(t => t.name === 'History');
+          const historyTrace = traces.find((t) => {
+            const traceName = String((t && t.name) || '').toLowerCase();
+            return traceName === 'history' || traceName === 'hist' || traceName === 'h';
+          });
           if (historyTrace && historyTrace.y && historyTrace.y.length > 0) {
             const yVals = historyTrace.y;
             const xVals = historyTrace.x;
@@ -1166,7 +1619,7 @@
             traces.push({
               type: 'scatter',
               mode: 'markers+text',
-              name: `Min: ${formatStat(filteredMin)}`,
+              name: formatLegendStatLabel('Min', filteredMin),
               x: [xVals[minIdx]],
               y: [filteredMin],
               marker: { color: minColor, size: 7, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
@@ -1182,7 +1635,7 @@
             traces.push({
               type: 'scatter',
               mode: 'markers+text',
-              name: `Max: ${formatStat(filteredMax)}`,
+              name: formatLegendStatLabel('Max', filteredMax),
               x: [xVals[maxIdx]],
               y: [filteredMax],
               marker: { color: maxColor, size: 7, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
@@ -1195,27 +1648,77 @@
             });
           }
 
-          // Add annotations - position based on which line is higher
-          // If mean > median, Avg annotation goes on top; otherwise Med goes on top
+          // Add annotations next to their lines by shifting only on the x axis.
           layout.annotations = layout.annotations || [];
-          if (s.mean > s.median) {
-            // Mean is higher - Avg on top (yanchor: bottom), Med below (yanchor: top)
+          const annotationX = 1.002;
+          if (s.mean <= s.median) {
             layout.annotations.push(
-              { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' },
-              { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top', name: 'med-annot' }
+              { x: annotationX, y: s.mean, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'top', name: 'avg-annot' },
+              { x: annotationX, y: s.median, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' }
             );
           } else {
-            // Median is higher - Med on top (yanchor: bottom), Avg below (yanchor: top)
             layout.annotations.push(
-              { x: 1.01, y: s.median, xref: 'paper', yref: 'y', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' },
-              { x: 1.01, y: s.mean, xref: 'paper', yref: 'y', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'top', name: 'avg-annot' }
+              { x: annotationX, y: s.median, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top', name: 'med-annot' },
+              { x: annotationX, y: s.mean, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' }
             );
           }
 
           // Increase right margin to show stat labels
           layout.margin = layout.margin || {};
-          layout.margin.r = Math.max(layout.margin.r || 10, 70);
+          layout.margin.r = Math.max(layout.margin.r || 10, 82);
         }
+
+        const legendAliases = {
+          History: 'Hist',
+          Forecast: 'Fcst',
+          '95% CI': 'CI',
+          Anomaly: 'Anom',
+        };
+        traces.forEach((trace) => {
+          if (!trace || trace.showlegend === false) {
+            return;
+          }
+          const currentName = String(trace.name || '');
+          if (Object.prototype.hasOwnProperty.call(legendAliases, currentName)) {
+            trace.name = legendAliases[currentName];
+          }
+        });
+
+        const finalLegendEntries = getLegendEntryCount(traces);
+        const finalLegendRows = 1;
+        const finalLegendEntryWidth = Math.min(
+          0.10,
+          getLegendEntryWidthFraction(finalLegendEntries, 0.058, 0.10, 0.80)
+        );
+        layout.legend = Object.assign({}, layout.legend || {}, {
+          orientation: 'h',
+          x: 0.5,
+          xanchor: 'center',
+          yanchor: 'top',
+          y: getLegendYOffset(finalLegendRows, -0.255, 0),
+          font: Object.assign({}, (layout.legend && layout.legend.font) || {}, { size: 6.5 }),
+          entrywidthmode: 'fraction',
+          entrywidth: finalLegendEntryWidth,
+          tracegroupgap: 0
+        });
+        layout.margin = Object.assign({}, layout.margin || {});
+        layout.margin.b = Math.max(
+          layout.margin.b || 0,
+          denseChartTicks ? 104 : 98
+        );
+        const chartXAxisTitleText = layout.xaxis && layout.xaxis.title
+          ? (typeof layout.xaxis.title === 'object' ? layout.xaxis.title.text : layout.xaxis.title)
+          : '';
+        layout.xaxis = normalizeAxisTitle(layout.xaxis, chartXAxisTitleText, 12);
+        setFooterAxisTitleAnnotation(layout, 'xaxis', chartXAxisTitleText, {
+          name: 'chart-xaxis-title',
+          y: denseChartTicks ? -0.214 : -0.198,
+          fontSize: 10,
+        });
+
+        layout = finalizeInteractiveMainLayout(layout, traces, chartContainer, {
+          axisTitleName: 'chart-xaxis-title',
+        });
 
         Plotly.newPlot('chart', traces, layout, {
           displayModeBar: true,
@@ -1225,6 +1728,9 @@
             filename: 'timeseries_' + colName,
             scale: 2
           }
+        }).then(() => {
+          const chartRoot = document.getElementById('chart');
+          relabelPlotlyCompactSISuffixes(chartRoot);
         });
 
         // Attach legend toggle handler to save visibility and autoscale
@@ -1246,8 +1752,8 @@
           const isAvg = nm.includes('avg');
           const isMed = nm.includes('med');
           // Determine if this is a main data trace (History/Forecast) that should trigger autoscale
-          const isHistory = nm.includes('histor') || nm.includes('actual');
-          const isForecast = nm.includes('forecast');
+          const isHistory = nm.includes('histor') || nm.includes('actual') || nm === 'hist' || nm === 'h';
+          const isForecast = nm.includes('forecast') || nm.includes('fcst') || nm === 'f';
           const isMainDataTrace = isHistory || isForecast;
 
           // Save current range for CI/Anomaly toggles
@@ -1271,10 +1777,10 @@
             const isHiding = newVis === 'legendonly';
             const annotations = [...(chartEl.layout.annotations || [])];
             annotations.forEach(a => {
-              if (isAvg && (a.name === 'avg-annot' || (a.text && a.text.includes('Avg:')))) {
+              if (isAvg && (a.name === 'avg-annot' || (a.text && String(a.text).includes('Avg')))) {
                 a.visible = !isHiding;
               }
-              if (isMed && (a.name === 'med-annot' || (a.text && a.text.includes('Med:')))) {
+              if (isMed && (a.name === 'med-annot' || (a.text && String(a.text).includes('Med')))) {
                 a.visible = !isHiding;
               }
             });
@@ -1295,8 +1801,8 @@
               chartEl.data.forEach(t => {
                 const tName = (t.name || '').toLowerCase();
                 // Only include History and Forecast traces
-                const isHistoryTrace = tName.includes('histor') || tName.includes('actual') || tName === 'history';
-                const isForecastTrace = tName.includes('forecast');
+                const isHistoryTrace = tName.includes('histor') || tName.includes('actual') || tName === 'history' || tName === 'hist' || tName === 'h';
+                const isForecastTrace = tName.includes('forecast') || tName.includes('fcst') || tName === 'f';
                 if (!isHistoryTrace && !isForecastTrace) return;
                 // Skip hidden traces
                 if (t.visible === 'legendonly' || t.visible === false) return;
@@ -1334,6 +1840,7 @@
               }
 
               Plotly.relayout(chartEl, layoutUpdate);
+              relabelPlotlyCompactSISuffixes(chartEl);
             }
           }, 50);
           return false;
@@ -1353,31 +1860,39 @@
           }
 
           // Build distribution layout with stats annotation
-          const distLayout = {
+          let distLayout = {
             title: { text: dist.name + ' Distribution', font: { size: 14 }, x: 0.02 },
-            height: distHeight - 40,
+            height: Math.max(360, distHeight),
             paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-            margin: { l: 35, r: 10, t: 40, b: 52 },
+            margin: { l: 35, r: 12, t: 40, b: 108 },
             bargap: 0.1,
             showlegend: true,
             legend: {
               orientation: 'h',
               x: 0.5,
               xanchor: 'center',
-              y: -0.06,
+              y: -0.245,
               yanchor: 'top',
-              font: { size: 9, color: t.text },
-              bgcolor: 'rgba(0,0,0,0)'
+              font: { size: 7.6, color: t.text },
+              bgcolor: 'rgba(0,0,0,0)',
+              tracegroupgap: 4
             },
-            xaxis: {
-              automargin: true,
-              showticklabels: true,
-              tickangle: -45,
-              tickfont: { size: 10 }
-            },
+            xaxis: normalizeAxisTitle({ automargin: true, showticklabels: true }, dist.name, 14),
             yaxis: { automargin: true },
             hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
           };
+
+          const distTickConfig = getDistributionTickConfig(distValues, distEl ? distEl.clientWidth : 0, { maxTicks: 16, pxPerTick: 56, minTicks: 5 });
+          const distAxisTickConfig = Object.assign({}, distTickConfig || {});
+          const distTickFontSize = Number.isFinite(distAxisTickConfig.tickfontSize) ? distAxisTickConfig.tickfontSize : 8.5;
+          delete distAxisTickConfig.tickfontSize;
+          distLayout.xaxis = Object.assign({}, distLayout.xaxis || {}, distAxisTickConfig);
+          distLayout.xaxis.tickangle = distTickConfig && Number.isFinite(distTickConfig.tickangle)
+            ? distTickConfig.tickangle
+            : (distLayout.xaxis.tickangle || -35);
+          distLayout.xaxis.tickfont = { size: distTickFontSize };
+          distLayout.xaxis = enableCompactAxisTicks(distLayout.xaxis, { maxAbsValue: getFiniteMaxAbs(distValues) });
+          distLayout.yaxis = enableCompactAxisTicks(distLayout.yaxis, { maxAbsValue: distValues.length });
 
           const distAbsMax = distValues.reduce((acc, v) => {
             const n = Number(v);
@@ -1394,12 +1909,9 @@
           // Build traces array starting with histogram
           const distTraces = [{
             type: 'histogram',
-            name: dist.name,
+            name: 'Dist',
             x: distValues,
             marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
-            texttemplate: '%{y}',
-            textposition: 'outside',
-            textfont: { size: 9, color: t.muted || t.text },
             showlegend: true
           }];
 
@@ -1416,16 +1928,17 @@
 
             // Add vertical line shapes for Avg and Median (use yref: 'paper' to span chart area only)
             distLayout.shapes = [
-              { type: 'line', x0: s.mean, x1: s.mean, y0: 0.08, y1: 1, yref: 'paper', line: { color: avgColor, width: 2, dash: 'dot' }, name: 'avg-shape' },
-              { type: 'line', x0: s.median, x1: s.median, y0: 0.08, y1: 1, yref: 'paper', line: { color: medColor, width: 1.5, dash: 'dashdot' }, name: 'med-shape' }
+              { type: 'line', x0: s.mean, x1: s.mean, y0: 0, y1: 1, yref: 'paper', line: { color: avgColor, width: 2, dash: 'dot' }, name: 'avg-shape' },
+              { type: 'line', x0: s.median, x1: s.median, y0: 0, y1: 1, yref: 'paper', line: { color: medColor, width: 1.5, dash: 'dashdot' }, name: 'med-shape' }
             ];
 
             // Add Avg/Med as line traces for legend control (visible styling for legend symbols)
             // Use a very short line segment at the top to not interfere with histogram
+            const markerLaneY = 0.012;
             distTraces.push({
               type: 'scatter',
               mode: 'lines',
-              name: `Avg: ${formatStat(s.mean)}`,
+              name: formatLegendStatLabel('Avg', s.mean),
               x: [s.mean, s.mean],
               y: [0.95, 1],  // Short segment at top (paper coords won't work, but this gives legend styling)
               yaxis: 'y2',  // Use secondary y-axis to avoid interfering with histogram
@@ -1439,7 +1952,7 @@
             distTraces.push({
               type: 'scatter',
               mode: 'lines',
-              name: `Med: ${formatStat(s.median)}`,
+              name: formatLegendStatLabel('Med', s.median),
               x: [s.median, s.median],
               y: [0.95, 1],  // Short segment at top
               yaxis: 'y2',  // Use secondary y-axis
@@ -1458,45 +1971,44 @@
             };
 
             // Add Min/Max as scatter trace markers at bottom
-            const minColor = '#e53935';  // Red - works in both modes
+            const minColor = '#f1c40f';  // Bright yellow
             const maxColor = '#00BCD4';  // Cyan - works on both light and dark backgrounds
             const edgeColor = isDarkMode() ? '#ffffff' : '#0b1220';
             const stdColor = isDarkMode() ? '#94a3b8' : '#5d6d7e';  // Gray - adjusted for both modes
 
             distTraces.push({
               type: 'scatter',
-              mode: 'markers+text',
-              name: `Min: ${formatStat(s.min)}`,
+              mode: 'markers',
+              name: formatLegendStatLabel('Min', s.min),
               x: [s.min],
-              y: [0],
+              y: [markerLaneY],
+              yaxis: 'y2',
               marker: { color: minColor, size: 12, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
-              text: [`Min: ${formatStat(s.min)}`],
-              textposition: 'bottom center',
-              textfont: { size: 9, color: minColor },
-              hoverinfo: 'text',
-              showlegend: true
-            });
-
-            distTraces.push({
-              type: 'scatter',
-              mode: 'markers+text',
-              name: `Max: ${formatStat(s.max)}`,
-              x: [s.max],
-              y: [0],
-              marker: { color: maxColor, size: 12, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
-              text: [`Max: ${formatStat(s.max)}`],
-              textposition: 'bottom center',
-              textfont: { size: 9, color: maxColor },
-              hoverinfo: 'text',
+              hovertemplate: `Min ${formatStat(s.min)}<extra></extra>`,
+              cliponaxis: false,
               showlegend: true
             });
 
             distTraces.push({
               type: 'scatter',
               mode: 'markers',
-              name: `Std: ${formatStat(s.std)}`,
+              name: formatLegendStatLabel('Max', s.max),
+              x: [s.max],
+              y: [markerLaneY],
+              yaxis: 'y2',
+              marker: { color: maxColor, size: 12, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
+              hovertemplate: `Max ${formatStat(s.max)}<extra></extra>`,
+              cliponaxis: false,
+              showlegend: true
+            });
+
+            distTraces.push({
+              type: 'scatter',
+              mode: 'markers',
+              name: formatLegendStatLabel('Std', s.std),
               x: [s.mean],
-              y: [0],
+              y: [markerLaneY],
+              yaxis: 'y2',
               marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
               hoverinfo: 'skip',
               showlegend: true
@@ -1505,38 +2017,87 @@
             // Add Avg/Med annotations - position based on which value is left vs right
             // Calculate x-offset for spacing (approx 2% of range)
             var xRange = s.max - s.min;
-            var xOffset = xRange * 0.015;  // 1.5% offset for closer text tags
+            var xOffset = Math.max(1e-9, xRange * 0.010);  // keep text tags close to their guide lines
+            var minMaxAreClose = Math.abs(s.max - s.min) <= Math.max(1e-9, xRange * 0.05);
+            var minAnnotationY = minMaxAreClose ? 0.038 : 0.030;
+            var maxAnnotationY = minMaxAreClose ? 0.052 : 0.030;
             if (s.mean <= s.median) {
               // Mean is on the left, Median is on the right
               distLayout.annotations = [
-                { x: s.mean - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'right', yanchor: 'bottom', name: 'avg-annot' },
-                { x: s.median + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' }
+                { x: s.mean - xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'right', yanchor: 'bottom', name: 'avg-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
+                { x: s.median + xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
+                { x: s.min, y: minAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
+                { x: s.max, y: maxAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 }
               ];
             } else {
               // Median is on the left, Mean is on the right
               distLayout.annotations = [
-                { x: s.median - xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Med: ${formatStat(s.median, 1)}`, showarrow: false, font: { size: 12, color: medColor }, xanchor: 'right', yanchor: 'bottom', name: 'med-annot' },
-                { x: s.mean + xOffset, y: 0.97, xref: 'x', yref: 'paper', text: `Avg: ${formatStat(s.mean, 1)}`, showarrow: false, font: { size: 12, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' }
+                { x: s.median - xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'right', yanchor: 'bottom', name: 'med-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
+                { x: s.mean + xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
+                { x: s.min, y: minAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
+                { x: s.max, y: maxAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 }
               ];
             }
 
-            distLayout.margin.t = 50;  // More top margin for labels
+            distLayout.margin.t = 42;
           }
+
+          const distLegendEntries = getLegendEntryCount(distTraces);
+          const distLegendRows = 1;
+          const distLegendEntryWidth = Math.min(
+            0.135,
+            getLegendEntryWidthFraction(distLegendEntries, 0.082, 0.135, 0.84)
+          );
+          distLayout.legend = Object.assign({}, distLayout.legend || {}, {
+            orientation: 'h',
+            x: 0.5,
+            xanchor: 'center',
+            yanchor: 'top',
+            y: getLegendYOffset(distLegendRows, -0.245, 0),
+            font: { size: 7.6, color: t.text },
+            entrywidthmode: 'fraction',
+            entrywidth: Math.min(0.12, getLegendEntryWidthFraction(distLegendEntries, 0.068, 0.12, 0.80)),
+            tracegroupgap: 0
+          });
+          distLayout.margin = Object.assign({}, distLayout.margin || {});
+          distLayout.margin.b = Math.max(
+            distLayout.margin.b || 0,
+            108
+          );
+          setFooterAxisTitleAnnotation(distLayout, 'xaxis', dist.name, {
+            name: 'dist-xaxis-title',
+            y: -0.195,
+            fontSize: 10,
+          });
+
+          distLayout = finalizeInteractiveDistributionLayout(
+            distLayout,
+            distTraces,
+            distValues,
+            dist.name,
+            distEl,
+            { axisTitleName: 'dist-xaxis-title' }
+          );
 
           Plotly.newPlot('dist', distTraces, distLayout, {
             responsive: true,
             displayModeBar: true,
             toImageButtonOptions: { format: 'png', filename: 'distribution_' + (dist.name || 'data').replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
+          }).then(() => {
+            relabelPlotlyCompactSISuffixes(distEl);
           });
 
           // Add legend click handler to toggle shapes and annotations for Avg/Med (reuse distEl from above)
           distEl.on('plotly_legendclick', function (evt) {
             const d = distEl.data[evt.curveNumber];
             const meta = d.meta || '';
+            const lowerName = (d.name || '').toLowerCase();
             const isAvg = meta === 'avg-control' || (d.name || '').toLowerCase().includes('avg');
             const isMed = meta === 'med-control' || (d.name || '').toLowerCase().includes('med');
+            const isMin = lowerName === 'min' || lowerName.startsWith('min ');
+            const isMax = lowerName === 'max' || lowerName.startsWith('max ');
 
-            if (isAvg || isMed) {
+            if (isAvg || isMed || isMin || isMax) {
               const newVis = (d.visible === undefined || d.visible === true) ? 'legendonly' : true;
               const isHiding = newVis === 'legendonly';
 
@@ -1552,7 +2113,7 @@
                 if (shapes[0]) shapes[0].visible = !isHiding;
                 // Toggle avg annotation
                 annotations.forEach(a => {
-                  if (a.name === 'avg-annot' || (a.text && a.text.includes('Avg:'))) {
+                  if (a.name === 'avg-annot' || (a.text && String(a.text).includes('Avg'))) {
                     a.visible = !isHiding;
                   }
                 });
@@ -1561,13 +2122,21 @@
                 if (shapes[1]) shapes[1].visible = !isHiding;
                 // Toggle med annotation
                 annotations.forEach(a => {
-                  if (a.name === 'med-annot' || (a.text && a.text.includes('Med:'))) {
+                  if (a.name === 'med-annot' || (a.text && String(a.text).includes('Med'))) {
+                    a.visible = !isHiding;
+                  }
+                });
+              } else if (isMin || isMax) {
+                const targetAnnotation = isMin ? 'min-annot' : 'max-annot';
+                annotations.forEach(a => {
+                  if (a.name === targetAnnotation) {
                     a.visible = !isHiding;
                   }
                 });
               }
 
               Plotly.relayout(distEl, { shapes: shapes, annotations: annotations });
+              relabelPlotlyCompactSISuffixes(distEl);
               return false;  // Prevent default legend behavior
             }
           });
@@ -1578,6 +2147,7 @@
 
       async function renderByFetch(column) {
         try {
+          await loadPlotly();
           const u = new URL(fullHistoryUrl, window.location.origin);
           u.searchParams.set('filename', filename);
           u.searchParams.set('max_points', 'all');
@@ -1615,6 +2185,9 @@
 
           const t = getThemeVars();
           const colName = (column || 'data').replace(/[^a-zA-Z0-9_-]/g, '_');
+          const xAxisTitle = (data && typeof data.x_title === 'string' && data.x_title)
+            ? data.x_title
+            : (xIsTime ? 'Timestamp' : 'Index');
 
           // Apply data range filter
           const rangePct = getDataRangePct();
@@ -1634,37 +2207,118 @@
             y: yData,
             line: { color: 'rgb(31,119,180)', width: 2 }
           };
-          const layout = {
-            xaxis: { title: xIsTime ? 'Timestamp' : 'Index', type: xIsTime ? 'date' : undefined },
+          let layout = {
+            xaxis: { title: xAxisTitle, type: xIsTime ? 'date' : undefined },
             yaxis: { title: column }
           };
           applyThemeLayoutDefaults(layout);
+          layout.xaxis = enableCompactAxisTicks(layout.xaxis, { maxAbsValue: getFiniteMaxAbs(xData) });
+          layout.yaxis = enableCompactAxisTicks(layout.yaxis, { maxAbsValue: getFiniteMaxAbs(yData) });
+          const chartEl = document.getElementById('chart');
+          const fallbackLegendEntries = getLegendEntryCount([hist]);
+          const fallbackLegendRows = estimateLegendRows(fallbackLegendEntries, chartEl ? chartEl.clientWidth : 0, 56);
+          layout.legend = Object.assign({}, layout.legend || {}, {
+            orientation: 'h',
+            x: 0.5,
+            xanchor: 'center',
+            yanchor: 'top',
+            y: getLegendYOffset(fallbackLegendRows, -0.255, 0),
+            font: Object.assign({}, (layout.legend && layout.legend.font) || {}, { size: 7.6 }),
+            entrywidthmode: 'fraction',
+            entrywidth: getLegendEntryWidthFraction(fallbackLegendEntries, 0.060, 0.12, 0.76),
+            tracegroupgap: 0
+          });
+          layout.margin = Object.assign({}, layout.margin || {});
+          layout.margin.b = Math.max(
+            layout.margin.b || 0,
+            getBottomLegendMargin(fallbackLegendEntries, chartEl ? chartEl.clientWidth : 0, { base: 92, rowHeight: 10, min: 96, max: 122, minItemWidth: 56 })
+          );
+          layout.xaxis = normalizeAxisTitle(layout.xaxis, xAxisTitle, 10);
+          setFooterAxisTitleAnnotation(layout, 'xaxis', xAxisTitle, {
+            name: 'fallback-chart-xaxis-title',
+            y: -0.192,
+            fontSize: 10,
+          });
+          if (chartEl) {
+            layout.height = Math.max(360, (chartEl.clientHeight || 400));
+          }
           layout.hoverlabel = Object.assign({ bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }, layout.hoverlabel || {});
+          layout = finalizeInteractiveMainLayout(layout, [hist], chartEl, {
+            axisTitleName: 'fallback-chart-xaxis-title',
+          });
+
           Plotly.newPlot('chart', [hist], layout, {
             responsive: true,
             displayModeBar: true,
             toImageButtonOptions: { format: 'png', filename: 'timeseries_' + colName, scale: 2 }
+          }).then(() => {
+            relabelPlotlyCompactSISuffixes(chartEl);
           });
 
           // Filter vals to match data range
           let vals = (yData || []).filter(v => Number.isFinite(v));
           if (vals.length) {
             const distEl = document.getElementById('dist');
-            Plotly.newPlot('dist', [{
-              type: 'histogram', name: column, x: vals, marker: { color: t.accent }, showlegend: true
-            }], {
+            let fallbackDistLayout = {
               title: null,
               paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-              height: (distEl ? (distEl.clientHeight || 400) : 400) + 60,
-              margin: { l: 40, r: 10, t: 20, b: 150 },
+              height: Math.max(360, (distEl ? (distEl.clientHeight || 400) : 400)),
+              margin: { l: 40, r: 10, t: 24, b: 108 },
               showlegend: true,
-              legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.12, yanchor: 'top', font: { size: 10 } },
+              legend: {
+                orientation: 'h',
+                x: 0.5,
+                xanchor: 'center',
+                y: -0.245,
+                yanchor: 'top',
+                font: { size: 7.6 },
+                entrywidthmode: 'fraction',
+                entrywidth: getLegendEntryWidthFraction(1, 0.12, 0.18, 0.84),
+                tracegroupgap: 0,
+              },
+              xaxis: enableCompactAxisTicks(normalizeAxisTitle({ automargin: true }, column, 10), { maxAbsValue: getFiniteMaxAbs(vals) }),
+              yaxis: enableCompactAxisTicks({ automargin: true }, { maxAbsValue: vals.length }),
               hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
-            }, {
+            };
+            setFooterAxisTitleAnnotation(fallbackDistLayout, 'xaxis', column, {
+              name: 'fallback-dist-xaxis-title',
+              y: -0.195,
+              fontSize: 10,
+            });
+
+            const fallbackDistTraces = [{
+              type: 'histogram', name: 'Dist', x: vals, marker: { color: t.accent }, showlegend: true
+            }];
+            fallbackDistLayout = finalizeInteractiveDistributionLayout(
+              fallbackDistLayout,
+              fallbackDistTraces,
+              vals,
+              column,
+              distEl,
+              { axisTitleName: 'fallback-dist-xaxis-title' }
+            );
+
+            Plotly.newPlot('dist', fallbackDistTraces, fallbackDistLayout, {
               responsive: true,
               displayModeBar: true,
               toImageButtonOptions: { format: 'png', filename: 'distribution_' + colName, scale: 2 }
+            }).then(() => {
+              relabelPlotlyCompactSISuffixes(distEl);
             });
+
+            const fallbackDistTickConfig = getDistributionTickConfig(vals, distEl ? distEl.clientWidth : 0, { maxTicks: 8, pxPerTick: 88, minTicks: 4 });
+            if (fallbackDistTickConfig) {
+              const fallbackTickFontSize = Number.isFinite(fallbackDistTickConfig.tickfontSize)
+                ? Math.min(fallbackDistTickConfig.tickfontSize, 7.2)
+                : 7.2;
+              Plotly.relayout('dist', {
+                'xaxis.tickmode': fallbackDistTickConfig.tickmode,
+                'xaxis.tickvals': fallbackDistTickConfig.tickvals,
+                'xaxis.ticktext': fallbackDistTickConfig.ticktext,
+                'xaxis.tickangle': Math.min(-55, Number(fallbackDistTickConfig.tickangle || -60)),
+                'xaxis.tickfont.size': fallbackTickFontSize,
+              });
+            }
           } else {
             document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
           }
@@ -1674,7 +2328,8 @@
         }
       }
 
-      function onPickChange() {
+      async function onPickChange() {
+        await loadPlotly();
         const col = document.getElementById('colPick').value;
         try {
           const url = new URL(window.location.href);
@@ -1706,10 +2361,7 @@
           const relayout = {
             paper_bgcolor: t.panel,
             plot_bgcolor: t.panel,
-            font: { color: t.text },
-            'xaxis.rangeselector.bgcolor': t.panel,
-            'xaxis.rangeselector.activecolor': t.border,
-            'xaxis.rangeselector.font.color': t.text
+            font: { color: t.text }
           };
           if (chart && chart.data) Plotly.relayout(chart, relayout);
           if (dist && dist.data) Plotly.relayout(dist, { paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text } });
@@ -1717,6 +2369,9 @@
       });
 
       window.addEventListener('DOMContentLoaded', () => {
+        if (window.syncAnalysisHeaderHeight) {
+          window.syncAnalysisHeaderHeight();
+        }
         const sel = document.getElementById('colPick');
         const contamEl = document.getElementById('contaminationInteractive');
         applyDataRangeFromUrl();
@@ -1730,7 +2385,9 @@
         if (interactivePayload.length === 0 && apiInteractiveUrl) {
           loadInteractiveDataAsync();
         } else if (sel && sel.options.length) {
-          onPickChange();
+          loadPlotly().then(function () {
+            onPickChange();
+          });
           sel.addEventListener('change', onPickChange);
           // Bind data range selector to re-render on change
           const dataRangeSel = document.getElementById('dataRangePick');
@@ -1790,16 +2447,18 @@
     </script>
 
     {% elif active_view == 'correlation' %}
-    <section class="panel" style="width: 100%;">
+    <section class="panel" style="width:100%; max-width:100%; min-width:0; box-sizing:border-box;">
       <h3>Correlation</h3>
       {% if analysis.corr and analysis.corr.z %}
       <!-- Side-by-side layout for Spearman and Pearson -->
       <div
-        style="display: flex; gap: 16px; align-items: stretch; height: calc(100vh - 175px); min-height: 510px; overflow: hidden;">
-        <div id="corr" class="panel" style="flex: 1 1 50%; height: 100%; overflow: hidden;">
+        style="display:flex; gap:16px; align-items:stretch; height:calc(100vh - 175px); min-height:510px; overflow:hidden; width:100%; max-width:100%; min-width:0; box-sizing:border-box;">
+        <div id="corr" class="panel"
+          style="flex:1 1 50%; height:100%; overflow:hidden; min-width:0; box-sizing:border-box;">
           <div class="skeleton" style="height: 100%"></div>
         </div>
-        <div id="pearson" class="panel" style="flex: 1 1 50%; height: 100%; overflow: hidden;">
+        <div id="pearson" class="panel"
+          style="flex:1 1 50%; height:100%; overflow:hidden; min-width:0; box-sizing:border-box;">
           <div class="skeleton" style="height: 100%"></div>
         </div>
       </div>
@@ -1809,11 +2468,6 @@
         window.addEventListener('DOMContentLoaded', function () {
           // Wait for Plotly to be available (with retry mechanism)
           function initCorrelationPlots() {
-            if (typeof Plotly === 'undefined') {
-              // Plotly not yet loaded, retry after a short delay
-              setTimeout(initCorrelationPlots, 100);
-              return;
-            }
             try {
               const corrPayloadEl = document.getElementById('corrPayload');
               const corrData = JSON.parse((corrPayloadEl && corrPayloadEl.textContent) || '{}');
@@ -1907,11 +2561,22 @@
           window.themeCallbacks = window.themeCallbacks || [];
           window.themeCallbacks.push(function () {
             if (typeof window.initCorrelationPlots === 'function') {
-              window.initCorrelationPlots();
+              loadPlotly().then(function () {
+                window.initCorrelationPlots();
+              });
             }
           });
 
-          initCorrelationPlots();
+          loadPlotly().then(function () {
+            initCorrelationPlots();
+          }).catch(function (err) {
+            const corrDiv = document.getElementById('corr');
+            const pearDiv = document.getElementById('pearson');
+            const msg = '<div class="muted">Correlation render failed. Refresh the page once.</div>';
+            if (corrDiv) corrDiv.innerHTML = msg;
+            if (pearDiv) pearDiv.innerHTML = msg;
+            console.error('Correlation Plotly load error:', err);
+          });
         });
       </script>
       {% else %}
@@ -1929,7 +2594,7 @@
       <div class="grid">
         {% for col, chart_data in analysis.category_charts.items() %}
         <div class="panel" style="width:100%; padding-top: 0;">
-          <div id="category-chart-{{ loop.index }}" class="category-chart" style="width:100%; height:700px;"></div>
+          <div id="category-chart-{{ loop.index }}" class="category-chart" style="width:100%;"></div>
         </div>
         {% endfor %}
       </div>
@@ -1940,6 +2605,68 @@
       <script>
         document.addEventListener('DOMContentLoaded', function () {
           var categoryData = JSON.parse(document.getElementById('category-data').textContent || '{}');
+
+          function normalizeCategoryAxisTitle(axis, fallbackText, standoffPx) {
+            var nextAxis = Object.assign({}, axis || {});
+            var rawTitle = nextAxis.title;
+            if (rawTitle && typeof rawTitle === 'object') {
+              nextAxis.title = Object.assign({ text: fallbackText || '' }, rawTitle);
+              nextAxis.title.text = nextAxis.title.text || fallbackText || '';
+              nextAxis.title.standoff = Math.max(standoffPx || 0, Number(nextAxis.title.standoff) || 0);
+            } else {
+              nextAxis.title = { text: rawTitle || fallbackText || '', standoff: standoffPx || 0 };
+            }
+            return nextAxis;
+          }
+
+          function countCategoryLegendEntries(traces) {
+            return (traces || []).filter(function (trace) {
+              return trace && trace.showlegend !== false;
+            }).length;
+          }
+
+          function estimateCategoryLegendRows(traceCount, containerWidth, minItemWidth) {
+            if (!traceCount) return 1;
+            var safeWidth = Math.max(320, Number(containerWidth) || 0);
+            var itemsPerRow = Math.max(1, Math.floor(safeWidth / (minItemWidth || 135)));
+            return Math.max(1, Math.ceil(traceCount / itemsPerRow));
+          }
+
+          function getCategoryChartFooterConfig(traces, xValues, containerWidth) {
+            var labels = Array.isArray(xValues) ? xValues.map(function (value) { return String(value == null ? '' : value); }) : [];
+            var maxLabelLength = labels.reduce(function (max, label) {
+              return Math.max(max, label.length);
+            }, 0);
+            var longLabelScale = Math.min(1, maxLabelLength / 64);
+            var labelDensityScale = Math.min(1, labels.length / 180);
+            var legendEntries = countCategoryLegendEntries(traces);
+            var legendNames = (traces || []).filter(function (trace) {
+              return trace && trace.showlegend !== false;
+            }).map(function (trace) {
+              return String(trace.name || '');
+            });
+            var maxLegendLineLength = legendNames.reduce(function (max, label) {
+              var lineMax = String(label).split('<br>').reduce(function (innerMax, part) {
+                return Math.max(innerMax, String(part).length);
+              }, 0);
+              return Math.max(max, lineMax);
+            }, 0);
+            var legendFontSize = 12;
+            var legendRows = estimateCategoryLegendRows(legendEntries, containerWidth, labels.length > 140 || maxLegendLineLength > 48 ? 165 : 145);
+            var baseLabelMargin = 52 + Math.round(longLabelScale * 10) + Math.round(labelDensityScale * 8);
+            var legendFootprint = 12 + Math.max(0, legendRows - 1) * 12;
+            return {
+              bottomMargin: Math.max(94, Math.min(130, baseLabelMargin + legendFootprint)),
+              legendY: Math.max(-0.36, -0.27 - longLabelScale * 0.010 - labelDensityScale * 0.010 - Math.max(0, legendRows - 1) * 0.020),
+              titleStandoff: 0,
+              titleAnnotationY: Math.max(-0.24, -0.18 - longLabelScale * 0.010 - labelDensityScale * 0.010 - Math.max(0, legendRows - 1) * 0.015),
+              tickAngle: labels.length > 120 || maxLabelLength > 18 ? -60 : (labels.length > 60 ? -50 : -36),
+              height: 682 + Math.round(longLabelScale * 16) + Math.round(labelDensityScale * 20) + Math.max(0, legendRows - 1) * 14,
+              legendFontSize: 14,
+              titleFontSize: 19,
+              tickFontSize: labels.length > 180 ? 6 : labels.length > 120 ? 6.5 : labels.length > 60 ? 7.5 : 10
+            };
+          }
 
           function initCategoryCharts() {
             // Get theme colors directly
@@ -1954,7 +2681,23 @@
                 var data = categoryData[col];
                 var el = document.getElementById('category-chart-' + idx);
                 if (el && data.traces && data.layout) {
+                  const chartEl = el;
                   var layout = Object.assign({}, data.layout);
+                  var xValues = Array.isArray(data.traces[0] && data.traces[0].x) ? data.traces[0].x : [];
+                  var showAllCategoryLabels = xValues.length > 0 && xValues.length <= 220;
+                  if (showAllCategoryLabels && layout.xaxis) {
+                    layout.xaxis.tickmode = 'array';
+                    layout.xaxis.tickvals = xValues.slice();
+                    layout.xaxis.ticktext = xValues.slice();
+                  }
+                  var displayLabels = showAllCategoryLabels
+                    ? xValues
+                    : (Array.isArray(layout.xaxis && layout.xaxis.ticktext) ? layout.xaxis.ticktext : xValues);
+                  var footerConfig = getCategoryChartFooterConfig(data.traces, displayLabels, chartEl.clientWidth || chartEl.offsetWidth || 900);
+                  layout.margin = Object.assign({ l: 60, r: 24, t: 30, b: 102 }, layout.margin || {});
+                  layout.margin.b = footerConfig.bottomMargin;
+                  layout.height = footerConfig.height;
+                  chartEl.style.height = layout.height + 'px';
 
                   // Apply theme colors
                   layout.paper_bgcolor = panelColor;
@@ -1963,13 +2706,51 @@
 
                   // Fix axis labels
                   if (layout.xaxis) {
-                    layout.xaxis.tickfont = { color: textColor };
-                    layout.xaxis.titlefont = { color: textColor };
+                    var xAxisTitleText = '';
+                    if (layout.xaxis.title) {
+                      xAxisTitleText = typeof layout.xaxis.title === 'object'
+                        ? String(layout.xaxis.title.text || col)
+                        : String(layout.xaxis.title || col);
+                    } else {
+                      xAxisTitleText = String(col || '');
+                    }
+                    layout.xaxis = normalizeCategoryAxisTitle(layout.xaxis, col, footerConfig.titleStandoff);
+                    if (layout.xaxis.title && typeof layout.xaxis.title === 'object') {
+                      layout.xaxis.title.text = '';
+                    }
+                    layout.xaxis.tickangle = footerConfig.tickAngle;
+                    layout.xaxis.tickfont = Object.assign({}, layout.xaxis.tickfont || {}, { color: textColor, size: footerConfig.tickFontSize });
+                    layout.xaxis.range = [-0.5, Math.max(-0.5, xValues.length - 0.5)];
+                    layout.xaxis.autorange = false;
+                    layout.xaxis.title = Object.assign({}, layout.xaxis.title || {}, {
+                      font: Object.assign({}, (layout.xaxis.title && layout.xaxis.title.font) || {}, { color: textColor })
+                    });
+                    layout.xaxis.automargin = true;
                     layout.xaxis.gridcolor = gridColor;
+
+                    layout.annotations = Array.isArray(layout.annotations) ? layout.annotations.slice() : [];
+                    layout.annotations = layout.annotations.filter(function (annotation) {
+                      return String(annotation && annotation.name || '') !== 'xaxis-title-annotation';
+                    });
+                    layout.annotations.push({
+                      x: 0.5,
+                      y: footerConfig.titleAnnotationY,
+                      xref: 'paper',
+                      yref: 'paper',
+                      text: xAxisTitleText,
+                      showarrow: false,
+                      xanchor: 'center',
+                      yanchor: 'top',
+                      font: { color: textColor, size: footerConfig.titleFontSize || 15 },
+                      name: 'xaxis-title-annotation'
+                    });
                   }
                   if (layout.yaxis) {
-                    layout.yaxis.tickfont = { color: textColor };
-                    layout.yaxis.titlefont = { color: textColor };
+                    layout.yaxis = normalizeCategoryAxisTitle(layout.yaxis, layout.yaxis.title, 10);
+                    layout.yaxis.tickfont = Object.assign({}, layout.yaxis.tickfont || {}, { color: textColor });
+                    layout.yaxis.title = Object.assign({}, layout.yaxis.title || {}, {
+                      font: Object.assign({}, (layout.yaxis.title && layout.yaxis.title.font) || {}, { color: textColor })
+                    });
                     layout.yaxis.gridcolor = gridColor;
                   }
 
@@ -1980,13 +2761,20 @@
 
                   // Fix legend text
                   if (layout.legend) {
-                    layout.legend.font = { color: textColor, size: 10 };
+                    layout.legend = Object.assign({}, layout.legend, {
+                      orientation: 'h',
+                      x: 0.5,
+                      xanchor: 'center',
+                      yanchor: 'top',
+                      y: footerConfig.legendY,
+                      font: { color: textColor, size: footerConfig.legendFontSize }
+                    });
                   }
 
                   // Fix hover label
                   layout.hoverlabel = { bgcolor: panelColor, font: { color: textColor }, bordercolor: t.accent || '#0ea5e9' };
 
-                  Plotly.newPlot(el, data.traces, layout, {
+                  Plotly.newPlot(chartEl, data.traces, layout, {
                     responsive: true,
                     displaylogo: true,
                     displayModeBar: true,
@@ -1994,12 +2782,12 @@
                     toImageButtonOptions: { format: 'png', filename: 'category_chart_' + col.replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
                   });
 
-                  if (typeof el.removeAllListeners === 'function') {
-                    el.removeAllListeners('plotly_legendclick');
+                  if (typeof chartEl.removeAllListeners === 'function') {
+                    chartEl.removeAllListeners('plotly_legendclick');
                   }
 
-                  el.on('plotly_legendclick', function (evt) {
-                    var clickedTrace = (el.data && el.data[evt.curveNumber]) ? el.data[evt.curveNumber] : {};
+                  chartEl.on('plotly_legendclick', function (evt) {
+                    var clickedTrace = (chartEl.data && chartEl.data[evt.curveNumber]) ? chartEl.data[evt.curveNumber] : {};
                     var traceName = String(clickedTrace.name || '').toLowerCase();
                     var traceMeta = String(clickedTrace.meta || '').toLowerCase();
                     var isAvg = traceMeta === 'avg-control' || traceName.indexOf('avg') !== -1;
@@ -2011,9 +2799,9 @@
 
                     var isVisible = clickedTrace.visible === undefined || clickedTrace.visible === true;
                     var nextVisible = isVisible ? 'legendonly' : true;
-                    Plotly.restyle(el, { visible: nextVisible }, [evt.curveNumber]);
+                    Plotly.restyle(chartEl, { visible: nextVisible }, [evt.curveNumber]);
 
-                    var shapes = (el.layout && el.layout.shapes ? el.layout.shapes : []).map(function (s) {
+                    var shapes = (chartEl.layout && chartEl.layout.shapes ? chartEl.layout.shapes : []).map(function (s) {
                       return Object.assign({}, s);
                     });
 
@@ -2024,7 +2812,7 @@
                       shapes[1].visible = nextVisible === true;
                     }
 
-                    var annotations = (el.layout && el.layout.annotations ? el.layout.annotations : []).map(function (a) {
+                    var annotations = (chartEl.layout && chartEl.layout.annotations ? chartEl.layout.annotations : []).map(function (a) {
                       return Object.assign({}, a);
                     });
 
@@ -2039,7 +2827,7 @@
                       }
                     });
 
-                    Plotly.relayout(el, { shapes: shapes, annotations: annotations });
+                    Plotly.relayout(chartEl, { shapes: shapes, annotations: annotations });
                     return false;
                   });
                 }
