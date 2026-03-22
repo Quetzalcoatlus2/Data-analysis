@@ -493,8 +493,16 @@ def _cap_anomalies_for_display(
 def _anomaly_positions_for_index(data_index: pd.Index, anomalies_idx: pd.Index | None) -> list[int]:
     return analysis_plots._anomaly_positions_for_index(data_index, anomalies_idx)
 
-def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=False):
-    return analysis_plots.generate_plot(data, title, xlabel, ylabel, anomalies_idx=anomalies_idx, use_webp=use_webp)
+def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=False, display_index=None):
+    return analysis_plots.generate_plot(
+        data,
+        title,
+        xlabel,
+        ylabel,
+        anomalies_idx=anomalies_idx,
+        use_webp=use_webp,
+        display_index=display_index,
+    )
 
 def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
     """Generate a correlation heatmap as base64 image."""
@@ -554,6 +562,7 @@ def generate_forecast_plot(
     stats=None,
     legend_y=None,
     xlabel_labelpad=None,
+    display_index=None,
 ):
     """Generate a plot showing historical data and forecast with confidence intervals."""
     return analysis_plots.generate_forecast_plot(
@@ -561,6 +570,7 @@ def generate_forecast_plot(
         conf_int=conf_int, history_tail=history_tail,
         anomalies_idx=anomalies_idx, anomalies_score=anomalies_score,
         stats=stats, legend_y=legend_y, xlabel_labelpad=xlabel_labelpad,
+        display_index=display_index,
     )
 
 
