@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Feature Labs{% endblock %}</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: #05070b;
+      color: #e8eef7;
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 20px 16px 28px;
+    }
+    .card {
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      background: #0a1018;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .muted { color: #98a6bd; }
+    nav a {
+      color: #8fb8ff;
+      text-decoration: none;
+      margin-right: 10px;
+      font-size: 0.95rem;
+    }
+    nav a:hover { text-decoration: underline; }
+    .lab-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }
+    .pill {
+      display: block;
+      border: 1px solid #243041;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #0f172a;
+      color: #dbeafe;
+      text-decoration: none;
+    }
+    .pill:hover { border-color: #60a5fa; }
+    code {
+      background: #0f172a;
+      border-radius: 6px;
+      padding: 1px 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="card">
+      <a href="{{ url_for('pages.analyze_file', filename=filename, display=display_name, selected_col=selected_col) }}">Back to analysis</a>
+      <a href="{{ url_for('pages.labs_hub', filename=filename, display=display_name, column=selected_col) }}">Hub</a>
+      <a href="{{ url_for('pages.labs_forecast_lab', filename=filename, display=display_name, column=selected_col) }}">Forecast</a>
+      <a href="{{ url_for('pages.labs_anomaly_lab', filename=filename, display=display_name, column=selected_col) }}">Anomaly</a>
+      <a href="{{ url_for('pages.labs_quality_lab', filename=filename, display=display_name, column=selected_col) }}">Quality</a>
+      <a href="{{ url_for('pages.labs_change_point_lab', filename=filename, display=display_name, column=selected_col) }}">Change points</a>
+      <a href="{{ url_for('pages.labs_conformal_lab', filename=filename, display=display_name, column=selected_col) }}">Conformal</a>
+      <a href="{{ url_for('pages.labs_shap_lab', filename=filename, display=display_name, column=selected_col) }}">SHAP</a>
+      <a href="{{ url_for('pages.labs_multivariate_lab', filename=filename, display=display_name, column=selected_col) }}">Multivariate</a>
+    </nav>
+
+    <section class="card">
+      <h1 style="margin: 0 0 6px;">{% block heading %}Feature Labs{% endblock %}</h1>
+      <p class="muted" style="margin: 0;">Dataset: <code>{{ display_name }}</code>{% if selected_col %} · Column: <code>{{ selected_col }}</code>{% endif %}</p>
+    </section>
+
+    {% block body %}{% endblock %}
+  </div>
+</body>
+</html>
