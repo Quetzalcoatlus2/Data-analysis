@@ -286,6 +286,30 @@ header {
   gap: 16px;
 }
 
+#categories-section {
+  padding: 10px 12px 8px;
+}
+
+#categories-section>h2 {
+  margin: 0 0 4px;
+}
+
+#categories-section>.muted {
+  margin: 0 0 8px;
+}
+
+#categories-section>.grid {
+  gap: 10px;
+}
+
+#categories-section>.grid>.panel {
+  margin-bottom: 0;
+}
+
+.category-chart-panel {
+  padding: 0 10px 2px;
+}
+
 @media (min-width: 900px) {
   .grid-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -320,8 +344,8 @@ img.plot {
 .interactive-panel-head {
   display: flex;
   flex-wrap: nowrap;
-  gap: 10px 26px;
-  align-items: flex-start;
+  gap: 6px 12px;
+  align-items: center;
   justify-content: flex-start;
   min-width: 0;
 }
@@ -331,25 +355,31 @@ img.plot {
 }
 
 .interactive-controls-bar {
-  margin-left: clamp(12px, 1.8vw, 28px);
+  --settings-inline-gap: clamp(10px, 1vw, 14px);
+  --settings-right-pad: 0px;
+  margin-left: 0;
   margin-right: 0;
   display: flex !important;
   flex-wrap: nowrap !important;
   justify-content: flex-start;
   align-items: center;
-  gap: 18px 120px !important;
+  gap: 6px var(--settings-inline-gap) !important;
+  padding-right: var(--settings-right-pad);
   flex: 1 1 auto;
-  width: auto;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .interactive-control-group {
   display: grid;
   grid-template-columns: max-content minmax(var(--interactive-field-min, 88px), var(--interactive-field-width, 140px));
-  gap: 4px 24px;
+  gap: 1px 6px;
   align-items: center;
+  flex: 0 0 auto;
   width: fit-content;
   max-width: 100%;
   min-width: 0;
@@ -357,12 +387,14 @@ img.plot {
 }
 
 .interactive-control-group--hint-left {
-  --interactive-hint-width: clamp(18ch, 26vw, 38ch);
+  --interactive-hint-width: clamp(9ch, 9.5vw, 13ch);
   grid-template-columns:
     max-content
     minmax(var(--interactive-field-min, 88px), var(--interactive-field-width, 140px))
-    max-content;
-  column-gap: 8px;
+    minmax(max-content, var(--interactive-hint-width));
+  grid-template-rows: auto;
+  column-gap: 6px;
+  row-gap: 0;
 }
 
 .interactive-control-group--compact {
@@ -372,29 +404,36 @@ img.plot {
 
 .interactive-control-group--column {
   order: 1;
-  --interactive-field-width: 226px;
-  --interactive-field-min: 196px;
+  --interactive-field-width: clamp(248px, 17vw, 300px);
+  --interactive-field-min: 248px;
 }
 
 .interactive-control-group--range {
   order: 2;
-  --interactive-field-width: 126px;
-  --interactive-field-min: 118px;
-  --interactive-hint-width: clamp(14ch, 16vw, 22ch);
+  --interactive-field-width: clamp(150px, 10.5vw, 190px);
+  --interactive-field-min: 146px;
+  --interactive-hint-width: clamp(9ch, 9vw, 13ch);
 }
 
 .interactive-control-group--forecast {
   order: 3;
-  --interactive-field-width: 96px;
-  --interactive-field-min: 96px;
-  --interactive-hint-width: clamp(12ch, 14vw, 19ch);
+  --interactive-field-width: clamp(156px, 11vw, 196px);
+  --interactive-field-min: 152px;
+  --interactive-hint-width: clamp(8ch, 8.5vw, 12ch);
 }
 
 .interactive-control-group--contamination {
   order: 4;
-  --interactive-field-width: 76px;
-  --interactive-field-min: 76px;
-  --interactive-hint-width: clamp(16ch, 18vw, 24ch);
+  --interactive-field-width: 78px;
+  --interactive-field-min: 78px;
+  --interactive-hint-width: clamp(8ch, 8.5vw, 12ch);
+}
+
+.interactive-control-group--trailing,
+.forecast-control-group--trailing {
+  margin-inline-start: auto;
+  margin-left: auto;
+  justify-self: end;
 }
 
 .interactive-control-group label {
@@ -414,10 +453,13 @@ img.plot {
 
 .interactive-control-group--hint-left .interactive-control-hint {
   grid-column: 3;
+  grid-row: 1;
   justify-self: start;
   align-self: center;
   text-align: left;
-  padding-left: 2px;
+  padding-left: 1px;
+  font-size: 0.72rem;
+  line-height: 1.08;
   max-width: none;
   white-space: nowrap;
   overflow: visible;
@@ -426,20 +468,23 @@ img.plot {
 
 .interactive-control-group--hint-left label {
   grid-column: 1;
+  grid-row: 1;
 }
 
 .interactive-control-group--hint-left select,
 .interactive-control-group--hint-left input[type="number"] {
   grid-column: 2;
+  grid-row: 1;
 }
 
 .interactive-control-group--forecast .interactive-control-hint {
   grid-column: 3;
+  grid-row: 1;
   justify-self: start;
   text-align: left;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .interactive-control-group select,
@@ -450,16 +495,33 @@ img.plot {
 }
 
 .forecast-controls-bar {
+  --settings-inline-gap: clamp(10px, 1vw, 14px);
+  --settings-right-pad: 0px;
   display: flex !important;
   flex-wrap: nowrap !important;
-  gap: 10px 120px !important;
+  gap: 6px var(--settings-inline-gap) !important;
+  padding-right: var(--settings-right-pad);
   align-items: center;
   justify-content: flex-start;
-  width: auto;
-  flex: 0 1 auto;
+  width: 100%;
+  flex: 1 1 auto;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.forecast-header-row > div:last-child {
+  display: flex;
+  flex: 1 1 640px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.forecast-header-row > div:last-child .forecast-controls-bar {
+  margin-left: auto;
+  margin-right: 0;
 }
 
 .forecast-header-row {
@@ -467,37 +529,48 @@ img.plot {
 }
 
 .forecast-header-row>div:first-child {
+  flex: 0 1 470px;
+  max-width: 470px;
   min-width: 280px !important;
 }
 
 .forecast-control-group {
   display: grid;
-  grid-template-columns: max-content minmax(var(--forecast-field-min, 88px), var(--forecast-field-width, 140px)) max-content;
-  gap: 8px 24px;
+  grid-template-columns:
+    max-content
+    minmax(var(--forecast-field-min, 88px), var(--forecast-field-width, 140px))
+    minmax(max-content, var(--forecast-hint-width, 22ch));
+  grid-template-rows: auto;
+  gap: 1px 6px;
   align-items: center;
+  flex: 0 0 auto;
   width: fit-content;
   max-width: 100%;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .forecast-control-group--range {
-  --forecast-field-width: 126px;
-  --forecast-field-min: 126px;
+  --forecast-field-width: clamp(150px, 10.5vw, 190px);
+  --forecast-field-min: 146px;
+  --forecast-hint-width: clamp(9ch, 9vw, 13ch);
 }
 
 .forecast-control-group--forecast {
-  --forecast-field-width: 96px;
-  --forecast-field-min: 96px;
+  --forecast-field-width: clamp(156px, 11vw, 196px);
+  --forecast-field-min: 152px;
+  --forecast-hint-width: clamp(8ch, 8.5vw, 12ch);
 }
 
 .forecast-control-group--contamination {
   --forecast-field-width: 78px;
   --forecast-field-min: 78px;
+  --forecast-hint-width: clamp(8ch, 8.5vw, 12ch);
 }
 
 .forecast-control-group label,
 .forecast-control-group .muted {
-  white-space: normal;
+  white-space: nowrap;
   max-width: 100%;
   overflow: visible;
   text-overflow: clip;
@@ -507,8 +580,8 @@ img.plot {
   grid-column: 1;
   grid-row: 1;
   align-self: center;
-  font-size: 0.87rem;
-  line-height: 1.15;
+  font-size: 0.9rem;
+  line-height: 1.05;
 }
 
 .forecast-control-group .muted {
@@ -516,11 +589,11 @@ img.plot {
   grid-row: 1;
   justify-self: start;
   align-self: center;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   opacity: 0.9;
   text-align: left;
   margin-top: 0;
-  line-height: 1.1;
+  line-height: 1.08;
 }
 
 .forecast-control-group select,
@@ -530,6 +603,61 @@ img.plot {
   width: min(100%, var(--forecast-field-width, 140px));
   min-width: var(--forecast-field-min, 88px);
   max-width: var(--forecast-field-width, 140px);
+}
+
+@media (max-width: 1700px) {
+  .interactive-control-group--hint-left {
+    grid-template-columns: max-content minmax(var(--interactive-field-min, 88px), var(--interactive-field-width, 140px));
+    grid-template-rows: auto auto;
+    row-gap: 1px;
+  }
+
+  .interactive-control-group--hint-left .interactive-control-hint {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+    text-align: left;
+    padding-left: 0;
+  }
+
+  .interactive-control-group--hint-left label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .interactive-control-group--hint-left select,
+  .interactive-control-group--hint-left input[type="number"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .forecast-control-group {
+    grid-template-columns:
+      max-content
+      minmax(var(--forecast-field-min, 88px), var(--forecast-field-width, 140px));
+    grid-template-rows: auto auto;
+    row-gap: 1px;
+  }
+
+  .forecast-control-group .muted {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    align-self: start;
+    text-align: left;
+  }
+
+  .forecast-control-group label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .forecast-control-group select,
+  .forecast-control-group input[type="number"] {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
 
 @media (max-width: 1040px) {
@@ -557,10 +685,12 @@ img.plot {
 
   .interactive-control-group--hint-left {
     grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-rows: auto auto;
   }
 
   .interactive-control-group--hint-left .interactive-control-hint {
     grid-column: 1 / -1;
+    grid-row: 2;
     justify-self: start;
     text-align: left;
   }
@@ -572,6 +702,12 @@ img.plot {
   .interactive-control-group--hint-left select,
   .interactive-control-group--hint-left input[type="number"] {
     grid-column: 2;
+    grid-row: 1;
+  }
+
+  .interactive-control-group--trailing,
+  .forecast-control-group--trailing {
+    margin-left: 0;
   }
 
   .forecast-controls-bar {
@@ -585,12 +721,18 @@ img.plot {
   }
 
   .forecast-control-group {
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-rows: auto auto;
     width: 100%;
     align-items: stretch;
+    white-space: normal;
   }
 
   .forecast-control-group .muted {
+    grid-column: 1 / -1;
+    grid-row: 2;
     justify-self: start;
+    white-space: normal;
   }
 }
 

@@ -12,6 +12,15 @@ from typing import Any, cast
 import emoji
 from fpdf import FPDF
 
+from data_analysis.analysis.plot import (
+    _add_static_distribution_overlays,
+    _apply_sci_formatter,
+    _build_static_category_chart,
+    _format_stat_value,
+    _resolve_static_tick_policy,
+    _sample_numeric_axis_ticks,
+    get_export_chart_figsize,
+)
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *  # pyright: ignore[reportAssignmentType]
 from data_analysis.runtime_app import (
@@ -992,11 +1001,17 @@ def handle_download_full_report_pdf(filename):
         img_width = 180
         img_x = 15
 
-        def _add_base64_plot(plot_b64: str | None) -> bool:
+        def _add_base64_plot(
+            plot_b64: str | None,
+            *,
+            min_space_mm: float = 96.0,
+            gap_after_mm: float = 8.0,
+        ) -> bool:
             if not plot_b64:
                 return False
+            _ensure_img_space(min_space_mm)
             pdf.image(io.BytesIO(base64.b64decode(plot_b64)), w=img_width, x=img_x)
-            pdf.ln(30)
+            pdf.ln(gap_after_mm)
             return True
         
         for col in df.columns:
@@ -1064,8 +1079,9 @@ def handle_download_full_report_pdf(filename):
                         history_tail=None,
                         anomalies_idx=an_idx,
                         anomalies_score=an_score,
-                        legend_y=-0.36,
-                        xlabel_labelpad=6
+                        legend_y=-0.28,
+                        xlabel_labelpad=4,
+                        figsize=get_export_chart_figsize("trend", context="pdf"),
                     )
                     _add_base64_plot(trend_b64)
                 except Exception as e:
@@ -1094,8 +1110,9 @@ def handle_download_full_report_pdf(filename):
                             conf_int=ci,
                             history_tail=None,
                             anomalies_idx=an_idx,
-                            legend_y=-0.40,
-                            xlabel_labelpad=6
+                            legend_y=-0.28,
+                            xlabel_labelpad=4,
+                            figsize=get_export_chart_figsize("forecast", context="pdf"),
                         )
                         _add_base64_plot(fc_b64)
                 except Exception as e:
@@ -1104,140 +1121,67 @@ def handle_download_full_report_pdf(filename):
 
             # 3. DISTRIBUTION chart
             try:
-                fig, ax = plt.subplots(figsize=(10, 5))  # Wider figure for full-width image
+                fig, ax = plt.subplots(figsize=get_export_chart_figsize("distribution", context="pdf"))
                 if is_numeric:
                     s_num = numeric_series
                     s_arr = np.asarray(s_num.to_numpy(dtype=float), dtype=float)
-                    ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', label='Distribution')
+                    ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label='Distribution')
                     ax.set_title(f"Distribution: {col}")
+                    ax.set_xlabel(col, fontsize=9, labelpad=1)
                     ax.set_ylabel("Frequency")
-                    
-                    # Add stat markers like web version
-                    stats_min, stats_max = float(s_num.min()), float(s_num.max())
-                    stats_mean, stats_median = float(s_num.mean()), float(s_num.median())
-                    stats_std = float(s_num.std())
-                    
-                    # Avg/Med vertical lines (with labels for legend)
-                    ax.axvline(x=stats_mean, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_plot_value(stats_mean)}')
-                    ax.axvline(x=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.7, label=f'Med: {_format_plot_value(stats_median)}')
-                    
-                    # Min/Max markers at bottom with annotations
-                    ylim = ax.get_ylim()
-                    xlim = ax.get_xlim()
-                    marker_y = ylim[0] + (ylim[1] - ylim[0]) * 0.05
-                    min_color = '#ff3b30'
-                    max_color = '#00e5ff'
-                    edge_color = '#0b1220'
-                    ax.scatter([stats_min], [marker_y], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_plot_value(stats_min)}')
-                    ax.scatter([stats_max], [marker_y], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_plot_value(stats_max)}')
+                    ax.grid(True, alpha=0.3)
 
-                    # Match Detailed Analysis: min tag slightly left, max tag slightly right.
-                    min_xytext, min_ha = (-3, 12), 'right'
-                    max_xytext, max_ha = (3, 12), 'left'
-                    if abs(stats_max - stats_min) <= (xlim[1] - xlim[0]) * 0.03:
-                        min_xytext = (min_xytext[0], 12)
-                        max_xytext = (max_xytext[0], 22)
-                    ax.annotate(f'{_format_plot_value(stats_min)}', (stats_min, marker_y), textcoords='offset points', xytext=min_xytext, ha=min_ha, fontsize=7, color=min_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    ax.annotate(f'{_format_plot_value(stats_max)}', (stats_max, marker_y), textcoords='offset points', xytext=max_xytext, ha=max_ha, fontsize=7, color=max_color, fontweight='bold', annotation_clip=False, clip_on=False)
-                    
-                    # Avg/Med tags
-                    x_offset = (xlim[1] - xlim[0]) * 0.02
-                    if stats_mean <= stats_median:
-                        ax.text(stats_mean - x_offset, ylim[1] * 0.985, f'Avg: {_format_plot_value(stats_mean)}', va='top', ha='right', fontsize=8, color='#f39c12', fontweight='bold')
-                        ax.text(stats_median + x_offset, ylim[1] * 0.985, f'Med: {_format_plot_value(stats_median)}', va='top', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
-                    else:
-                        ax.text(stats_median - x_offset, ylim[1] * 0.985, f'Med: {_format_plot_value(stats_median)}', va='top', ha='right', fontsize=8, color='#9b59b6', fontweight='bold')
-                        ax.text(stats_mean + x_offset, ylim[1] * 0.985, f'Avg: {_format_plot_value(stats_mean)}', va='top', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
-                    
-                    # Std in legend only (always add this, outside the if/else)
-                    ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_plot_value(stats_std)}')
-
-                    # Use compact K/M/B/T labels for extreme values.
                     try:
-                        from data_analysis.analysis.plot import _apply_sci_formatter
-                        _apply_sci_formatter(ax)
+                        from matplotlib.ticker import MaxNLocator
+                        ax.yaxis.set_major_locator(MaxNLocator(nbins=7, integer=True, min_n_ticks=4))
                     except Exception:
                         pass
-                    
-                    # Legend with all stats (Min, Max, Avg, Med, Std) - always show
-                    ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=6, frameon=False)
-                    fig.subplots_adjust(bottom=0.22)
+
+                    finite_unique_values = np.unique(s_arr[np.isfinite(s_arr)]) if s_arr.size else np.asarray([], dtype=float)
+                    tick_policy = _resolve_static_tick_policy(
+                        finite_unique_values.tolist(),
+                        chart_type='distribution',
+                    )
+                    tick_values, tick_labels = _sample_numeric_axis_ticks(
+                        s_arr.tolist(),
+                        max_tick_labels=int(tick_policy['max_tick_labels']),
+                        min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
+                    )
+                    if tick_values:
+                        ax.set_xticks(tick_values)
+                        ax.set_xticklabels(
+                            tick_labels,
+                            rotation=int(tick_policy['tick_angle']),
+                            ha=str(tick_policy['tick_ha']),
+                            fontsize=float(tick_policy['tick_fontsize']),
+                        )
+
+                    _add_static_distribution_overlays(
+                        ax,
+                        s_arr,
+                        value_formatter=_format_stat_value,
+                        legend_fontsize=6,
+                        legend_columns=6,
+                        legend_y=-0.18,
+                    )
+                    _apply_sci_formatter(ax)
+                    fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
                 else:
-                    # Categorical bar chart (top 50)
+                    # Categorical bar chart (all categories)
                     all_counts = series.value_counts()
-                    top_counts = all_counts.head(50)
-                    top_counts.plot(kind='bar', ax=ax, color='tab:green', alpha=0.7, edgecolor='black')
-
-                    # Add value labels above each bar
-                    try:
-                        if ax.containers and isinstance(ax.containers[0], BarContainer):
-                            ax.bar_label(
-                                ax.containers[0],
-                                labels=[str(int(v)) for v in top_counts.values],
-                                padding=2,
-                                fontsize=7
-                            )
-                    except Exception as e:
-                        app.logger.debug("Bar labels skipped for PDF category chart '%s': %s", col, e)
-                    
-                    total_unique = len(all_counts)
-                    if len(all_counts) > 50:
-                        ax.set_title(f"Categories: {col} (Top 50 of {total_unique})")
-                    else:
-                        ax.set_title(f"Categories: {col} ({total_unique} unique)")
-                    ax.set_ylabel("Count")
-                    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
-                    
-                    # Stats for annotation
-                    max_count = int(all_counts.max())
-                    min_count = int(all_counts.min())
-                    avg_count = float(all_counts.mean())
-                    med_count = float(all_counts.median())
-                    most_freq = str(all_counts.index[0])[:15]
-                    
-                    # Add horizontal avg/med lines for counts
-                    ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {avg_count:.1f}')
-                    ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {med_count:.1f}')
-                    
-                    # Add text labels for avg/med lines next to the chart, with extra separation if close
-                    cat_ylim = ax.get_ylim()
-                    y_range = cat_ylim[1] - cat_ylim[0]
-                    threshold = y_range * 0.03
-                    if abs(avg_count - med_count) < threshold:
-                        offset = threshold * 0.4
-                        if avg_count >= med_count:
-                            avg_y = avg_count + offset
-                            med_y = med_count - offset
-                        else:
-                            avg_y = avg_count - offset
-                            med_y = med_count + offset
-                    else:
-                        avg_y = avg_count
-                        med_y = med_count
-
-                    ax.text(1.01, avg_y, f'Avg: {avg_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#f39c12', fontweight='bold')
-                    ax.text(1.01, med_y, f'Med: {med_count:.1f}', transform=ax.get_yaxis_transform(), va='center', ha='left', fontsize=8, color='#9b59b6', fontweight='bold')
-                    
-                    # Stats in TOP-RIGHT corner
-                    # Get least frequent item name
-                    least_freq = str(all_counts.index[-1])[:15] if len(all_counts) > 0 else "N/A"
-                    
-                    # Add Most/Least as legend entries
-                    ax.plot([], [], color='#27ae60', marker='s', linestyle='', markersize=8, label=f"Most: '{most_freq}' ({max_count})")
-                    ax.plot([], [], color='#e74c3c', marker='s', linestyle='', markersize=8, label=f"Least: '{least_freq}' ({min_count})")
-                    
-                    # Legend on top-right, vertical (line by line)
-                    ax.legend(fontsize=7, loc='upper right', framealpha=0.9)
-
-                ax.set_xlabel(col)
-                ax.grid(True, alpha=0.3)
+                    built_chart = _build_static_category_chart(all_counts, col)
+                    if built_chart is None:
+                        raise ValueError(f"Could not build categories chart for {col}")
+                    plt.close(fig)
+                    fig, ax = built_chart
                 
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
                 plt.close(fig)
                 buf.seek(0)
+                _ensure_img_space(96.0)
                 pdf.image(buf, w=img_width, x=img_x)
-                pdf.ln(30)
+                pdf.ln(8)
             except Exception as e:
                 app.logger.debug("Distribution chart skipped in PDF for '%s': %s", col, e)
                 

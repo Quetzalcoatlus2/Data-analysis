@@ -7,6 +7,7 @@ import io
 import math
 import textwrap
 from collections import Counter
+from collections.abc import Sequence
 from typing import Any, Callable, Literal, cast
 
 import matplotlib.pyplot as plt
@@ -63,6 +64,9 @@ def _format_stat_value(v: float) -> str:
         if mag >= 1e6:
             raw = f"{value / 1e6:.3f}"
             return _strip_numeric_trailing_zeros(raw) + "M"
+        if mag >= 1e3:
+            raw = f"{value / 1e3:.2f}"
+            return _strip_numeric_trailing_zeros(raw) + "K"
         return _format_precise_axis_value(value)
     except Exception:
         return str(v)
@@ -118,7 +122,7 @@ def _format_axis_tick_value(value: float) -> str:
 
 
 def _sample_numeric_axis_ticks(
-    values: list[object] | tuple[object, ...] | np.ndarray | pd.Series,
+    values: Sequence[Any] | np.ndarray | pd.Series,
     max_tick_labels: int,
     min_spacing_ratio: float = 0.0,
 ) -> tuple[list[float], list[str]]:
@@ -185,7 +189,7 @@ def _sample_numeric_axis_ticks(
 
 
 def _tick_fontsize_for_labels(
-    labels: list[object] | tuple[object, ...] | pd.Index,
+    labels: Sequence[object] | pd.Index,
     *,
     dense_cutoff: int = 10,
 ) -> float:
@@ -211,7 +215,7 @@ def _tick_fontsize_for_labels(
 
 
 def _resolve_static_tick_policy(
-    labels: list[object] | tuple[object, ...] | pd.Index,
+    labels: Sequence[object] | pd.Index,
     *,
     chart_type: Literal["trend", "forecast", "distribution"] = "forecast",
 ) -> dict[str, float | int | str]:
@@ -219,24 +223,32 @@ def _resolve_static_tick_policy(
     clean_labels = [_stringify_axis_label(label) for label in list(labels) if str(label or "").strip()]
     label_count = len(clean_labels)
     max_label_length = max((len(label) for label in clean_labels), default=0)
-    target_tick_labels = min(25, label_count)
     if chart_type == "distribution":
-        target_tick_labels = min(15, label_count)
-    
-    can_fit_horizontal = target_tick_labels * (max_label_length + 1) <= 75
-    
-    if can_fit_horizontal:
+        # Keep distribution labels non-inclined and rely on evenly-spaced sampling
+        # to increase readability while avoiding overlaps.
         tick_angle = 0
         tick_ha = 'center'
-        max_tick_labels = max(4, int(150 / max(1, max_label_length)))
+        target_tick_labels = min(16, label_count)
+        if label_count <= 8:
+            max_tick_labels = max(4, label_count)
+        elif label_count <= 16:
+            max_tick_labels = min(14, label_count)
+        else:
+            max_tick_labels = min(12, label_count)
+        if max_label_length > 12:
+            max_tick_labels = max(6, min(max_tick_labels, 10))
+        min_spacing_ratio = 0.34 if (label_count > 16 or max_label_length > 10) else 0.28
     else:
-        tick_angle = -20 # Fallback angle closer to horizontal
-        tick_ha = 'left'
-        max_tick_labels = min(40, label_count) # Allow more since they are tilted
-
-    if chart_type == "distribution":
-        min_spacing_ratio = 0.34 if (label_count > 10 or max_label_length > 10) else 0.24
-    else:
+        target_tick_labels = min(25, label_count)
+        can_fit_horizontal = target_tick_labels * (max_label_length + 1) <= 75
+        if can_fit_horizontal:
+            tick_angle = 0
+            tick_ha = 'center'
+            max_tick_labels = max(4, int(150 / max(1, max_label_length)))
+        else:
+            tick_angle = -20
+            tick_ha = 'left'
+            max_tick_labels = min(40, label_count)
         min_spacing_ratio = 0.0
 
     dense_cutoff = 8 if chart_type == "distribution" else 10
@@ -266,7 +278,7 @@ def _stringify_axis_label(label: object) -> str:
 
 
 def _sample_axis_tick_labels(
-    labels: list[object] | tuple[object, ...] | pd.Index,
+    labels: Sequence[object] | pd.Index,
     max_tick_labels: int,
 ) -> tuple[list[int], list[str]]:
     """Sample axis labels while always preserving the last visible point."""
@@ -292,8 +304,8 @@ def _sample_axis_tick_labels(
 
 
 def _build_non_timeseries_tick_labels(
-    history_labels: list[object] | tuple[object, ...] | pd.Index,
-    forecast_labels: list[object] | tuple[object, ...] | pd.Index | None = None,
+    history_labels: Sequence[object] | pd.Index,
+    forecast_labels: Sequence[object] | pd.Index | None = None,
     *,
     max_tick_labels: int,
 ) -> tuple[list[int], list[str]]:
@@ -438,6 +450,27 @@ def _wrap_category_legend_label(
     return joiner.join(wrapped)
 
 
+def get_export_chart_figsize(
+    chart_kind: Literal["trend", "forecast", "distribution"],
+    *,
+    context: Literal["zip", "pdf"] = "pdf",
+) -> tuple[float, float]:
+    """Return shared export figure sizes for ZIP/PDF chart rendering.
+
+    Sizes are intentionally a bit taller than previous defaults to improve
+    legibility of axis labels, legends, and annotations in static exports.
+    """
+    size_map: dict[tuple[str, str], tuple[float, float]] = {
+        ("zip", "trend"): (10.0, 7.4),
+        ("zip", "forecast"): (10.0, 7.4),
+        ("zip", "distribution"): (8.0, 8.2),
+        ("pdf", "trend"): (10.0, 7.4),
+        ("pdf", "forecast"): (10.0, 7.4),
+        ("pdf", "distribution"): (10.0, 8.2),
+    }
+    return size_map.get((str(context), str(chart_kind)), (10.0, 7.2))
+
+
 def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, Any] | None:
     """Build a shared Matplotlib category chart used by PDF and ZIP exports."""
     if all_counts.empty or len(all_counts) < 2:
@@ -462,7 +495,7 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     ]
 
     category_labels = [_stringify_axis_label(label) for label in all_counts.index.tolist()]
-    tick_positions = list(range(category_count))
+    tick_positions: list[float] = [float(i) for i in range(category_count)]
     tick_labels = category_labels
     max_label_length = max((len(label) for label in tick_labels), default=0)
     long_label_scale = min(1.0, max_label_length / 42.0)
@@ -471,41 +504,84 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     legend_columns = 5
     legend_rows = int(math.ceil(max(1, len(legend_labels)) / max(1, legend_columns)))
     can_fit_horizontal = category_count * (max_label_length + 1) <= 120
-    tick_angle = 0 if can_fit_horizontal else -20
-    tick_ha = 'center' if can_fit_horizontal else 'left'
-    tick_fontsize = 5 if category_count > 180 else 6 if category_count > 140 else 6.5 if category_count > 100 else 7.5 if category_count > 60 else 8
+    tick_ha: Literal['left', 'center', 'right']
+    if can_fit_horizontal:
+        tick_angle = 0
+        tick_ha = 'center'
+    elif category_count > 120:
+        tick_angle = -54
+        tick_ha = 'left'
+    elif category_count > 70 or max_label_length > 18:
+        tick_angle = -46
+        tick_ha = 'left'
+    else:
+        tick_angle = -32
+        tick_ha = 'left'
+    tick_fontsize = 5.0 if category_count > 180 else 5.6 if category_count > 140 else 6.2 if category_count > 100 else 7.0 if category_count > 60 else 8.0
     fig_width = min(48.0, max(16.0, category_count * 0.16))
-    fig_height = min(32.0, 21.0 + long_label_scale * 0.45 + label_density_scale * 0.8 + max(0, legend_rows - 1) * 0.22)
-    legend_y = -0.19 - long_label_scale * 0.012 - label_density_scale * 0.012 - max(0, legend_rows - 1) * 0.025
-    bottom_padding = 0.17 + long_label_scale * 0.02 + label_density_scale * 0.02 + max(0, legend_rows - 1) * 0.03
+    fig_height = min(28.0, 18.5 + long_label_scale * 0.55 + label_density_scale * 0.85 + max(0, legend_rows - 1) * 0.24)
+    legend_y = (
+        -0.092
+        - long_label_scale * 0.006
+        - label_density_scale * 0.008
+        - max(0, legend_rows - 1) * 0.014
+        - (0.11 if tick_angle != 0 else 0.0)
+    )
+    bottom_padding = (
+        0.25
+        + long_label_scale * 0.045
+        + label_density_scale * 0.055
+        + max(0, legend_rows - 1) * 0.02
+        + (0.34 if tick_angle != 0 else 0.0)
+    )
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     x_positions = np.arange(category_count, dtype=np.int64)
     y_values = [int(float(v)) for v in all_counts.to_numpy(dtype=float).tolist()]
-    ax.bar(x_positions, y_values, color='tab:green', alpha=0.7, edgecolor='black', label='Count')
+    bar_container = ax.bar(x_positions, y_values, color='tab:green', alpha=0.7, edgecolor='black', label='Count')
 
-    if category_count <= 120 and ax.containers:
+    if isinstance(bar_container, BarContainer):
         with contextlib.suppress(Exception):
-            first_container = ax.containers[0]
-            if isinstance(first_container, BarContainer):
+            tick_positions = [
+                float(bar.get_x() + (bar.get_width() / 2.0))
+                for bar in bar_container.patches
+            ]
+
+    if category_count <= 120:
+        with contextlib.suppress(Exception):
+            if isinstance(bar_container, BarContainer):
                 ax.bar_label(
-                    first_container,
+                    bar_container,
                     labels=[str(v) for v in y_values],
                     padding=2,
                     fontsize=8,
                 )
 
     ax.set_title(f"Categories: {col} ({total_unique} unique values)", fontsize=13)
-    ax.set_xlabel(col, fontsize=16, labelpad=1)
+    ax.set_xlabel(col, fontsize=13, labelpad=9)
     ax.set_ylabel("Count", fontsize=11)
     ax.grid(True, alpha=0.3, axis='y')
     ax.margins(x=0.01)
     ax.set_ylim(0, max(max_count * 1.06, 1.0))
+    ax.set_xlim(-0.5, category_count - 0.5)
 
-    ax.set_xticks(tick_positions)
-    ax.set_xticklabels(tick_labels, rotation=tick_angle, ha=tick_ha, fontsize=tick_fontsize)
-    ax.tick_params(axis='x', pad=0.5)
+    ax.xaxis.set_major_locator(mticker.FixedLocator(tick_positions))
+    ax.xaxis.set_major_formatter(mticker.FixedFormatter(tick_labels))
+    x_tick_pad = 1.0 if tick_angle == 0 else 0.0
+    ax.tick_params(axis='x', pad=x_tick_pad, labelsize=tick_fontsize, direction='out')
+    if tick_angle != 0:
+        with contextlib.suppress(Exception):
+            # Keep only a minimal outward offset for rotated labels: enough to
+            # preserve anchor readability while avoiding the larger historical
+            # chart-to-label gap.
+            ax.spines['bottom'].set_position(('outward', 6.0))
+    for tick_label in ax.get_xticklabels():
+        tick_label.set_rotation(tick_angle)
+        tick_label.set_horizontalalignment(tick_ha)
+        if tick_angle != 0:
+            tick_label.set_rotation_mode('anchor')
+            tick_label.set_verticalalignment('top')
 
     ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_stat_value(avg_count)}')
     ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {_format_stat_value(med_count)}')
@@ -577,7 +653,9 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
         columnspacing=0.35,
         handletextpad=0.20,
     )
-    fig.subplots_adjust(bottom=min(0.28, bottom_padding), right=0.94, top=0.93)
+    min_bottom = 0.24 if tick_angle == 0 else 0.60
+    max_bottom = 0.42 if tick_angle == 0 else 0.82
+    fig.subplots_adjust(bottom=min(max_bottom, max(min_bottom, bottom_padding)), right=0.94, top=0.93)
     return fig, ax
 
 
@@ -761,7 +839,7 @@ def _add_static_distribution_overlays(
     )
 
     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {formatter(stats_std)}')
-    legend_anchor = min(float(legend_y), -0.60)
+    legend_anchor = max(-0.24, min(float(legend_y), -0.14))
     ax.legend(
         fontsize=legend_fontsize,
         loc='upper center',
@@ -920,7 +998,7 @@ def generate_plot(
     except Exception:
         max_anomaly_markers = 20
     # HIGH QUALITY: Larger figure for better image quality
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig, ax = plt.subplots(figsize=(10, 4.8))
     
     # Use numeric x-positions for non-datetime indexes to ensure proper alignment
     is_datetime = _is_reliable_timeseries_index(data.index)
@@ -1099,13 +1177,24 @@ def generate_forecast_plot(
     stats=None,
     legend_y=None,
     xlabel_labelpad=None,
+    figsize: tuple[float, float] | None = None,
     display_index: pd.Index | list[object] | tuple[object, ...] | None = None,
 ):
     """Generate a plot showing historical data and forecast with confidence intervals and anomaly markers.
        If forecast_series is None or empty, only history is shown (0% forecast mode).
     """
     _bind_runtime_globals()
-    fig, ax = plt.subplots(figsize=(10, 4))
+    resolved_figsize = (10.0, 5.2)
+    if isinstance(figsize, tuple) and len(figsize) == 2:
+        try:
+            w = float(figsize[0])
+            h = float(figsize[1])
+            if np.isfinite(w) and np.isfinite(h) and w > 0 and h > 0:
+                resolved_figsize = (w, h)
+        except Exception:
+            resolved_figsize = (10.0, 5.2)
+
+    fig, ax = plt.subplots(figsize=resolved_figsize)
 
     history_tail_series = history if not history_tail or history_tail <= 0 else history.tail(history_tail)
     display_history_index = history_tail_series.index
@@ -1302,13 +1391,21 @@ def generate_forecast_plot(
     ax.set_title(title)
     # Use a sensible x-axis label depending on index type
     try:
-        label_pad = 12 if xlabel_labelpad is None else xlabel_labelpad
-        resolved_xlabel = xlabel or ('Timestamp' if has_reliable_index else 'Index')
+        label_pad = 6 if xlabel_labelpad is None else xlabel_labelpad
+        if has_reliable_index:
+            resolved_xlabel = xlabel or 'Timestamp'
+        else:
+            raw_xlabel = str(xlabel or '').strip().lower()
+            resolved_xlabel = 'Index' if raw_xlabel in {'', 'timestamp', 'time', 'date'} else str(xlabel)
         ax.set_xlabel(resolved_xlabel, labelpad=label_pad)
     except Exception:
-        label_pad = 12 if xlabel_labelpad is None else xlabel_labelpad
+        label_pad = 6 if xlabel_labelpad is None else xlabel_labelpad
         ax.set_xlabel(xlabel, labelpad=label_pad)
     ax.set_ylabel(ylabel)
+
+    with contextlib.suppress(Exception):
+        ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=10, min_n_ticks=6))
+
     ax.legend()
     ax.grid(True, alpha=0.3)
 
@@ -1432,15 +1529,15 @@ def generate_forecast_plot(
 
         # Keep x-axis title above the legend lane for static outputs.
         with contextlib.suppress(Exception):
-            ax.xaxis.set_label_coords(0.5, -0.46)
+            ax.xaxis.set_label_coords(0.5, -0.18)
 
         # Legend on single line - below x-axis title (Index)
-        legend_floor = -0.66
-        legend_anchor = legend_floor if legend_y is None else min(float(legend_y), legend_floor)
+        legend_floor = -0.34
+        legend_anchor = legend_floor if legend_y is None else max(legend_floor, min(float(legend_y), -0.22))
         ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, legend_anchor), ncol=12, frameon=False, columnspacing=0.45, handletextpad=0.25)
 
         with contextlib.suppress(Exception):
-            fig.subplots_adjust(bottom=0.64, right=0.82, top=0.90)
+            fig.subplots_adjust(bottom=0.42, right=0.82, top=0.92)
         
         # Std appears in legend only
     except Exception as e:
@@ -1524,7 +1621,7 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
     bottom_margin = int(round(min(166, 96 + max_tick_line_length * 0.46 + label_density_scale * 14 + max(0, legend_rows - 1) * 14)))
     legend_y = round(max(-0.54, -0.43 - long_label_scale * 0.012 - label_density_scale * 0.012 - max(0, legend_rows - 1) * 0.024), 3)
     title_standoff = 0
-    chart_height = int(round(1250 + long_label_scale * 14 + label_density_scale * 18 + max(0, legend_rows - 1) * 8))
+    chart_height = int(round(1325 + long_label_scale * 14 + label_density_scale * 18 + max(0, legend_rows - 1) * 8))
     show_bar_labels = len(x_values) <= 120
 
     bar_trace = {
