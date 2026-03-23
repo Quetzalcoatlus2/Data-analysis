@@ -420,29 +420,33 @@ def handle_analyze_file(filename):
 
             # Stop forecasting if time/column limits are exceeded
             # Generate forecasts for any numeric series with sufficient length
-            if build_forecast and not skip_forecasts and len(series) >= 5 and pct > 0:
+            if build_forecast and not skip_forecasts and len(series) >= 5:
                 try:
                     t0 = time.perf_counter()
                     steps = _steps_for_history_rows(len(series))
-                    if steps <= 0:
-                        pass
-                    else:
+                    has_future_forecast = steps > 0
+
+                    if has_future_forecast:
                         app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
 
-                    if steps > 0:
+                    title_fc = f"Forecast for {column} (with anomalies)"
+                    fc_mean_thin = None
+                    conf_df_thin = None
+
+                    if has_future_forecast:
                         # Unified pipeline - use cached helper for cross-view performance
                         fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
-
-                        title_fc = f"Forecast for {column} (with anomalies)"
                         
                         # Do not thin history for display to ensure anomaly positions 
                         # perfectly match Interactive, PDF, and ZIP exports which use full series.
-                        s_hist = series
                         fc_mean_thin = fc_mean
                         conf_df_thin = conf_df
-                        
-                        # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
-                        fc_stats = _compute_basic_stats(series)
+                    else:
+                        title_fc = f"Forecast for {column} (history only)"
+
+                    s_hist = series
+                    # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
+                    fc_stats = _compute_basic_stats(series)
 
                     xlab, display_index = _resolve_plot_display_axis(
                         series,
@@ -468,7 +472,7 @@ def handle_analyze_file(filename):
                     except Exception as _e:
                         app.logger.warning("Could not render forecast image for %s: %s", column, _e)
                     try:
-                        fc_points = len(fc_mean) if isinstance(fc_mean, pd.Series) else -1
+                        fc_points = len(fc_mean_thin) if isinstance(fc_mean_thin, pd.Series) else 0
                         app.logger.info("Forecast plot ready col=%s forecast_points=%d", column, fc_points)
                     except Exception as fc_log_err:
                         app.logger.debug("Forecast points logging skipped for %s: %s", column, fc_log_err)
@@ -480,6 +484,7 @@ def handle_analyze_file(filename):
                     # distribution plots and remaining columns still run.
                     if (
                         (not forecast_force_full)
+                        and has_future_forecast
                         and ((time.perf_counter() - request_start) > budget_s or forecast_done >= cols_limit)
                     ):
                         skip_forecasts = True  # Skip forecast computation for subsequent columns
@@ -509,9 +514,15 @@ def handle_analyze_file(filename):
                     series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
                     ax.hist(series_arr, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
                     ax.set_title(f"Distribution: {column}", fontsize=10)
-                    ax.set_xlabel(column, fontsize=9, labelpad=10)
+                    ax.set_xlabel(column, fontsize=9, labelpad=2)
                     ax.set_ylabel("Frequency", fontsize=9)
                     ax.grid(True, alpha=0.3)
+
+                    try:
+                        from matplotlib.ticker import MaxNLocator
+                        ax.yaxis.set_major_locator(MaxNLocator(nbins=9, integer=True, min_n_ticks=6))
+                    except Exception:
+                        pass
 
                     finite_unique_values = np.unique(series_arr[np.isfinite(series_arr)]) if series_arr.size else np.asarray([], dtype=float)
                     tick_policy = _resolve_static_tick_policy(
@@ -537,8 +548,9 @@ def handle_analyze_file(filename):
                         series_arr,
                         legend_fontsize=6,
                         legend_columns=6,
+                        legend_y=-0.18,
                     )
-                    fig.subplots_adjust(bottom=0.54, right=0.95, top=0.90)
+                    fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
                     
                     
                     buf = io.BytesIO()
@@ -811,14 +823,17 @@ def handle_analyze_file(filename):
                 series = full_series
                 if data_range_rows > 0:
                     series = full_series.tail(data_range_rows)
-                if len(series) >= 5 and pct > 0:
+                if len(series) >= 5:
                     # Detect anomalies for fallback forecast
                     an_idx_fb, _ = get_cached_anomalies(filename, column, full_series, user_contam)
                     steps = _steps_for_history_rows(len(series))
-                    if steps <= 0:
-                        continue
-                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+                    fc_mean = None
+                    conf_df = None
                     title_fc = f"Forecast for {column}"
+                    if steps > 0:
+                        fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+                    else:
+                        title_fc = f"Forecast for {column} (history only)"
                     s_hist = series
                     fallback_xlab, fallback_display_index = _resolve_plot_display_axis(
                         series,
