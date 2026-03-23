@@ -562,6 +562,7 @@ def generate_forecast_plot(
     stats=None,
     legend_y=None,
     xlabel_labelpad=None,
+    figsize=None,
     display_index=None,
 ):
     """Generate a plot showing historical data and forecast with confidence intervals."""
@@ -570,6 +571,7 @@ def generate_forecast_plot(
         conf_int=conf_int, history_tail=history_tail,
         anomalies_idx=anomalies_idx, anomalies_score=anomalies_score,
         stats=stats, legend_y=legend_y, xlabel_labelpad=xlabel_labelpad,
+        figsize=figsize,
         display_index=display_index,
     )
 
