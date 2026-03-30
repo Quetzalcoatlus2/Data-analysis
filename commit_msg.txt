@@ -1,7 +1,0 @@
-Refactor: Comprehensive modularization and UI/AI bug fixes
-
-- App Modularization: Split monolithic `app.py` into distinct domains (`data_analysis/routes/`, `data_analysis/core/`, `data_analysis/analysis/`, `data_analysis/ai/`).
-- Deferred Render Pipeline: Heavy AI summaries and complex forecasts are now deferred during the initial dataset load and executed on-demand during their respective route views.
-- AI Summary Model Labeling: Separated model extraction and caching logic to strictly prevent the summary's `gemini-pro` attribution from being overwritten by a Q&A model during reloads.
-- PDF Engine Overhaul: Replaced primitive Regex generation with a custom `AIHTMLParser` natively tracking nested lists, inserting customized bullet points and colored headings, and utilizing `set_fallback_fonts` for robust Emoji support.
-- Graphing X-Axis Enhancements: The first column of a dataset is automatically promoted to `df.index` without dropping it when no valid timeseries is found, directing Plotly to actively label text indices linearly via `tickvals` instead of raw integers.
