@@ -155,7 +155,7 @@ AI_STATUS: dict = cast(dict, None)
 AI_ENABLED: bool = cast(bool, None)
 model: Any = cast(Any, None)
 AI_CONFIG_ATTEMPTED: bool = cast(bool, None)
-RATE_LIMITED_MODELS: set = cast(set, None)
+RATE_LIMITED_MODELS: dict[str, float] = cast(dict[str, float], None)
 RATE_LIMIT_COOLDOWN_SECONDS: int = cast(int, None)
 
 
