@@ -148,9 +148,9 @@ os.environ.setdefault("NO_COLOR", "1")
 log_level = configure_logging(app)
 
 # AI state variables - synchronized from ai_engine at runtime
-DEFAULT_AI_MODEL: str = cast(str, None)
+DEFAULT_AI_MODEL: str | None = cast(str, None)
 MODEL_CACHE: dict = cast(dict, None)
-CURRENT_MODEL_NAME: str = cast(str, None)
+CURRENT_MODEL_NAME: str | None = cast(str, None)
 AI_STATUS: dict = cast(dict, None)
 AI_ENABLED: bool = cast(bool, None)
 model: Any = cast(Any, None)
@@ -390,6 +390,15 @@ def _is_reliable_timeseries_index(idx) -> bool:
     return True
 
 
+def _should_suppress_temporal_charts(idx: pd.Index) -> bool:
+    """Legacy compatibility hook.
+
+    Temporal datasets remain chartable. We avoid using temporal fields as
+    plotted Y-series during numeric coercion instead of suppressing the view.
+    """
+    return False
+
+
 
 
 def _restore_emoji_placeholders(text: str) -> str:
@@ -562,6 +571,7 @@ def generate_forecast_plot(
     stats=None,
     legend_y=None,
     xlabel_labelpad=None,
+    figsize=None,
     display_index=None,
 ):
     """Generate a plot showing historical data and forecast with confidence intervals."""
@@ -570,6 +580,7 @@ def generate_forecast_plot(
         conf_int=conf_int, history_tail=history_tail,
         anomalies_idx=anomalies_idx, anomalies_score=anomalies_score,
         stats=stats, legend_y=legend_y, xlabel_labelpad=xlabel_labelpad,
+        figsize=figsize,
         display_index=display_index,
     )
 
@@ -662,6 +673,13 @@ def _cleanup_uploads_if_configured():
 
 def _try_parse_numeric_series(s: pd.Series) -> pd.Series:
     return analysis_dataframe_ops._try_parse_numeric_series(s)
+
+def _is_active_temporal_axis_column(df: pd.DataFrame, column: object) -> bool:
+    return analysis_dataframe_ops._is_active_temporal_axis_column(
+        df,
+        column,
+        is_reliable_timeseries_index=_is_reliable_timeseries_index,
+    )
 
 def coerce_numeric_df(df: pd.DataFrame) -> pd.DataFrame:
     return analysis_dataframe_ops.coerce_numeric_df(
