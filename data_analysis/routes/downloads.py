@@ -12,6 +12,7 @@ from data_analysis.analysis.plot import (
     _resolve_plot_display_axis,
     _resolve_static_tick_policy,
     _sample_numeric_axis_ticks,
+    get_export_chart_figsize,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
@@ -237,6 +238,7 @@ def handle_download_static_plots_zip(filename):
                     history_tail=None,
                     anomalies_idx=an_idx,
                     anomalies_score=an_score,
+                    figsize=get_export_chart_figsize("trend", context="zip"),
                     display_index=display_index,
                 )
                 raw = base64.b64decode(img_b64.encode('utf-8'))
@@ -247,14 +249,20 @@ def handle_download_static_plots_zip(filename):
             # Distribution histogram - HIGH QUALITY: Larger figure and more bins
             try:
                 from matplotlib.figure import Figure
-                fig = Figure(figsize=(8, 5))
+                fig = Figure(figsize=get_export_chart_figsize("distribution", context="zip"))
                 ax = fig.subplots()
                 s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
                 ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
                 ax.set_title(f"Distribution: {col}", fontsize=10)
-                ax.set_xlabel(col, fontsize=9, labelpad=10)
+                ax.set_xlabel(col, fontsize=9, labelpad=2)
                 ax.set_ylabel("Frequency", fontsize=9)
                 ax.grid(True, alpha=0.3)
+
+                try:
+                    from matplotlib.ticker import MaxNLocator
+                    ax.yaxis.set_major_locator(MaxNLocator(nbins=7, integer=True, min_n_ticks=4))
+                except Exception:
+                    pass
 
                 finite_unique_values = np.unique(s_arr[np.isfinite(s_arr)]) if s_arr.size else np.asarray([], dtype=float)
                 tick_policy = _resolve_static_tick_policy(
@@ -283,8 +291,9 @@ def handle_download_static_plots_zip(filename):
                         value_formatter=_format_stat_value,
                         legend_fontsize=6,
                         legend_columns=6,
+                        legend_y=-0.18,
                     )
-                    fig.subplots_adjust(bottom=0.54, right=0.95, top=0.90)
+                    fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
                     
                     # Apply compact K/M/B/T axis labels for large values.
                     _apply_sci_formatter(ax)
@@ -329,6 +338,7 @@ def handle_download_static_plots_zip(filename):
                         history_tail=None,
                         anomalies_idx=an_idx,
                         anomalies_score=an_score,
+                        figsize=get_export_chart_figsize("forecast", context="zip"),
                         display_index=display_index,
                     )
                     raw = base64.b64decode(fc_b64.encode('utf-8'))
