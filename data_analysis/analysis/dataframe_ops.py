@@ -268,7 +268,7 @@ def _looks_temporal_series(s: pd.Series) -> bool:
     if pd.api.types.is_numeric_dtype(s):
         return False
 
-    sample = s.dropna()
+    sample = s.head(200).dropna()
     if sample.empty:
         return False
 
@@ -278,14 +278,20 @@ def _looks_temporal_series(s: pd.Series) -> bool:
 
     name_hint = str(s.name or "").lower()
     has_name_hint = any(token in name_hint for token in ("date", "time", "timestamp", "datetime"))
+    # Numeric-looking string columns (e.g. "1", "2") can parse as epoch-like
+    # datetimes; require at least ~10% non-numeric evidence before temporal parse.
+    numeric_only_ratio = float(sample.str.fullmatch(r"[+-]?\d+", na=False).mean())
+    if numeric_only_ratio >= 0.9:
+        return False
+
     temporal_pattern_ratio = float(
-        sample.head(200).str.contains(r"[-/:]|[Tt ]\d{1,2}:\d{2}|[AaPp][Mm]|Z$", regex=True, na=False).mean()
+        sample.str.contains(r"[-/:]|[Tt ]\d{1,2}:\d{2}|[AaPp][Mm]|Z$", regex=True, na=False).mean()
     )
     if not has_name_hint and temporal_pattern_ratio < 0.6:
         return False
 
     try:
-        parsed = pd.to_datetime(sample.head(200), errors="coerce", utc=False)
+        parsed = pd.to_datetime(sample, errors="coerce", utc=False)
     except Exception:
         return False
     return bool(parsed.notna().mean() >= 0.8)
