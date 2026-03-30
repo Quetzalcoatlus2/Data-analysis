@@ -257,6 +257,80 @@ def _try_parse_numeric_series(s: pd.Series) -> pd.Series:
     return out
 
 
+def _looks_temporal_series(s: pd.Series) -> bool:
+    """Return True when a non-numeric series is primarily datetime-like text."""
+    if not isinstance(s, pd.Series):
+        return False
+    if s.empty:
+        return False
+    if pd.api.types.is_datetime64_any_dtype(s) or pd.api.types.is_timedelta64_dtype(s):
+        return True
+    if pd.api.types.is_numeric_dtype(s):
+        return False
+
+    sample = s.dropna()
+    if sample.empty:
+        return False
+
+    sample = sample.astype(str).str.strip()
+    if sample.empty:
+        return False
+
+    name_hint = str(s.name or "").lower()
+    has_name_hint = any(token in name_hint for token in ("date", "time", "timestamp", "datetime"))
+    temporal_pattern_ratio = float(
+        sample.head(200).str.contains(r"[-/:]|[Tt ]\d{1,2}:\d{2}|[AaPp][Mm]|Z$", regex=True, na=False).mean()
+    )
+    if not has_name_hint and temporal_pattern_ratio < 0.6:
+        return False
+
+    try:
+        parsed = pd.to_datetime(sample.head(200), errors="coerce", utc=False)
+    except Exception:
+        return False
+    return bool(parsed.notna().mean() >= 0.8)
+
+
+def _is_active_temporal_axis_column(
+    df: pd.DataFrame,
+    column: object,
+    *,
+    is_reliable_timeseries_index: Callable[[pd.Index | Any], bool] | None = None,
+) -> bool:
+    """Return True when ``column`` is the temporal field already driving the x-axis.
+
+    Categories built from the same datetime-like field that was promoted to the
+    dataset index are not useful: they count each timestamp against itself. This
+    helper keeps the filter narrow by only matching the actual active time axis.
+    """
+    if df is None or df.empty:
+        return False
+
+    if column not in df.columns:
+        return False
+
+    index_name = getattr(df.index, "name", None)
+    if index_name in (None, "") or str(index_name) != str(column):
+        return False
+
+    try:
+        index_is_temporal = (
+            bool(is_reliable_timeseries_index(df.index))
+            if callable(is_reliable_timeseries_index)
+            else isinstance(df.index, pd.DatetimeIndex)
+        )
+    except Exception:
+        index_is_temporal = isinstance(df.index, pd.DatetimeIndex)
+
+    if not index_is_temporal:
+        return False
+
+    series = df[column]
+    if pd.api.types.is_datetime64_any_dtype(series) or pd.api.types.is_timedelta64_dtype(series):
+        return True
+    return _looks_temporal_series(series)
+
+
 def coerce_numeric_df(
     df: pd.DataFrame,
     *,
@@ -269,9 +343,13 @@ def coerce_numeric_df(
     res: dict[Any, pd.Series] = {}
     for col in df.columns:
         ser = df[col]
+        if pd.api.types.is_datetime64_any_dtype(ser) or pd.api.types.is_timedelta64_dtype(ser):
+            continue
         if pd.api.types.is_numeric_dtype(ser):
             res[col] = ser.astype(float)
         else:
+            if _looks_temporal_series(ser):
+                continue
             coerced = parse_numeric_series_fn(ser)
             if coerced.notna().any():
                 res[col] = coerced
@@ -470,6 +548,8 @@ __all__ = [
     "read_excel_smart",
     "_cleanup_uploads_if_configured",
     "_try_parse_numeric_series",
+    "_looks_temporal_series",
+    "_is_active_temporal_axis_column",
     "coerce_numeric_df",
     "get_cached_numeric_df",
     "get_dataframe_for",
