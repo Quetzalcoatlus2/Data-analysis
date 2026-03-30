@@ -5,7 +5,8 @@ import pandas as pd
 
 
 def _load_dataframe_ops_module():
-    module_path = Path(__file__).resolve().parents[2] / "data_analysis" / "analysis" / "dataframe_ops.py"
+    repo_root = Path(__file__).resolve().parents[2]
+    module_path = repo_root / "data_analysis" / "analysis" / "dataframe_ops.py"
     spec = importlib.util.spec_from_file_location("test_dataframe_ops_module", module_path)
     if spec is None or spec.loader is None:
         raise RuntimeError("Unable to load dataframe_ops module for tests")

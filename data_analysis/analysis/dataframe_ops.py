@@ -278,7 +278,9 @@ def _looks_temporal_series(s: pd.Series) -> bool:
 
     name_hint = str(s.name or "").lower()
     has_name_hint = any(token in name_hint for token in ("date", "time", "timestamp", "datetime"))
-    numeric_only_ratio = float(sample.str.fullmatch(r"[+-]?\d+").mean())
+    # Numeric-looking string columns (e.g. "1", "2") can parse as epoch-like
+    # datetimes; require at least ~10% non-numeric evidence before temporal parse.
+    numeric_only_ratio = float(sample.str.fullmatch(r"[+-]?\d+", na=False).mean())
     if numeric_only_ratio >= 0.9:
         return False
 
