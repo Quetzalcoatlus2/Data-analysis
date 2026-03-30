@@ -163,6 +163,26 @@ def handle_api_interactive_data(filename):
         app.logger.info("Interactive API cache HIT file=%s pct=%.4f contam=%.4f elapsed=%.3fs", filename, pct, user_contam, elapsed)
         return jsonify({"ok": True, "data": cached, "cached": True})
 
+    # Backward compatibility: older callers/tests may warm the cache with the
+    # filename-only key used before parameterized interactive cache keys.
+    # Restrict fallback to default requests so parameter-specific responses do
+    # not collide.
+    legacy_default_request = ('forecast_pct' not in request.args) and ('contamination' not in request.args)
+    if legacy_default_request:
+        legacy_cached = INTERACTIVE_DATA_CACHE.get(filename)
+        if legacy_cached is not None:
+            INTERACTIVE_DATA_CACHE.set(cache_key, legacy_cached)
+            _log_cache_stats_if_needed("interactive-cached")
+            elapsed = time.perf_counter() - request_start
+            app.logger.info(
+                "Interactive API legacy cache HIT file=%s pct=%.4f contam=%.4f elapsed=%.3fs",
+                filename,
+                pct,
+                user_contam,
+                elapsed,
+            )
+            return jsonify({"ok": True, "data": legacy_cached, "cached": True})
+
     # Load DataFrame
     df = get_dataframe_for(filename)
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
