@@ -128,6 +128,18 @@ def test_format_stat_value_uses_billion_trillion_suffixes():
     assert _format_stat_value(1e16) == "1.000e+16"
 
 
+def test_resolve_static_tick_policy_distribution_prefers_horizontal_labels():
+    """Distribution static policy should keep labels horizontal and densely sampled safely."""
+    from data_analysis.analysis.plot import _resolve_static_tick_policy
+
+    labels = [str(2000 + i) for i in range(24)]
+    policy = _resolve_static_tick_policy(labels, chart_type="distribution")
+
+    assert int(policy["tick_angle"]) == 0
+    assert str(policy["tick_ha"]) == "center"
+    assert int(policy["max_tick_labels"]) >= 10
+
+
 def test_generate_forecast_plot_returns_base64():
     """Ensure generate_forecast_plot returns a non-empty base64 string."""
     history_idx = pd.date_range("2024-01-01", periods=5, freq="D")
@@ -137,6 +149,139 @@ def test_generate_forecast_plot_returns_base64():
     img = generate_forecast_plot(history, forecast, "Forecast", "Timestamp", "Value")
     assert isinstance(img, str)
     assert len(img) > 0
+
+
+def test_generate_forecast_plot_accepts_custom_figsize():
+    """Forecast renderer should accept explicit figure-size overrides for export layouts."""
+    history_idx = pd.date_range("2024-01-01", periods=8, freq="D")
+    history = pd.Series([1, 2, 3, 4, 5, 6, 7, 8], index=history_idx)
+    forecast_idx = pd.date_range("2024-01-09", periods=3, freq="D")
+    forecast = pd.Series([8.2, 8.5, 8.7], index=forecast_idx)
+
+    img = cast(Any, generate_forecast_plot)(
+        history,
+        forecast,
+        "Forecast",
+        "Timestamp",
+        "Value",
+        figsize=(9.5, 6.1),
+    )
+
+    assert isinstance(img, str)
+    assert len(img) > 0
+
+
+def test_build_static_category_chart_uses_milder_dense_tick_angle():
+    """Dense static category exports should avoid near-vertical tick angles and huge heights."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(210, 10, -1),
+        index=[f"category_{i:03d}" for i in range(200)],
+    )
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        tick_labels = ax.get_xticklabels()
+        rotation = float(tick_labels[0].get_rotation()) if tick_labels else 0.0
+        assert rotation >= -55.0
+        assert float(fig.get_size_inches()[1]) <= 28.0
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_rotated_ticks_match_bar_centers():
+    """Static categorical exports should keep each rotated tick anchored to its matching bar center."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(220, 120, -1),
+        index=[f"region_{i:03d}" for i in range(100)],
+    )
+    built = _build_static_category_chart(counts, "region")
+    assert built is not None
+    fig, ax = built
+    try:
+        bars = list(ax.patches)
+        assert len(bars) == len(counts)
+
+        bar_centers = np.asarray([bar.get_x() + (bar.get_width() / 2.0) for bar in bars], dtype=float)
+        tick_positions = np.asarray(ax.get_xticks(), dtype=float)
+        assert len(tick_positions) == len(counts)
+        assert np.allclose(bar_centers, tick_positions, atol=1e-8)
+
+        tick_labels = [tick.get_text() for tick in ax.get_xticklabels()]
+        assert tick_labels[0] == str(counts.index[0])
+        assert tick_labels[-1] == str(counts.index[-1])
+
+        first_rotation = float(ax.get_xticklabels()[0].get_rotation()) if ax.get_xticklabels() else 0.0
+        if first_rotation != 0.0:
+            assert ax.get_xticklabels()[0].get_rotation_mode() == "anchor"
+            bottom_spine = ax.spines.get("bottom")
+            assert bottom_spine is not None
+            pos_kind, pos_value = bottom_spine.get_position()
+            assert pos_kind == "outward"
+            assert float(pos_value) >= 6.0
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_dense_ticks_render_below_axis():
+    """Dense category export labels should stay below the axis while matching bar centers."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(340, 190, -1),
+        index=[f"very_long_region_name_{i:03d}" for i in range(150)],
+    )
+    built = _build_static_category_chart(counts, "region")
+    assert built is not None
+    fig, ax = built
+    try:
+        bars = list(ax.patches)
+        bar_centers = np.asarray([bar.get_x() + (bar.get_width() / 2.0) for bar in bars], dtype=float)
+        tick_positions = np.asarray(ax.get_xticks(), dtype=float)
+        assert len(tick_positions) == len(bar_centers)
+        assert np.allclose(tick_positions, bar_centers, atol=1e-8)
+
+        tick_labels = list(ax.get_xticklabels())
+        assert tick_labels
+        first_tick = tick_labels[0]
+        raw_rotation = float(first_tick.get_rotation())
+        signed_rotation = ((raw_rotation + 180.0) % 360.0) - 180.0
+        assert signed_rotation < 0.0
+        assert first_tick.get_rotation_mode() == "anchor"
+        assert first_tick.get_va() == "top"
+        # Keep labels anchored below the x-axis baseline (not inside the plotting area).
+        assert float(first_tick.get_position()[1]) <= 0.0
+    finally:
+        plt.close(fig)
+
+
+def test_get_export_chart_figsize_uses_taller_defaults_for_pdf_and_zip():
+    """Shared export chart size helper should return moderately taller chart heights."""
+    from data_analysis.analysis.plot import get_export_chart_figsize
+
+    zip_trend = get_export_chart_figsize("trend", context="zip")
+    zip_forecast = get_export_chart_figsize("forecast", context="zip")
+    zip_dist = get_export_chart_figsize("distribution", context="zip")
+    pdf_trend = get_export_chart_figsize("trend", context="pdf")
+    pdf_forecast = get_export_chart_figsize("forecast", context="pdf")
+    pdf_dist = get_export_chart_figsize("distribution", context="pdf")
+
+    assert zip_trend[1] > 6.3
+    assert zip_forecast[1] > 6.3
+    assert zip_dist[1] > 7.0
+    assert pdf_trend[1] > 6.3
+    assert pdf_forecast[1] > 6.3
+    assert pdf_dist[1] > 7.0
 
 
 def test_generate_forecast_plot_anomaly_positions_with_duplicate_index(monkeypatch):
@@ -1148,6 +1293,37 @@ def test_api_interactive_returns_all_numeric_columns_not_first_eight(monkeypatch
     assert set(cols) == set(df.columns)
 
 
+def test_api_interactive_zero_pct_excludes_forecast_and_ci_traces(monkeypatch):
+    """Interactive API at 0% forecast should return history/anomaly traces only (no forecast or CI)."""
+    filename = "f" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.arange(1, 101, dtype=float)})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_anomalies",
+        lambda *_args, **_kwargs: (pd.Index([], dtype="int64"), pd.Series(dtype=float)),
+    )
+
+    def _fail_if_forecast_called(*_args, **_kwargs):
+        raise AssertionError("Forecast should not be requested when forecast_pct=0")
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", _fail_if_forecast_called)
+
+    with app.test_client() as client:
+        response = client.get(f"/api/interactive/{filename}?forecast_pct=0&contamination=0.02")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["data"]
+    trace_names = [str((t or {}).get("name", "")).lower() for t in payload["data"][0].get("traces", [])]
+    assert all("forecast" not in name for name in trace_names)
+    assert all(not re.search(r"\bci\b|conf|interval", name) for name in trace_names)
+
+
 def test_api_interactive_anomalies_snap_to_displayed_history_points(monkeypatch):
     """Anomaly markers should stay on visible history points after downsampling."""
     filename = "6" * 40 + ".csv"
@@ -1335,3 +1511,89 @@ def test_static_plots_zip_trend_uses_forecast_renderer(monkeypatch):
 
     assert any(name.endswith("_trend.png") for name in names)
     assert calls["forecast"] >= 1
+
+
+def test_analyze_forecast_zero_pct_renders_history_only_forecast(monkeypatch):
+    """Detailed Analysis at 0% should still render forecast charts using history-only traces."""
+    filename = "0" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(1, 61, dtype=float)})
+    DATAFRAME_CACHE.set(filename, df)
+
+    captured = {}
+
+    def fake_render_template(_template, **kwargs):
+        captured["analysis"] = kwargs.get("analysis", {})
+        return "ok"
+
+    calls: list[dict[str, Any]] = []
+
+    def fake_generate_forecast_plot(history, forecast_series, title, *_args, **_kwargs):
+        calls.append(
+            {
+                "history_len": len(history) if history is not None else 0,
+                "has_forecast": forecast_series is not None,
+                "title": str(title),
+            }
+        )
+        return "x"
+
+    monkeypatch.setattr(app_module, "render_template", fake_render_template)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "generate_forecast_plot", fake_generate_forecast_plot)
+
+    def fail_if_forecast_requested(_filename, _column, _series, _steps):
+        raise AssertionError("get_cached_column_forecast should not be called when forecast_pct=0")
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fail_if_forecast_requested)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=forecast&forecast_pct=0")
+
+    assert response.status_code == 200
+    assert calls
+    assert all(call["has_forecast"] is False for call in calls)
+    grouped = captured.get("analysis", {}).get("forecast_plots_by_column", {})
+    grouped_types = [p.get("type") for plots in grouped.values() for p in plots if isinstance(p, dict)]
+    assert "forecast" in grouped_types
+
+
+def test_download_full_report_pdf_categories_not_capped_to_top_50(monkeypatch):
+    """PDF categories should render all category bars via shared helper (no top-50 truncation)."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = "9" * 40 + ".csv"
+    categories = [
+        f"cat_{chr(65 + (i % 26))}{chr(65 + ((i // 26) % 26))}{chr(65 + ((i // (26 * 26)) % 26))}"
+        for i in range(75)
+    ]
+    values = categories + categories
+    df = pd.DataFrame({"category": values})
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    try:
+        app_module.REPORT_CACHE.clear()
+    except Exception:
+        pass
+
+    captured_counts: list[int] = []
+    original_builder = pdf_report_mod._build_static_category_chart
+
+    def spy_build_static_category_chart(all_counts, col):
+        captured_counts.append(int(len(all_counts)))
+        return original_builder(all_counts, col)
+
+    monkeypatch.setattr(pdf_report_mod, "_build_static_category_chart", spy_build_static_category_chart)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert response.data.startswith(b"%PDF")
+    assert captured_counts
+    assert max(captured_counts) == 75
