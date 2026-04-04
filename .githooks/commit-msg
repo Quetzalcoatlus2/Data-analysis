@@ -16,7 +16,8 @@ path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 
 def is_copilot_coauthor(line: str) -> bool:
-    lowered = line.lower()
+    stripped = line.lstrip()
+    lowered = stripped.lower()
     if not lowered.startswith("co-authored-by:"):
         return False
     return (
