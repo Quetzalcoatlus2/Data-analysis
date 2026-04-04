@@ -79,3 +79,18 @@ def test_commit_msg_hook_fails_when_file_missing(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "commit message file not found or invalid" in result.stderr.lower()
+
+
+def test_commit_msg_hook_fails_when_file_argument_missing() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    hook_path = repo_root / ".githooks" / "commit-msg"
+
+    result = subprocess.run(
+        ["bash", str(hook_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "commit message file not found or invalid" in result.stderr.lower()
