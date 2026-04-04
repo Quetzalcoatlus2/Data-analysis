@@ -502,6 +502,7 @@ Hooks will automatically:
 - Run linting before commits
 - Run tests before pushes
 - Prevent committing secrets
+- Remove Copilot co-author trailers (`Co-authored-by: ...copilot...`) from commit messages
 
 ### Code Style Guidelines
 

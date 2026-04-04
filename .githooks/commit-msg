@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+commit_msg_file="${1:-}"
+
+if [ -z "$commit_msg_file" ] || [ ! -f "$commit_msg_file" ]; then
+  echo "Error: commit message file not found or invalid." >&2
+  exit 1
+fi
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+  PYTHON=".venv/Scripts/python.exe"
+elif [ -x ".venv/Scripts/python" ]; then
+  PYTHON=".venv/Scripts/python"
+elif [ -x ".venv/bin/python" ]; then
+  PYTHON=".venv/bin/python"
+else
+  PYTHON="python"
+fi
+
+"$PYTHON" - "$commit_msg_file" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+
+def is_copilot_coauthor(line: str) -> bool:
+    stripped = line.lstrip()
+    lowered = stripped.lower()
+    if not lowered.startswith("co-authored-by:"):
+        return False
+    return (
+        "github-copilot[bot]" in lowered
+        or "copilot@users.noreply.github.com" in lowered
+        or "github-copilot@users.noreply.github.com" in lowered
+    )
+
+filtered_lines = []
+for line in text.splitlines(keepends=True):
+    line_without_line_ending = line.rstrip("\r\n")
+    if not is_copilot_coauthor(line_without_line_ending):
+        filtered_lines.append(line)
+result = "".join(filtered_lines)
+
+path.write_text(result, encoding="utf-8")
+PY
