@@ -8,7 +8,17 @@ if [ -z "$commit_msg_file" ] || [ ! -f "$commit_msg_file" ]; then
   exit 1
 fi
 
-python - "$commit_msg_file" <<'PY'
+if [ -x ".venv/Scripts/python.exe" ]; then
+  PYTHON=".venv/Scripts/python.exe"
+elif [ -x ".venv/Scripts/python" ]; then
+  PYTHON=".venv/Scripts/python"
+elif [ -x ".venv/bin/python" ]; then
+  PYTHON=".venv/bin/python"
+else
+  PYTHON="python"
+fi
+
+"$PYTHON" - "$commit_msg_file" <<'PY'
 import pathlib
 import sys
 
