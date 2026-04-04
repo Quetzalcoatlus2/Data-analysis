@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+commit_msg_file="${1:-}"
+
+if [ -z "$commit_msg_file" ] || [ ! -f "$commit_msg_file" ]; then
+  exit 0
+fi
+
+python - "$commit_msg_file" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+
+copilot_coauthor_pattern = re.compile(r"^\s*co-authored-by:.*copilot.*$", re.IGNORECASE)
+filtered_lines = [line for line in text.splitlines() if not copilot_coauthor_pattern.match(line)]
+
+result = "\n".join(filtered_lines)
+if text.endswith("\n"):
+    result += "\n"
+
+path.write_text(result, encoding="utf-8")
+PY
