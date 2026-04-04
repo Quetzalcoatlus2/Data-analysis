@@ -36,26 +36,28 @@ All screenshots below were captured from the current app using datasets in `data
 - `datasets/Project 1 - Weather Dataset.csv`
 - `datasets/Life Expectancy Data.csv`
 
-### Upload page (theme variants)
+### Default visual style (AMOLED-first)
 
-| AMOLED | Light | Dark |
-|---|---|---|
-| ![Upload AMOLED](screenshots/upload_amoled.png) | ![Upload Light](screenshots/upload_light.png) | ![Upload Dark](screenshots/upload_dark.png) |
+| Upload (AMOLED) |
+|---|
+| ![Upload AMOLED](screenshots/upload_amoled.png) |
+
+### Theme showcase (Light / Dark)
+
+| Light | Dark |
+|---|---|
+| ![Upload Light](screenshots/upload_light.png) | ![Upload Dark](screenshots/upload_dark.png) |
 
 ### Analysis tabs (Weather dataset)
 
 | View | Screenshot |
 |---|---|
 | Overview (AMOLED) | ![Weather Overview AMOLED](screenshots/weather_overview_amoled.png) |
-| Overview (Light) | ![Weather Overview Light](screenshots/weather_overview_light.png) |
-| Overview (Dark) | ![Weather Overview Dark](screenshots/weather_overview_dark.png) |
 | Interactive (AMOLED) | ![Weather Interactive AMOLED](screenshots/weather_interactive_amoled.png) |
-| Interactive (Light) | ![Weather Interactive Light](screenshots/weather_interactive_light.png) |
-| Interactive (Dark) | ![Weather Interactive Dark](screenshots/weather_interactive_dark.png) |
-| Detailed Analysis | ![Weather Detailed](screenshots/weather_detailed_light.png) |
-| Correlation | ![Weather Correlation](screenshots/weather_correlation_light.png) |
-| Categories | ![Weather Categories](screenshots/weather_categories_light.png) |
-| Export controls in-page | ![Weather Exports](screenshots/weather_exports_header.png) |
+| Detailed Analysis (AMOLED) | ![Weather Detailed AMOLED](screenshots/weather_detailed_amoled.png) |
+| Correlation (AMOLED) | ![Weather Correlation AMOLED](screenshots/weather_correlation_amoled.png) |
+| Categories (AMOLED) | ![Weather Categories AMOLED](screenshots/weather_categories_amoled.png) |
+| Export controls in-page (AMOLED) | ![Weather Exports AMOLED](screenshots/weather_exports_header_amoled.png) |
 
 > ✅ Categories behavior update: the active temporal-axis column is now filtered out of category charts to avoid self-count temporal noise.
 
@@ -63,28 +65,25 @@ All screenshots below were captured from the current app using datasets in `data
 
 | Page | Screenshot |
 |---|---|
-| Labs Hub (Light) | ![Weather Labs Hub Light](screenshots/weather_labs_hub_light.png) |
-| Labs Hub (Dark) | ![Weather Labs Hub Dark](screenshots/weather_labs_hub_dark.png) |
-| Forecast Lab (Light) | ![Weather Labs Forecast Light](screenshots/weather_labs_forecast_light.png) |
-| Forecast Lab (Dark) | ![Weather Labs Forecast Dark](screenshots/weather_labs_forecast_dark.png) |
-| Anomaly Lab | ![Weather Labs Anomaly](screenshots/weather_labs_anomaly_light.png) |
-| Quality Lab | ![Weather Labs Quality](screenshots/weather_labs_quality_light.png) |
-| Change Points Lab | ![Weather Labs Change Points](screenshots/weather_labs_changepoints_light.png) |
-| Conformal Lab | ![Weather Labs Conformal](screenshots/weather_labs_conformal_light.png) |
-| SHAP Lab | ![Weather Labs SHAP](screenshots/weather_labs_shap_light.png) |
-| Multivariate Lab | ![Weather Labs Multivariate](screenshots/weather_labs_multivariate_light.png) |
+| Labs Hub (AMOLED) | ![Weather Labs Hub AMOLED](screenshots/weather_labs_hub_amoled.png) |
+| Forecast Lab (AMOLED) | ![Weather Labs Forecast AMOLED](screenshots/weather_labs_forecast_amoled.png) |
+| Anomaly Lab (AMOLED) | ![Weather Labs Anomaly AMOLED](screenshots/weather_labs_anomaly_amoled.png) |
+| Quality Lab (AMOLED) | ![Weather Labs Quality AMOLED](screenshots/weather_labs_quality_amoled.png) |
+| Change Points Lab (AMOLED) | ![Weather Labs Change Points AMOLED](screenshots/weather_labs_changepoints_amoled.png) |
+| Conformal Lab (AMOLED) | ![Weather Labs Conformal AMOLED](screenshots/weather_labs_conformal_amoled.png) |
+| SHAP Lab (AMOLED) | ![Weather Labs SHAP AMOLED](screenshots/weather_labs_shap_amoled.png) |
+| Multivariate Lab (AMOLED) | ![Weather Labs Multivariate AMOLED](screenshots/weather_labs_multivariate_amoled.png) |
 
 ### Additional dataset scenario (Life Expectancy)
 
 | View | Screenshot |
 |---|---|
-| Overview (Light) | ![Life Overview Light](screenshots/life_overview_light.png) |
-| Overview (Dark) | ![Life Overview Dark](screenshots/life_overview_dark.png) |
-| Interactive (Light) | ![Life Interactive Light](screenshots/life_interactive_light.png) |
-| Detailed Analysis | ![Life Detailed](screenshots/life_detailed_light.png) |
-| Correlation | ![Life Correlation](screenshots/life_correlation_light.png) |
-| Categories | ![Life Categories](screenshots/life_categories_light.png) |
-| Labs Hub | ![Life Labs Hub](screenshots/life_labs_hub_light.png) |
+| Overview (AMOLED) | ![Life Overview AMOLED](screenshots/life_overview_amoled.png) |
+| Interactive (AMOLED) | ![Life Interactive AMOLED](screenshots/life_interactive_amoled.png) |
+| Detailed Analysis (AMOLED) | ![Life Detailed AMOLED](screenshots/life_detailed_amoled.png) |
+| Correlation (AMOLED) | ![Life Correlation AMOLED](screenshots/life_correlation_amoled.png) |
+| Categories (AMOLED) | ![Life Categories AMOLED](screenshots/life_categories_amoled.png) |
+| Labs Hub (AMOLED) | ![Life Labs Hub AMOLED](screenshots/life_labs_hub_amoled.png) |
 
 ---
 
