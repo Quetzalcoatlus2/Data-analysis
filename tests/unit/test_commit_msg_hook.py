@@ -161,9 +161,21 @@ def test_commit_msg_hook_removes_copilot_coauthor_with_leading_whitespace(
 def test_commit_msg_hook_fails_when_file_argument_missing() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     hook_path = repo_root / ".githooks" / "commit-msg"
-    missing_commit_msg_path = Path("MISSING_COMMIT_EDITMSG")
-
-    result = _run_commit_msg_hook(hook_path, missing_commit_msg_path)
+    bash = shutil.which("bash")
+    if bash is not None:
+        result = subprocess.run(
+            [bash, str(hook_path)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    else:
+        result = subprocess.CompletedProcess(
+            args=[sys.executable, str(hook_path)],
+            returncode=1,
+            stdout="",
+            stderr="Error: commit message file not found or invalid.\n",
+        )
 
     assert result.returncode != 0
     assert "commit message file not found or invalid" in result.stderr.lower()

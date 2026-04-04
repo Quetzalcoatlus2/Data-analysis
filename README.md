@@ -225,20 +225,21 @@ What started as a simple CSV analysis tool has evolved into a comprehensive data
 
 ### 🚧 Work in Progress
 
-**UI/UX & Visual Polish**
-- Continuous refinements of responsive layouts, optimized chart scaling, and accessible contrast patterns.
-- Enhanced interactive Plotly visualizations with dynamic layout adjustment.
-- Real-time analysis progress indicators.
-- Drag-and-drop file upload interface.
+**AI Enhancement**
+- Making AI summaries more verbose while staying within free-tier token limits
+- Reducing "Empty AI response (finish_reason=MAX_TOKENS)" by dynamic prompt tuning
+- Context-aware prompt engineering for better insights
 
 **Research Labs Expansion**
-- Full implementation of SHAP explainability features.
-- Conformal prediction UI and visualization.
-- Advanced multivariate techniques (PCA, clustering).
+- Full implementation of SHAP explainability features
+- Conformal prediction UI and visualization
+- Advanced multivariate techniques (PCA, clustering)
 
-**AI Enhancement**
-- Making AI summaries more verbose while staying within free-tier token limits (dynamic prompt tuning).
-- Content-aware prompt engineering for deeper insights.
+**UI/UX Polish**
+- Enhanced interactive Plotly visualizations
+- Drag-and-drop file upload
+- Real-time analysis progress indicators
+- Export options for individual sections
 
 ### 🚀 Planned Features & Roadmap
 
@@ -426,7 +427,6 @@ If no API key is provided:
 - Numeric columns should use standard formats (no currency symbols in cells)
 - Missing values can be blank, "NA", "NULL", or "NaN"
 - Large files (>100k rows) are automatically downsampled for plotting
-- All provided context datasets (e.g., Sales, Health, Finance, Flight) are fully supported out-of-the-box.
 
 ---
 

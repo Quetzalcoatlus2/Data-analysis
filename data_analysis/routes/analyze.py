@@ -45,17 +45,6 @@ def _clean_model_name(model_name: str | None) -> str:
 
 def handle_analyze_file(filename):
     _bind_runtime_globals()
-    filename = str(filename or "").strip()
-    safe_basename = os.path.basename(filename)
-    if (
-        not filename
-        or safe_basename != filename
-        or ".." in filename
-        or not allowed_file(filename)
-    ):
-        flash("Invalid uploaded file reference. Please upload the dataset again.")
-        return redirect(url_for('pages.upload_file'))
-
     filepath = os.path.join(app.config['UPLOADS_DIR'], filename)
     display_name = request.args.get('display') or request.form.get('display') or filename
     active_view = (request.args.get('view') or request.form.get('view') or 'overview').strip().lower()
@@ -326,8 +315,6 @@ def handle_analyze_file(filename):
                 numeric_non_na_counts = {c: int(_num_df[c].notna().sum()) for c in _num_df.columns}
             for col in df.columns:
                 try:
-                    if _is_active_temporal_axis_column(df, col):
-                        continue
                     if numeric_non_na_counts.get(col, 0) >= 3:
                         continue  # Skip - numeric column
                     s_cat = df[col].dropna()
@@ -606,6 +593,17 @@ def handle_analyze_file(filename):
                     "marker": {"size": 4, "opacity": 0.6}
                 }]
 
+                if not skip_forecasts and len(series) >= 5:
+                    try:
+                        sp = _infer_seasonal_period(series.index) if _is_reliable_timeseries_index(series.index) else None
+                        if sp:
+                            # Use cached STL plot - may already be computed in forecast view
+                            stl_img = get_cached_stl_plot(filename, column, series, sp)
+                            if stl_img:
+                                forecast_plots.append({"img": stl_img, "title": f"STL decomposition for {column}", "column": column, "type": "stl"})
+                    except Exception as stl_err:
+                        app.logger.debug("Interactive STL plot skipped for %s: %s", column, stl_err)
+
             
             if build_interactive and len(an_idx):
                 # an_idx is already capped uniformly above
@@ -661,87 +659,72 @@ def handle_analyze_file(filename):
                     })
             
             # fc_x removed as it was unused
-            fc_mean: pd.Series | None = None
             fc_y = ci_lower = ci_upper = split_x = None
             # Generate forecasts and CI for interactive plots (removed is_timeseries requirement)
             if build_interactive and not skip_forecasts and len(series) >= 5 and pct > 0:
                 try:
                     steps = _steps_for_history_rows(len(series))
-                    if steps > 0:
-                        # Use cached forecast - may already be computed in forecast view
-                        fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+                    if steps <= 0:
+                        continue
+                    # Use cached forecast - may already be computed in forecast view
+                    fc_mean, conf_df = get_cached_column_forecast(filename, column, series, steps)
+                    
+                    # Use numeric X-axis continuing from history
+                    if fc_mean is None or len(fc_mean) == 0:
+                        raise ValueError("Empty forecast")
+                    n_fc = len(fc_mean)
+                    n_fc_total = n_fc
+                    fc_x_numeric = list(range(n_hist, n_hist + n_fc))
+                    fc_y = [float(v) for v in fc_mean.to_numpy(dtype=float)]
+                    fc_labels = [str(i) for i in fc_mean.index]
+                    split_x = n_hist - 0.5  # Numeric position for split line
+                    
+                    if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
+                        ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
+                        ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
 
-                        # Use numeric X-axis continuing from history
-                        if fc_mean is None or len(fc_mean) == 0:
-                            raise ValueError("Empty forecast")
-                        n_fc = len(fc_mean)
-                        n_fc_total = n_fc
-                        fc_x_numeric = list(range(n_hist, n_hist + n_fc))
-                        fc_y = [float(v) for v in fc_mean.to_numpy(dtype=float)]
-                        fc_labels = [str(i) for i in fc_mean.index]
-                        split_x = n_hist - 0.5  # Numeric position for split line
+                    # Add interactive traces using numeric X-axis
+                    if fc_x_numeric and ci_lower and ci_upper:
+                        ci_group = f"ci-{re.sub(r'[^A-Za-z0-9_-]+', '', str(column))}"
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines",
+                            "name": "95% CI",
+                            "x": fc_x_numeric, "y": ci_lower,
+                            "line": {"width": 0},
+                            "hoverinfo": "skip",
+                            "showlegend": True,
+                            "legendgroup": ci_group
+                        })
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines",
+                            "name": "95% CI",
+                            "x": fc_x_numeric, "y": ci_upper,
+                            "line": {"width": 0},
+                            "fill": "tonexty",
+                            "fillcolor": "rgba(255,69,0,0.18)",
+                            "hoverinfo": "skip",
+                            "showlegend": False,
+                            "legendgroup": ci_group,
+                            "legendgrouptitle": {"text": "95% CI"}
+                        })
 
-                        if isinstance(conf_df, pd.DataFrame) and conf_df.shape[1] >= 2:
-                            ci_lower = [float(v) for v in conf_df.iloc[:, 0].values]
-                            ci_upper = [float(v) for v in conf_df.iloc[:, 1].values]
-
-                        # Add interactive traces using numeric X-axis
-                        if fc_x_numeric and ci_lower and ci_upper:
-                            ci_group = f"ci-{re.sub(r'[^A-Za-z0-9_-]+', '', str(column))}"
-                            traces.append({
-                                "type": "scatter",
-                                "mode": "lines",
-                                "name": "95% CI",
-                                "x": fc_x_numeric, "y": ci_lower,
-                                "line": {"width": 0},
-                                "hoverinfo": "skip",
-                                "showlegend": True,
-                                "legendgroup": ci_group
-                            })
-                            traces.append({
-                                "type": "scatter",
-                                "mode": "lines",
-                                "name": "95% CI",
-                                "x": fc_x_numeric, "y": ci_upper,
-                                "line": {"width": 0},
-                                "fill": "tonexty",
-                                "fillcolor": "rgba(255,69,0,0.18)",
-                                "hoverinfo": "skip",
-                                "showlegend": False,
-                                "legendgroup": ci_group,
-                                "legendgrouptitle": {"text": "95% CI"}
-                            })
-
-                        if fc_x_numeric and fc_y:
-                            # Connect to last history point
-                            x_plot = [n_hist - 1] + list(fc_x_numeric)
-                            y_plot = [float(series.iloc[-1])] + list(fc_y)
-                            text_plot = [original_labels[-1]] + list(fc_labels)
-                            traces.append({
-                                "type": "scatter",
-                                "mode": "lines+markers",
-                                "name": "Forecast",
-                                "x": x_plot, "y": y_plot,
-                                "text": text_plot,
-                                "hovertemplate": "%{text}<br>%{y}<extra></extra>",
-                                "line": {"color": "orangered", "width": 3},
-                                "marker": {"size": 3}
-                            })
-
-                        forecast_done += 1
-                        if (
-                            (not forecast_force_full)
-                            and ((time.perf_counter() - request_start) > budget_s or forecast_done >= cols_limit)
-                        ):
-                            skip_forecasts = True
-                            app.logger.info(
-                                "Interactive forecast budget reached: elapsed=%.2fs limit=%.2fs cols=%d/%d - "
-                                "remaining interactive columns will render history/anomalies only.",
-                                time.perf_counter() - request_start,
-                                budget_s,
-                                forecast_done,
-                                cols_limit,
-                            )
+                    if fc_x_numeric and fc_y:
+                        # Connect to last history point
+                        x_plot = [n_hist - 1] + list(fc_x_numeric)
+                        y_plot = [float(series.iloc[-1])] + list(fc_y)
+                        text_plot = [original_labels[-1]] + list(fc_labels)
+                        traces.append({
+                            "type": "scatter",
+                            "mode": "lines+markers",
+                            "name": "Forecast",
+                            "x": x_plot, "y": y_plot,
+                            "text": text_plot,
+                            "hovertemplate": "%{text}<br>%{y}<extra></extra>",
+                            "line": {"color": "orangered", "width": 3},
+                            "marker": {"size": 3}
+                        })
                 except Exception as e:
                     app.logger.warning("Interactive forecast build failed for %s: %s", column, e)
 
@@ -766,7 +749,7 @@ def handle_analyze_file(filename):
                 if history_prefers_text_labels:
                     tickvals, ticktext = _build_non_timeseries_tick_labels(
                         display_history_index,
-                        fc_mean.index if fc_mean is not None else None,
+                        fc_mean.index if 'fc_mean' in locals() and fc_mean is not None else None,
                         max_tick_labels=20,
                     )
                 else:
