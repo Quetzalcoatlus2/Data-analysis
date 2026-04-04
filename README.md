@@ -1,249 +1,633 @@
 <div align="center">
 
-# Data Analysis & AI Insight Platform
+# 📊 Data Analysis & AI Insight Platform
 
-Multi‑format exploratory data analysis, statistical insights, anomaly & trend detection and Gemini‑powered narrative summaries – all in a single lightweight Flask app.
+**Multi-format exploratory data analysis with AI-powered insights, advanced research labs, and professional visualizations – all in a single lightweight Flask application.**
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Flask](https://img.shields.io/badge/flask-3.1+-green.svg)](https://flask.palletsprojects.com/)
+[![License](https://img.shields.io/badge/license-TBD-lightgrey.svg)](LICENSE)
 
 </div>
 
-## 1. Overview
-This project started as a quick way to upload sensor or tabular datasets (CSV, Excel, TXT, JSON) and get fast, readable analysis. It has evolved into a modular data insight tool with AI summaries, question answering, forecasting visuals, decomposition plots, correlation exploration and performance-aware caching. The app now uses a package layout under `data_analysis/` while keeping `app.py` as a backward-compatible entrypoint.
+---
 
-### Upload Interface
-<div align="center">
-  <img src="screenshots/Upload page.png" alt="Upload Page" width="800"/>
-  <p><em>Clean, intuitive upload interface with configurable analysis options</em></p>
-</div>
+## 📋 Table of Contents
+- [Overview](#-overview)
+- [Screenshots & Features](#-screenshots--features)
+- [Key Features](#-key-features)
+- [Tech Stack](#%EF%B8%8F-tech-stack)
+- [Quick Start](#-quick-start)
+- [Research Labs](#-research-labs)
+- [AI Integration](#-ai-integration)
+- [Supported File Types](#-supported-file-types)
+- [Development](#-development)
+- [Roadmap](#%EF%B8%8F-roadmap)
+- [Contributing](#-contributing)
 
-## 2. Key Features (Current State)
+---
 
-### Visual Overview
+## 🎯 Overview
 
-<div align="center">
-  <img src="screenshots/AI summary.png" alt="AI Summary" width="800"/>
-  <p><em>Comprehensive AI-generated narrative analysis with structured insights</em></p>
-</div>
+What started as a simple CSV analysis tool has evolved into a comprehensive data insight platform combining traditional statistical analysis with cutting-edge AI capabilities and specialized research laboratories.
 
-<div align="center">
-  <img src="screenshots/AI Q&A.png" alt="AI Q&A" width="800"/>
-  <p><em>Context-aware question answering powered by Gemini AI</em></p>
-</div>
+**Core Capabilities:**
+- 📂 Multi-format data ingestion (CSV, Excel, JSON, TXT)
+- 🤖 AI-powered summaries and interactive Q&A (Google Gemini)
+- 📊 Professional static and interactive visualizations
+- 🔬 Specialized research labs (forecasting, anomaly detection, quality assessment)
+- 🎨 Light/Dark theme support
+- ⚡ Performance-optimized caching and downsampling
 
-<div align="center">
-  <img src="screenshots/Static graphs.png" alt="Static Graphs" width="800"/>
-  <p><em>High-quality Matplotlib visualizations with trend analysis</em></p>
-</div>
-
-<div align="center">
-  <img src="screenshots/Interactive graphs.png" alt="Interactive Graphs" width="800"/>
-  <p><em>Interactive Plotly charts for deeper data exploration</em></p>
-</div>
-
-<div align="center">
-  <img src="screenshots/Forecasts.png" alt="Forecasts" width="800"/>
-  <p><em>Time series forecasting with confidence intervals and STL decomposition</em></p>
-</div>
+### 🖼️ Application Interface
 
 <div align="center">
-  <img src="screenshots/Correlations.png" alt="Correlations" width="800"/>
-  <p><em>Correlation heatmaps with both Spearman and Pearson methods</em></p>
+  <table>
+    <tr>
+      <td align="center">
+        <img src="screenshots/01_upload_light.png" alt="Upload Interface - Light Theme" width="400"/>
+        <br/><em>Upload Interface (Light Theme)</em>
+      </td>
+      <td align="center">
+        <img src="screenshots/21_upload_dark.png" alt="Upload Interface - Dark Theme" width="400"/>
+        <br/><em>Upload Interface (Dark Theme)</em>
+      </td>
+    </tr>
+  </table>
+  <p><em>Clean, intuitive upload interface with configurable analysis options and theme support</em></p>
 </div>
 
+---
 
-### Implemented Features
-Implemented:
+## 📸 Screenshots & Features
+
+### 🤖 AI-Powered Analysis
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="screenshots/03_ai_summary_light.png" alt="AI Summary - Light" width="400"/>
+        <br/><em>AI Summary (Light Theme)</em>
+      </td>
+      <td align="center">
+        <img src="screenshots/13_ai_summary_dark.png" alt="AI Summary - Dark" width="400"/>
+        <br/><em>AI Summary (Dark Theme)</em>
+      </td>
+    </tr>
+  </table>
+  <p><em>Comprehensive AI-generated narrative analysis with structured insights, data quality assessment, and actionable recommendations</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/05_ai_qa_light.png" alt="AI Q&A Interface" width="800"/>
+  <p><em>Interactive AI Q&A: Ask questions about your dataset and get contextual answers powered by Gemini</em></p>
+</div>
+
+### 📊 Visualizations & Statistical Analysis
+
+<div align="center">
+  <img src="screenshots/04_statistics_light.png" alt="Statistics Grid" width="800"/>
+  <p><em>Comprehensive statistical analysis with descriptive statistics, distributions, and key metrics</em></p>
+</div>
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="screenshots/06_static_plots_light.png" alt="Static Plots" width="400"/>
+        <br/><em>High-quality Matplotlib static visualizations</em>
+      </td>
+      <td align="center">
+        <img src="screenshots/07_interactive_light.png" alt="Interactive Charts" width="400"/>
+        <br/><em>Interactive Plotly charts</em>
+      </td>
+    </tr>
+  </table>
+  <p><em>Professional visualizations: static plots for reports, interactive charts for exploration</em></p>
+</div>
+
+### 🔬 Research Labs
+
+<div align="center">
+  <img src="screenshots/08_labs_hub_light.png" alt="Research Labs Hub" width="800"/>
+  <p><em>Research Feature Labs Hub: Access specialized analysis tools and advanced techniques</em></p>
+</div>
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="screenshots/09_forecast_light.png" alt="Forecasting Lab" width="400"/>
+        <br/><em>Time Series Forecasting</em>
+      </td>
+      <td align="center">
+        <img src="screenshots/10_anomaly_light.png" alt="Anomaly Detection" width="400"/>
+        <br/><em>Anomaly Detection</em>
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="screenshots/22_change_points_light.png" alt="Change Point Detection" width="400"/>
+        <br/><em>Change Point Detection</em>
+      </td>
+      <td align="center">
+        <img src="screenshots/23_multivariate_light.png" alt="Multivariate Analysis" width="400"/>
+        <br/><em>Multivariate Analysis</em>
+      </td>
+    </tr>
+  </table>
+  <p><em>Advanced research labs for forecasting, anomaly detection, change points, and multivariate analysis</em></p>
+</div>
+
+### 🌍 Multi-Dataset Support
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="screenshots/02_overview_light.png" alt="Weather Analysis" width="400"/>
+        <br/><em>Weather Dataset Analysis</em>
+      </td>
+      <td align="center">
+        <img src="screenshots/17_life_overview.png" alt="Life Expectancy Analysis" width="400"/>
+        <br/><em>Life Expectancy Analysis</em>
+      </td>
+    </tr>
+  </table>
+  <p><em>Versatile analysis engine handles diverse datasets: time series, health data, and more</em></p>
+</div>
+
+---
+
+## ✨ Key Features
+
+### Currently Implemented
+
+**📂 Data Management**
 - File upload & persistent session dataset registry (multiple datasets retained per run)
 - Automatic schema parsing & numeric coercion with graceful fallbacks
-- Descriptive statistics (central tendency, dispersion inferred types)
-- Time series handling: thinning/downsampling for large datasets to keep responsiveness
-- Static Matplotlib plots serialized as base64 images (no JS dependency required)
-- Forecast visual (statsmodels based) & STL decomposition plot generation
-- Correlation / pairwise exploration (optimized payload normalization)
-- AI Summary: Gemini API generates a multi‑section narrative (status: improving reliability on free tier)
-- AI Q&A: ask contextual questions about the currently analyzed dataset (includes caching to reduce rate pressure)
-- Offline fallback summaries when AI unavailable, with inline reason display (e.g. rate limit, empty response, unsupported MIME type)
-- Model selection & adaptive fallback to free‑tier eligible Gemini models (auto downgrades when a model has no free quota)
-- Rate limit aware backoff & error reason surfacing in UI
-- Security headers & basic hardening via `Flask-Talisman`
-- Application level rate limiting via `Flask-Limiter`
-- Environment isolation via `.env` (secret key & API key **not** committed)
-- Check script (`check_models.py`) that enumerates free-tier models with a strength ordering & published limit snapshot
+- Support for CSV, Excel, JSON, and TXT formats
+- Intelligent encoding detection for diverse file sources
+- Session-based caching with LRU eviction
+
+**📊 Statistical Analysis**
+- Descriptive statistics (central tendency, dispersion, inferred types)
+- Distribution analysis and data profiling
+- Time series handling with automatic downsampling for large datasets
+- Correlation analysis (Spearman & Pearson methods)
+- Data quality assessment and missing value detection
+
+**📈 Visualizations**
+- Static Matplotlib plots (base64-encoded PNGs, no JS dependency)
+- Interactive Plotly charts for deep exploration
+- Time series plots with trend analysis
+- Correlation heatmaps
+- Distribution histograms and box plots
+
+**🤖 AI Integration (Google Gemini)**
+- Multi-section narrative summaries with structured insights
+- Interactive Q&A: Ask contextual questions about datasets
+- Intelligent caching to reduce API rate pressure
+- Adaptive model fallback (auto-downgrades when quota exhausted)
+- Offline fallback summaries when AI unavailable
+- Rate limit-aware backoff with error surfacing in UI
+
+**🔬 Research Labs** *(Specialized analysis modules)*
+- **Time Series Forecasting**: STL decomposition, prediction with confidence intervals
+- **Anomaly Detection**: Statistical outlier identification
+- **Data Quality Assessment**: Completeness, consistency, validity checks
+- **Change Point Detection**: Structural break identification
+- **Multivariate Analysis**: Multi-dimensional relationships
+- **SHAP Analysis**: Feature importance and explainability *(experimental)*
+- **Conformal Prediction**: Uncertainty quantification *(experimental)*
+
+**🎨 User Experience**
+- Light/Dark theme toggle with localStorage persistence
+- Responsive layout optimized for desktop and tablets
+- Performance-optimized with lazy loading and pagination
+- Professional UI with smooth animations
+- Accessibility considerations (semantic HTML, ARIA labels)
+
+**🔒 Security & Performance**
+- Security headers via Flask-Talisman (CSP, HSTS, etc.)
+- Application-level rate limiting via Flask-Limiter
+- Environment isolation via `.env` (secrets not committed)
+- Session-based state management (no persistent file storage)
+- Input validation and sanitization
+
+**🛠️ Developer Tools**
 - Logging to `app.log` with AI diagnostic context
+- Model enumeration script (`check_models.py`) with free-tier limits
+- Modular package architecture under `data_analysis/`
+- Type hints throughout codebase
+- Linting (ruff), type checking (mypy), testing (pytest)
 
-In Progress / Recent Focus:
-- Making AI summary generation more verbose while staying within free-tier token ceilings
-- Reducing “Empty AI response (finish_reason=MAX_TOKENS)” by tuning prompt size vs allowed output tokens
-- Further UI polish & optional interactive Plotly expansion (currently using static images for performance)
+### 🚧 Work in Progress
 
-Planned / Roadmap Ideas:
+**AI Enhancement**
+- Making AI summaries more verbose while staying within free-tier token limits
+- Reducing "Empty AI response (finish_reason=MAX_TOKENS)" by dynamic prompt tuning
+- Context-aware prompt engineering for better insights
+
+**Research Labs Expansion**
+- Full implementation of SHAP explainability features
+- Conformal prediction UI and visualization
+- Advanced multivariate techniques (PCA, clustering)
+
+**UI/UX Polish**
+- Enhanced interactive Plotly visualizations
+- Drag-and-drop file upload
+- Real-time analysis progress indicators
+- Export options for individual sections
+
+### 🚀 Planned Features & Roadmap
+
+**Short-term** *(Next release)*
 - Configurable analysis presets (light, standard, deep)
-- Optional asynchronous job queue for very large datasets
-- Export selectable sections to Markdown / JSON (PDF code removed for now to reduce dependency overhead)
+- Export selectable sections to Markdown/JSON
 - Lightweight user settings (preferred model, verbosity)
-- Automated test coverage expansion (currently minimal)
+- Enhanced data quality reports with actionable recommendations
 
-## 3. Tech Stack
-- **Backend**: Flask (modular package + compatibility facade)
-- **Data**: pandas, numpy, statsmodels, scikit-learn (select features)
-- **Plots**: Matplotlib (static PNG via base64)
-- **AI**: `google-generativeai` (Gemini models) with adaptive free-tier fallback
-- **Security**: Flask-Talisman, Flask-Limiter
-- **Environment**: `python-dotenv`
-- **Dev Tooling**: `ruff`, `mypy`, `pytest`
+**Mid-term** *(Future releases)*
+- Asynchronous job queue for very large datasets (Celery/Redis)
+- Advanced time series features (seasonal decomposition, ARIMA)
+- Machine learning model training and prediction
+- Multi-file comparative analysis
+- User authentication and saved analyses
 
-## 4. Architecture Snapshot
-Core logic is split across `data_analysis/`:
-- `data_analysis/core/`: configuration, logging, cache/state primitives, lazy imports
-- `data_analysis/ai/`: Gemini service integration + HTML/text formatting helpers
-- `data_analysis/analysis/`: forecasting, plotting, anomaly detection, DataFrame operations, AI context builders
-- `data_analysis/routes/`: upload, analysis, API, and download route handlers
-- `data_analysis/reports/`: PDF report classes/handlers
-- `data_analysis/legacy_app.py`: compatibility runtime used during incremental extraction
-- `app.py`: thin facade preserving legacy import and startup behavior
+**Long-term** *(Vision)*
+- Real-time streaming data analysis
+- Custom plugin system for domain-specific analyses
+- Collaborative features (shared analyses, annotations)
+- API endpoints for programmatic access
+- Cloud deployment templates (Docker, Kubernetes)
 
-Behavior highlights:
-- Upload endpoint stores the parsed DataFrame in an in‑memory cache (LRU)
-- Analysis route branches views (overview / forecast / decomposition / correlation)
-- AI helpers build a trimmed context (column stats, head/tail detected anomalies) before sending to Gemini
-- Caching layers: DataFrame cache, AI summary (only if a genuine AI result) AI Q&A answer cache
-- Rate errors trigger adaptive model fallback (e.g. from a higher capability model to `gemini-2.5-flash` or below)
+---
 
-## 5. Supported File Types
-| Type | Extensions | Notes |
-|------|------------|-------|
-| CSV | `.csv` | Auto detects encoding where possible |
-| Excel | `.xlsx` | Uses `openpyxl` |
-| Text (delimited) | `.txt` | Heuristics attempt comma / tab split |
-| JSON (records / list) | `.json` | Flattens list of objects |
+## 🛠️ Tech Stack
 
-## 6. AI Integration & Free Tier Constraints
-The Gemini free tier imposes limits on Requests/Minute (RPM), Tokens/Minute (TPM), and Requests/Day (RPD). The app:
-- Tries a preferred model (by strength) and falls back when quota or entitlement errors occur
-- Surfaces exact failure reason in the UI (e.g. “model has no free quota tier” / “empty AI response”)
-- Avoids caching offline placeholders so a later retry can succeed
-- Downscales prompt size dynamically (work in progress) to avoid `MAX_TOKENS` premature stops
+### Backend
+- **Flask 3.1+**: Modular package structure with blueprint routing
+- **Python 3.11+**: Modern Python with type hints
 
-A snapshot of documented free-tier limits (as of 2025‑08‑26 – see docs for updates):
-- `gemini-2.5-pro`: RPM 5, TPM 250k, RPD 100
-- `gemini-2.5-flash`: RPM 10, TPM 250k, RPD 250
-- `gemini-2.5-flash-lite`: RPM 15, TPM 250k, RPD 1000
-- `gemini-2.0-flash`: RPM 15, TPM 1M, RPD 200
-- `gemini-2.0-flash-lite`: RPM 30, TPM 1M, RPD 200
+### Data Science
+- **pandas**: DataFrame operations and data manipulation
+- **numpy**: Numerical computations
+- **statsmodels**: Time series analysis and statistical modeling
+- **scikit-learn**: Machine learning utilities and preprocessing
 
-Check live availability & mapping via:
+### Visualization
+- **Matplotlib**: High-quality static plots (PNG via base64)
+- **Plotly**: Interactive JavaScript charts
+- **Seaborn**: Statistical data visualization *(optional)*
+
+### AI & ML
+- **google-generativeai**: Gemini API integration with adaptive fallback
+- **SHAP**: Model explainability *(experimental)*
+
+### Security & Infrastructure
+- **Flask-Talisman**: Security headers (CSP, HSTS, etc.)
+- **Flask-Limiter**: Rate limiting and abuse prevention
+- **python-dotenv**: Environment variable management
+
+### Development Tools
+- **ruff**: Fast Python linter and formatter
+- **mypy**: Static type checking
+- **pytest**: Unit and integration testing
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.11 or higher recommended
+- Google Gemini API key (optional, for AI features)
+
+### Installation
+
+```powershell
+# Clone the repository
+git clone <repository-url>
+cd Data-analysis
+
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1  # Windows PowerShell
+# source venv/bin/activate    # Linux/macOS
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Configuration
+
+Create a `.env` file in the project root:
+
+```env
+FLASK_ENV=development
+GOOGLE_API_KEY=your_gemini_api_key_here
+SECRET_KEY=your_random_secret_key_here
+```
+
+**Note**: The `.env` file is gitignored. Never commit API keys!
+
+### Running the Application
+
+```powershell
+# Start the Flask development server
+python app.py
+```
+
+Open your browser and navigate to `http://127.0.0.1:5000`
+
+### Quick Test
+
+1. Navigate to the upload page
+2. Select a CSV/Excel file (try the included sample datasets in `datasets/`)
+3. Click "Analyze" and wait for results
+4. Explore AI summaries, visualizations, and research labs!
+
+---
+
+## 🔬 Research Labs
+
+The Research Labs provide specialized analysis capabilities beyond standard descriptive statistics:
+
+| Lab | Purpose | Key Features |
+|-----|---------|--------------|
+| **Forecasting** | Time series prediction | STL decomposition, confidence intervals, trend analysis |
+| **Anomaly Detection** | Outlier identification | Statistical tests, z-score, IQR methods |
+| **Data Quality** | Dataset health check | Completeness, consistency, validity metrics |
+| **Change Points** | Structural break detection | Trend shifts, regime changes |
+| **Multivariate** | Multi-dimensional analysis | Relationships between multiple variables |
+| **SHAP** *(experimental)* | Model explainability | Feature importance, decision visualization |
+| **Conformal Prediction** *(experimental)* | Uncertainty quantification | Prediction intervals with coverage guarantees |
+
+**Access Labs**: After uploading and analyzing a dataset, click on the "Research Labs" button to explore advanced features.
+
+---
+
+## 🤖 AI Integration
+
+### Google Gemini API
+
+The application uses Google's Gemini models for AI-powered insights:
+
+**Capabilities**:
+- Dataset summarization with structured insights
+- Interactive Q&A about your data
+- Anomaly highlighting and pattern detection
+- Actionable recommendations
+
+**Free Tier Constraints**:
+
+The Gemini free tier has limits on Requests/Minute (RPM), Tokens/Minute (TPM), and Requests/Day (RPD):
+
+| Model | RPM | TPM | RPD |
+|-------|-----|-----|-----|
+| gemini-2.5-pro | 5 | 250k | 100 |
+| gemini-2.5-flash | 10 | 250k | 250 |
+| gemini-2.5-flash-lite | 15 | 250k | 1000 |
+| gemini-2.0-flash | 15 | 1M | 200 |
+| gemini-2.0-flash-lite | 30 | 1M | 200 |
+
+**Adaptive Fallback**:
+- The app automatically tries higher-capability models first
+- Falls back to lower-tier models when quota exhausted
+- Surfaces exact failure reasons in the UI
+- Caches successful responses (but not error placeholders)
+
+**Check Available Models**:
+
 ```powershell
 python check_models.py
 ```
 
-## 7. Performance Optimizations Implemented
-- Downsampling long time series before plotting
-- Narrowed numeric coercion & column profiling to necessary subsets
-- Removed heavyweight PDF export dependencies
-- Short‑circuit repeated expensive AI calls with caching
-- Lazy AI model initialization (only when first needed)
-- Normalized model naming to avoid redundant instantiations
+### AI Features Without API Key
 
-## 8. Setup & Running Locally
-Prerequisites: Python 3.11+ recommended.
+If no API key is provided:
+- Static analysis and visualizations work normally
+- AI summaries show "AI unavailable" placeholders
+- Q&A section displays an informational message
 
+---
+
+## 📁 Supported File Types
+
+| Format | Extensions | Notes |
+|--------|------------|-------|
+| CSV | `.csv` | Auto-detects encoding, handles various delimiters |
+| Excel | `.xlsx`, `.xls` | Uses `openpyxl` backend |
+| Text (delimited) | `.txt` | Heuristics attempt comma/tab/pipe separation |
+| JSON | `.json` | Supports records format and list of objects |
+
+**Upload Tips**:
+- Ensure first row contains column headers
+- Numeric columns should use standard formats (no currency symbols in cells)
+- Missing values can be blank, "NA", "NULL", or "NaN"
+- Large files (>100k rows) are automatically downsampled for plotting
+
+---
+
+## 💻 Development
+
+### Project Structure
+
+```
+Data-analysis/
+├── app.py                     # Entry point (facade)
+├── data_analysis/             # Main package
+│   ├── core/                  # Configuration, logging, cache
+│   ├── ai/                    # Gemini integration
+│   ├── analysis/              # Data processing, plotting
+│   ├── routes/                # Flask route handlers
+│   ├── reports/               # PDF report generation
+│   └── static/                # CSS, JS, images
+├── templates/                 # Jinja2 HTML templates
+├── datasets/                  # Sample datasets
+├── tests/                     # Unit and integration tests
+├── requirements.txt           # Python dependencies
+└── .env                       # Environment variables (not committed)
+```
+
+### Development Commands
+
+**Linting**:
 ```powershell
-python -m venv venv
-./venv/Scripts/Activate.ps1
-pip install -r requirements.txt
+# Run ruff linter
+python -m ruff check .
+
+# Auto-fix issues
+python -m ruff check --fix .
 ```
 
-Create a `.env` file (not committed) with:
-```
-FLASK_ENV=development
-GOOGLE_API_KEY=your_real_key_here
-SECRET_KEY=some_random_string
-```
-
-Run the app:
+**Type Checking**:
 ```powershell
-python app.py
+# Run mypy
+python -m mypy app.py check_models.py
 ```
-Then open the printed local URL (typically `http://127.0.0.1:5000`).
 
-## 9. Project Scripts
-| Script | Purpose |
-|--------|---------|
-| `check_models.py` | Lists free‑tier Gemini models, strength‑sorted, with rate limit snapshot |
+**Testing**:
+```powershell
+# Run all tests
+python -m pytest tests/
 
-## 10. VS Code Workflow (Rules + Hooks + Plans)
+# Run with coverage
+python -m pytest --cov=data_analysis tests/
 
-This repository now includes a lightweight VS Code workflow to improve consistency and task context.
+# Run specific test
+python -m pytest tests/unit/test_example.py::test_function
+```
 
-- Rules/context for Copilot:
-  - `.github/copilot-instructions.md`
-- Reusable planning prompt:
-  - `.github/prompts/plan-and-execute.prompt.md`
-- VS Code tasks/debug profiles:
-  - `.vscode/tasks.json`
-  - `.vscode/launch.json`
-  - `.vscode/settings.json`
-- Git quality hooks:
-  - `.githooks/pre-commit`
-  - `.githooks/pre-push`
+**VS Code Tasks**:
+The project includes pre-configured VS Code tasks:
+- **Lint (ruff)**: Quick code quality check
+- **Type Check (mypy)**: Static type analysis
+- **Test (pytest)**: Run test suite
+- **Validate Project**: Run all checks sequentially
+- **Run Flask App**: Start development server
 
-### Enable hooks once per clone
+### Git Hooks
+
+Enable pre-commit and pre-push hooks:
 
 ```powershell
 git config core.hooksPath .githooks
 ```
 
-Or run VS Code task: **Install Git Hooks**.
+Or use VS Code task: **Install Git Hooks**
 
-### Common VS Code tasks
+Hooks will automatically:
+- Run linting before commits
+- Run tests before pushes
+- Prevent committing secrets
 
-- **Lint (ruff)**
-- **Type Check (mypy)**
-- **Test (pytest)**
-- **Validate Project** (runs lint + types + tests in order)
-- **Run Flask App**
+### Code Style Guidelines
 
-## 11. Environment & Configuration Notes
-- Don’t expose the API key in `.env.public` – keep it only in `.env` / deployment secret store.
-- Adjust rate limit strategies (window sizes) via environment if needed (future enhancement).
+- **PEP 8 compliance** with 4-space indentation
+- **Type hints** for all function signatures
+- **Docstrings** for non-trivial functions
+- **Error handling** with try-except and logging
+- Use `app.logger` (not `print()`)
 
-## 12. Logging & Troubleshooting
-- Runtime logs: `app.log`
-- AI issues: look for lines containing `AI status`, `rate limit`, or `Empty AI response`
-- Common scenarios:
-	- `Empty AI response (finish_reason=MAX_TOKENS)`: Increase output token allowance or trim prompt
-	- `429 ... no free quota tier`: Model not available on free tier – auto fallback should occur
-	- `Unsupported MIME type`: Resolved by coercing to `text/plain`
-
-## 13. Testing (Initial)
-Minimal automated tests exist; expansion planned. Suggested next steps:
-- Add unit tests for model fallback decision logic
-- Add prompt size regulator tests
-- Add regression tests for large CSV ingestion
-
-## 14. Security Considerations
-- HTTP security headers via Talisman (CSP etc.)
-- Rate limiting reduces brute force / abuse surface
-- No file persistence beyond in‑memory caches (ephemeral session state)
-- Future: file type stricter validation & sandboxing for untrusted content
-
-## 15. Roadmap (Condensed)
-- Robust prompt size manager (token budgeting)
-- Optional job queue for long-running decomposition/forecast tasks
-- Export to structured Markdown/JSON summaries
-- Incremental analysis refresh instead of full recompute
-- Dark mode & lightweight front-end enhancements
-
-## 16. Contributing
-Currently focused on rapid iteration. If you want to contribute:
-1. Fork & branch
-2. Keep changes focused
-3. Open a PR with a short rationale & before/after impact
-
-## 17. License
-License not yet specified (TBD). Add a `LICENSE` file before wider distribution.
-
-## 18. Disclaimer
-AI output is heuristic and may contain inaccuracies. Validate critical insights with domain/statistical review.
+See `AGENTS.md` for detailed coding standards.
 
 ---
-Questions or ideas? Open an issue or extend the roadmap section – iterative refinement is the guiding principle here.
+
+## 🗺️ Roadmap
+
+### ✅ Completed
+- Multi-format file upload and parsing
+- Comprehensive statistical analysis
+- Static and interactive visualizations
+- AI-powered summaries and Q&A
+- Research labs infrastructure
+- Theme support (light/dark)
+- Security headers and rate limiting
+- Modular package architecture
+
+### 🚧 In Progress
+- Enhanced AI prompt engineering
+- Full SHAP and Conformal Prediction labs
+- Advanced multivariate analysis techniques
+- Performance optimizations for large datasets
+
+### 📋 Planned
+- Asynchronous job processing
+- User authentication and saved analyses
+- Enhanced export capabilities (PDF, Markdown, JSON)
+- Machine learning model training
+- Real-time data streaming support
+- Cloud deployment templates
+
+See the [GitHub Issues](../../issues) for detailed feature requests and bug reports.
+
+---
+
+## 📝 Logging & Troubleshooting
+
+### Application Logs
+
+Runtime logs are written to `app.log` with rotating file handler:
+
+```powershell
+# View recent logs
+Get-Content app.log -Tail 50
+
+# Monitor logs in real-time
+Get-Content app.log -Wait
+```
+
+### Common Issues
+
+**Empty AI Response (finish_reason=MAX_TOKENS)**:
+- *Cause*: AI response exceeded output token limit
+- *Solution*: Working on dynamic prompt trimming; retry with a different model
+
+**429 Error: No free quota tier**:
+- *Cause*: Model not available on free tier or quota exhausted
+- *Solution*: App auto-falls back; check `check_models.py` for alternatives
+
+**File Upload Fails**:
+- *Cause*: Unsupported format or encoding issue
+- *Solution*: Ensure file has proper headers; try CSV export from Excel
+
+**Slow Analysis**:
+- *Cause*: Large dataset (>100k rows)
+- *Solution*: App automatically downsamples; consider filtering data before upload
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! This project is under active development.
+
+### How to Contribute
+
+1. **Fork** the repository
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes**: Follow code style guidelines
+4. **Run tests**: `python -m pytest tests/`
+5. **Commit**: Use descriptive commit messages
+6. **Push**: `git push origin feature/amazing-feature`
+7. **Open a Pull Request**: Describe changes and impact
+
+### Development Guidelines
+
+- Keep changes focused and atomic
+- Write tests for new features
+- Update documentation as needed
+- Follow existing code patterns
+- Run linting and type checking before committing
+
+See `CONTRIBUTING.md` for detailed guidelines.
+
+---
+
+## 📄 License
+
+License not yet specified (TBD). Add a `LICENSE` file before wider distribution.
+
+---
+
+## ⚠️ Disclaimer
+
+AI-generated output is heuristic and may contain inaccuracies. Always validate critical insights with domain expertise and statistical review. This tool is intended for exploratory analysis and should not replace professional data science practices.
+
+---
+
+## 💬 Questions or Ideas?
+
+- Open an [issue](../../issues) for bug reports or feature requests
+- Check existing [discussions](../../discussions) for Q&A
+- Contribute to the roadmap and documentation
+
+**Iterative refinement is the guiding principle here** – feedback drives development!
+
+---
+
+<div align="center">
+  <p>Built with ❤️ using Flask, Python, and Google Gemini AI</p>
+  <p><em>Transforming data into insights, one upload at a time</em></p>
+</div>
