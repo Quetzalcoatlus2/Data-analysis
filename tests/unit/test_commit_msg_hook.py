@@ -34,6 +34,37 @@ def test_commit_msg_hook_removes_only_copilot_coauthor(tmp_path: Path) -> None:
     )
 
 
+def test_commit_msg_hook_removes_multiple_and_case_insensitive_copilot_lines(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    hook_path = repo_root / ".githooks" / "commit-msg"
+    commit_msg_path = tmp_path / "COMMIT_EDITMSG"
+
+    commit_msg_path.write_text(
+        "\n".join(
+            [
+                "fix: another test",
+                "",
+                "CO-AUTHORED-BY: github-copilot[bot] <github-copilot@users.noreply.github.com>",
+                "Co-Authored-By: Some One <some.one@example.com>",
+                "co-authored-by: github-copilot <copilot@users.noreply.github.com>",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    subprocess.run(["bash", str(hook_path), str(commit_msg_path)], check=True)
+
+    assert commit_msg_path.read_text(encoding="utf-8") == "\n".join(
+        [
+            "fix: another test",
+            "",
+            "Co-Authored-By: Some One <some.one@example.com>",
+            "",
+        ]
+    )
+
+
 def test_commit_msg_hook_fails_when_file_missing(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     hook_path = repo_root / ".githooks" / "commit-msg"

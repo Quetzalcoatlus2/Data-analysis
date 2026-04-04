@@ -17,7 +17,13 @@ text = path.read_text(encoding="utf-8")
 
 def is_copilot_coauthor(line: str) -> bool:
     lowered = line.lower()
-    return lowered.startswith("co-authored-by:") and "copilot" in lowered
+    if not lowered.startswith("co-authored-by:"):
+        return False
+    return (
+        "github-copilot[bot]" in lowered
+        or "copilot@users.noreply.github.com" in lowered
+        or "github-copilot@users.noreply.github.com" in lowered
+    )
 
 filtered_lines = [
     line for line in text.splitlines(keepends=True) if not is_copilot_coauthor(line.rstrip("\r\n"))
