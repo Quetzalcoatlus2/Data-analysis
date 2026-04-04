@@ -12,6 +12,7 @@ from typing import Any, Callable, Literal, cast
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 from matplotlib.container import BarContainer
@@ -244,12 +245,28 @@ def _resolve_static_tick_policy(
         if can_fit_horizontal:
             tick_angle = 0
             tick_ha = 'center'
-            max_tick_labels = max(4, int(150 / max(1, max_label_length)))
+            if chart_type == "forecast":
+                max_tick_labels = max(4, min(18, int(130 / max(1, max_label_length))))
+                min_spacing_ratio = 0.18
+            else:
+                max_tick_labels = max(4, int(150 / max(1, max_label_length)))
+                min_spacing_ratio = 0.0
         else:
-            tick_angle = -20
-            tick_ha = 'left'
-            max_tick_labels = min(40, label_count)
-        min_spacing_ratio = 0.0
+            if chart_type == "forecast":
+                tick_angle = -25
+                tick_ha = 'left'
+                if max_label_length >= 16 or label_count > 80:
+                    max_tick_labels = min(10, label_count)
+                elif max_label_length >= 12 or label_count > 40:
+                    max_tick_labels = min(12, label_count)
+                else:
+                    max_tick_labels = min(14, label_count)
+                min_spacing_ratio = 0.24
+            else:
+                tick_angle = -20
+                tick_ha = 'left'
+                max_tick_labels = min(40, label_count)
+                min_spacing_ratio = 0.0
 
     dense_cutoff = 8 if chart_type == "distribution" else 10
     tick_fontsize = _tick_fontsize_for_labels(clean_labels, dense_cutoff=dense_cutoff)
@@ -1387,6 +1404,12 @@ def generate_forecast_plot(
                 ax.set_ylim(y_min - pad, y_max + pad)
         except Exception as e:
             app.logger.debug("generate_forecast_plot datetime y-limits skipped for '%s': %s", title, e)
+
+        # Keep datetime ticks compact enough to avoid unreadable overlap in static outputs.
+        with contextlib.suppress(Exception):
+            date_locator = mdates.AutoDateLocator(minticks=4, maxticks=12)
+            ax.xaxis.set_major_locator(date_locator)
+            ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(date_locator))
 
     ax.set_title(title)
     # Use a sensible x-axis label depending on index type
