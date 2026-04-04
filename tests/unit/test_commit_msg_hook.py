@@ -34,7 +34,7 @@ def test_commit_msg_hook_removes_only_copilot_coauthor(tmp_path: Path) -> None:
     )
 
 
-def test_commit_msg_hook_removes_multiple_and_case_insensitive_copilot_lines(tmp_path: Path) -> None:
+def test_commit_msg_hook_removes_copilot_lines_case_insensitively(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     hook_path = repo_root / ".githooks" / "commit-msg"
     commit_msg_path = tmp_path / "COMMIT_EDITMSG"

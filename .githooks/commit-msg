@@ -25,9 +25,11 @@ def is_copilot_coauthor(line: str) -> bool:
         or "github-copilot@users.noreply.github.com" in lowered
     )
 
-filtered_lines = [
-    line for line in text.splitlines(keepends=True) if not is_copilot_coauthor(line.rstrip("\r\n"))
-]
+filtered_lines = []
+for line in text.splitlines(keepends=True):
+    line_without_line_ending = line.rstrip("\r\n")
+    if not is_copilot_coauthor(line_without_line_ending):
+        filtered_lines.append(line)
 result = "".join(filtered_lines)
 
 path.write_text(result, encoding="utf-8")
