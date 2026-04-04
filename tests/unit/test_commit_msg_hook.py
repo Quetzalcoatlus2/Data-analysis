@@ -32,3 +32,16 @@ def test_commit_msg_hook_removes_only_copilot_coauthor(tmp_path: Path) -> None:
             "",
         ]
     )
+
+
+def test_commit_msg_hook_fails_when_file_missing(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    hook_path = repo_root / ".githooks" / "commit-msg"
+    missing_commit_msg_path = tmp_path / "MISSING_COMMIT_EDITMSG"
+
+    result = subprocess.run(
+        ["bash", str(hook_path), str(missing_commit_msg_path)],
+        check=False,
+    )
+
+    assert result.returncode != 0

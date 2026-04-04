@@ -4,19 +4,21 @@ set -euo pipefail
 commit_msg_file="${1:-}"
 
 if [ -z "$commit_msg_file" ] || [ ! -f "$commit_msg_file" ]; then
-  exit 0
+  exit 1
 fi
 
 python - "$commit_msg_file" <<'PY'
 import pathlib
-import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 
-copilot_coauthor_pattern = re.compile(r"^\s*co-authored-by:.*copilot.*$", re.IGNORECASE)
-filtered_lines = [line for line in text.splitlines() if not copilot_coauthor_pattern.match(line)]
+def is_copilot_coauthor(line: str) -> bool:
+    lowered = line.lstrip().lower()
+    return lowered.startswith("co-authored-by:") and "copilot" in lowered
+
+filtered_lines = [line for line in text.splitlines() if not is_copilot_coauthor(line)]
 
 result = "\n".join(filtered_lines)
 if text.endswith("\n"):
