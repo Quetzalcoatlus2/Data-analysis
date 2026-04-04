@@ -118,12 +118,22 @@ What started as a simple CSV analysis tool has evolved into a comprehensive data
   <table>
     <tr>
       <td align="center">
-        <img src="screenshots/09_forecast_light.png" alt="Forecasting Lab" width="400"/>
-        <br/><em>Time Series Forecasting</em>
+        <img src="screenshots/09_forecast_light.png" alt="Forecasting Lab API" width="400"/>
+        <br/><em>Time Series Forecasting (Light)</em>
       </td>
+      <td align="center">
+        <img src="screenshots/15_forecast_dark.png" alt="Forecasting Lab Dark" width="400"/>
+        <br/><em>Time Series Forecasting (Dark)</em>
+      </td>
+    </tr>
+    <tr>
       <td align="center">
         <img src="screenshots/10_anomaly_light.png" alt="Anomaly Detection" width="400"/>
         <br/><em>Anomaly Detection</em>
+      </td>
+      <td align="center">
+        <img src="screenshots/16_labs_hub_dark.png" alt="Research Hub Dark" width="400"/>
+        <br/><em>Research Feature Hub (Dark)</em>
       </td>
     </tr>
     <tr>
@@ -136,8 +146,14 @@ What started as a simple CSV analysis tool has evolved into a comprehensive data
         <br/><em>Multivariate Analysis</em>
       </td>
     </tr>
+    <tr>
+      <td align="center" colspan="2">
+        <img src="screenshots/11_quality_light.png" alt="Data Quality Assessment" width="800"/>
+        <br/><em>Data Quality Assessment</em>
+      </td>
+    </tr>
   </table>
-  <p><em>Advanced research labs for forecasting, anomaly detection, change points, and multivariate analysis</em></p>
+  <p><em>Advanced research labs for forecasting, anomaly detection, change points, multivariate analysis, and quality assessment</em></p>
 </div>
 
 ### 🌍 Multi-Dataset Support
