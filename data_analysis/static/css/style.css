@@ -372,6 +372,12 @@ img.plot {
   box-sizing: border-box;
   overflow-x: auto;
   overflow-y: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.interactive-controls-bar::-webkit-scrollbar {
+  height: 0;
 }
 
 .interactive-control-group {
@@ -510,6 +516,12 @@ img.plot {
   box-sizing: border-box;
   overflow-x: auto;
   overflow-y: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.forecast-controls-bar::-webkit-scrollbar {
+  height: 0;
 }
 
 .forecast-header-row > div:last-child {
