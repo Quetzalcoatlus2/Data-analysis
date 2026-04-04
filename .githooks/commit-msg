@@ -19,10 +19,10 @@ def is_copilot_coauthor(line: str) -> bool:
     lowered = line.lstrip().lower()
     return lowered.startswith("co-authored-by:") and "copilot" in lowered
 
-filtered_chunks = [
+filtered_lines = [
     chunk for chunk in text.splitlines(keepends=True) if not is_copilot_coauthor(chunk.rstrip("\r\n"))
 ]
-result = "".join(filtered_chunks)
+result = "".join(filtered_lines)
 
 path.write_text(result, encoding="utf-8")
 PY
