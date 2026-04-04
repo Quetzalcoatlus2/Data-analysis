@@ -4,6 +4,9 @@ from __future__ import annotations
 import math
 import textwrap
 
+from data_analysis.analysis.dataframe_ops import (
+    _is_active_temporal_axis_column as _is_active_temporal_axis_column_df,
+)
 from data_analysis.analysis.plot import (
     _add_static_distribution_overlays,
     _apply_sci_formatter,
@@ -352,6 +355,12 @@ def handle_download_static_plots_zip(filename):
                 # Skip numeric columns already processed above
                 if col in numeric_cols:
                     continue  # Skip - already processed as numeric
+                if _is_active_temporal_axis_column_df(
+                    df,
+                    col,
+                    is_reliable_timeseries_index=_is_reliable_timeseries_index,
+                ):
+                    continue
                 
                 # Process as categorical
                 s_cat = df[col].dropna().astype(str)

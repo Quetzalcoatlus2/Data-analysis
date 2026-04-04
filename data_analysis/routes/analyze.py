@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from data_analysis.analysis.dataframe_ops import (
+    _is_active_temporal_axis_column as _is_active_temporal_axis_column_df,
+)
 from data_analysis.analysis.plot import (
     _add_static_distribution_overlays,
     _build_non_timeseries_tick_labels,
@@ -317,6 +320,12 @@ def handle_analyze_file(filename):
                 try:
                     if numeric_non_na_counts.get(col, 0) >= 3:
                         continue  # Skip - numeric column
+                    if _is_active_temporal_axis_column_df(
+                        df,
+                        col,
+                        is_reliable_timeseries_index=_is_reliable_timeseries_index,
+                    ):
+                        continue
                     s_cat = df[col].dropna()
                     if len(s_cat) < 3:
                         continue
