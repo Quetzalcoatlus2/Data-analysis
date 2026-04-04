@@ -1020,6 +1020,8 @@ def handle_download_full_report_pdf(filename):
             series = numeric_series if is_numeric else df[col].astype(str)
             if not is_numeric and series.empty:
                 continue
+            if (not is_numeric) and _is_active_temporal_axis_column(df, col):
+                continue
             col_forecast_steps = _steps_for_history_rows(len(numeric_series))
 
             # Force new page for EACH column to ensure clean layout

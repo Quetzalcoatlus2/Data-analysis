@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+import warnings
 import zipfile
 from typing import Any, cast
 
@@ -104,6 +105,90 @@ def test_compute_basic_stats():
     assert stats["std"] == pytest.approx(series.dropna().std())
 
 
+def test_is_active_temporal_axis_column_true_for_duplicate_datetime_index():
+    """Temporal-axis detection should still work when datetime index contains duplicates."""
+    from data_analysis.analysis.dataframe_ops import _is_active_temporal_axis_column
+
+    idx = pd.DatetimeIndex(
+        [
+            "2024-01-01",
+            "2024-01-01",
+            "2024-01-02",
+            "2024-01-02",
+        ],
+        name="record_date",
+    )
+    df = pd.DataFrame(
+        {
+            "record_date": ["2024-01-01", "2024-01-01", "2024-01-02", "2024-01-02"],
+            "segment": ["A", "B", "A", "B"],
+        },
+        index=idx,
+    )
+
+    flag = _is_active_temporal_axis_column(
+        df,
+        "record_date",
+        is_reliable_timeseries_index=lambda _idx: False,
+    )
+    assert flag is True
+
+
+def test_get_dataframe_for_datetime_inference_no_boolean_reindex_warning(tmp_path):
+    """Datetime inference should filter rows without emitting Boolean Series reindex warnings."""
+    import data_analysis.analysis.dataframe_ops as df_ops
+
+    filename = "f" * 40 + ".csv"
+    file_path = tmp_path / filename
+    file_path.write_text("placeholder", encoding="utf-8")
+
+    source_df = pd.DataFrame(
+        {
+            "user_id": ["U1", "U2", "U3", "U4", "U5", "U6"],
+            "record_date": [
+                "2024-01-01",
+                "2024-01-01",
+                "2024-01-02",
+                "2024-01-02",
+                "2024-01-03",
+                "2024-01-03",
+            ],
+            "segment": ["A", "B", "A", "B", "A", "B"],
+        }
+    )
+
+    class _Cache:
+        def __init__(self):
+            self._data: dict[str, pd.DataFrame] = {}
+
+        def get(self, key: str):
+            return self._data.get(key)
+
+        def set(self, key: str, value: pd.DataFrame):
+            self._data[key] = value
+
+    cache = _Cache()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        out = df_ops.get_dataframe_for(
+            filename,
+            dataframe_cache=cache,
+            uploads_dir=str(tmp_path),
+            upload_folder=str(tmp_path),
+            logger=None,
+            read_csv_fallback_fn=lambda *_args, **_kwargs: source_df.copy(),
+            read_json_fallback_fn=lambda *_args, **_kwargs: source_df.copy(),
+            read_excel_smart_fn=lambda *_args, **_kwargs: source_df.copy(),
+            is_reliable_timeseries_index=lambda _idx: False,
+        )
+
+    assert out is not None
+    assert isinstance(out.index, pd.DatetimeIndex)
+    assert str(out.index.name) == "record_date"
+    assert not any("Boolean Series key will be reindexed" in str(w.message) for w in caught)
+
+
 def test_generate_plot_returns_base64():
     """Ensure generate_plot returns a non-empty base64 string."""
     series = pd.Series([1, 2, 3, 4], index=pd.RangeIndex(4))
@@ -138,6 +223,44 @@ def test_resolve_static_tick_policy_distribution_prefers_horizontal_labels():
     assert int(policy["tick_angle"]) == 0
     assert str(policy["tick_ha"]) == "center"
     assert int(policy["max_tick_labels"]) >= 10
+
+
+def test_resolve_static_tick_policy_forecast_dense_labels_is_conservative():
+    """Forecast static policy should aggressively reduce dense long x-labels to avoid overlap."""
+    from data_analysis.analysis.plot import _resolve_static_tick_policy
+
+    labels = [f"2026-03-{(i % 30) + 1:02d} 12:34:56" for i in range(120)]
+    policy = _resolve_static_tick_policy(labels, chart_type="forecast")
+
+    assert int(policy["max_tick_labels"]) <= 18
+    assert int(policy["tick_angle"]) <= -20
+    assert float(policy["min_spacing_ratio"]) >= 0.18
+
+
+def test_generate_forecast_plot_datetime_uses_compact_date_locator(monkeypatch):
+    """Datetime forecast plots should cap date ticks through AutoDateLocator for readability."""
+    import data_analysis.analysis.plot as plot_mod
+
+    history_idx = pd.date_range("2024-01-01", periods=180, freq="D")
+    history = pd.Series(np.linspace(10.0, 30.0, 180), index=history_idx)
+    forecast_idx = pd.date_range("2024-06-29", periods=20, freq="D")
+    forecast = pd.Series(np.linspace(30.1, 32.0, 20), index=forecast_idx)
+
+    captured: dict[str, Any] = {}
+    original_auto_date_locator = plot_mod.mdates.AutoDateLocator
+
+    def _spy_auto_date_locator(*args, **kwargs):
+        captured["kwargs"] = dict(kwargs)
+        return original_auto_date_locator(*args, **kwargs)
+
+    monkeypatch.setattr(plot_mod.mdates, "AutoDateLocator", _spy_auto_date_locator)
+
+    img = plot_mod.generate_forecast_plot(history, forecast, "Forecast", "Timestamp", "value")
+
+    assert isinstance(img, str)
+    assert len(img) > 0
+    assert captured
+    assert int(captured.get("kwargs", {}).get("maxticks", 0)) == 12
 
 
 def test_generate_forecast_plot_returns_base64():
@@ -993,6 +1116,23 @@ def test_api_interactive_invalid_filename_rejected():
         assert payload["ok"] is False
 
 
+def test_analyze_invalid_filename_rejected_before_dataframe_load(monkeypatch):
+    """Analyze route should reject unsafe filename references before attempting dataframe loading."""
+    calls = {"get_dataframe_for": 0}
+
+    def _fail_get_dataframe_for(_name):
+        calls["get_dataframe_for"] += 1
+        raise AssertionError("get_dataframe_for should not run for invalid analyze filename")
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", _fail_get_dataframe_for)
+
+    with app.test_client() as client:
+        response = client.get("/analyze/..evil.csv", follow_redirects=False)
+
+    assert response.status_code in (302, 303)
+    assert calls["get_dataframe_for"] == 0
+
+
 def test_download_full_report_pdf_returns_pdf(monkeypatch):
     """PDF report route should return a valid PDF payload without page-open errors."""
     filename = "f" * 40 + ".csv"
@@ -1188,6 +1328,84 @@ def test_analyze_interactive_large_dataset_defers_inline_payload(monkeypatch):
     assert match is not None
     payload = json.loads(match.group(1))
     assert payload == []
+
+
+def test_analyze_interactive_view_does_not_compute_stl(monkeypatch):
+    """Interactive view should not compute STL images because they are not rendered there."""
+    filename = "1" * 40 + ".csv"
+    idx = pd.date_range("2024-01-01", periods=80, freq="D")
+    df = pd.DataFrame({"value": np.linspace(1.0, 80.0, 80)}, index=idx)
+    DATAFRAME_CACHE.set(filename, df)
+
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    def _fail_if_stl_called(*_args, **_kwargs):
+        raise AssertionError("Interactive view should not request STL plots")
+
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", _fail_if_stl_called)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=interactive&forecast_pct=0.05&contamination=0.02")
+
+    assert response.status_code == 200
+
+
+def test_analyze_interactive_respects_forecast_column_budget(monkeypatch):
+    """Interactive analyze rendering should stop forecast generation after configured column cap."""
+    filename = "8" * 40 + ".csv"
+    df = pd.DataFrame(
+        {
+            "metric_a": np.arange(1, 101, dtype=float),
+            "metric_b": np.arange(101, 201, dtype=float),
+            "metric_c": np.arange(201, 301, dtype=float),
+        }
+    )
+    DATAFRAME_CACHE.set(filename, df)
+
+    captured: dict[str, Any] = {}
+    forecast_calls: list[str] = []
+
+    def fake_render_template(_template, **kwargs):
+        captured["analysis"] = kwargs.get("analysis", {})
+        return "ok"
+
+    def fake_get_cached_column_forecast(_filename, column, _series, steps):
+        forecast_calls.append(str(column))
+        idx = pd.RangeIndex(int(steps))
+        fc = pd.Series(np.linspace(0.0, 1.0, int(steps), dtype=float), index=idx)
+        ci = pd.DataFrame({"lower": fc - 0.1, "upper": fc + 0.1}, index=idx)
+        return fc, ci
+
+    monkeypatch.setenv("INTERACTIVE_FORECAST_COLS_MAX", "1")
+    monkeypatch.setattr(app_module, "render_template", fake_render_template)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_anomalies",
+        lambda *_args, **_kwargs: (pd.Index([], dtype="int64"), pd.Series(dtype=float)),
+    )
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=interactive&forecast_pct=0.05&contamination=0.02")
+
+    assert response.status_code == 200
+    assert len(forecast_calls) == 1
+
+    interactive_payload = captured.get("analysis", {}).get("interactive", [])
+    assert len(interactive_payload) == 3
+    forecast_columns = [
+        item.get("column")
+        for item in interactive_payload
+        if any(str(trace.get("name", "")).lower() == "forecast" for trace in item.get("traces", []))
+    ]
+    assert forecast_columns == ["metric_a"]
 
 
 def test_api_interactive_forecast_visual_share_matches_pct(monkeypatch):
@@ -1483,6 +1701,36 @@ def test_static_plots_zip_includes_category_images(monkeypatch):
     assert any(name.endswith("_categories.png") for name in names)
 
 
+def test_static_plots_zip_skips_active_temporal_axis_category_images(monkeypatch):
+    """ZIP export should skip redundant categorical charts for the active temporal axis column."""
+    filename = "d" * 40 + ".csv"
+    NUMERIC_DF_CACHE.clear()
+
+    idx = pd.date_range("2024-01-01", periods=12, freq="D")
+    df = pd.DataFrame(
+        {
+            "record_date": idx.strftime("%Y-%m-%d"),
+            "segment": ["A", "B", "C", "A", "B", "C", "A", "B", "C", "A", "B", "C"],
+        },
+        index=idx,
+    )
+    df.index.name = "record_date"
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "generate_correlation_heatmap", lambda *_args, **_kwargs: None)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip")
+        assert response.status_code == 200
+        assert response.headers.get("Content-Type") == "application/zip"
+
+        with zipfile.ZipFile(io.BytesIO(response.data), "r") as zf:
+            names = zf.namelist()
+
+    assert any(name.endswith("segment_categories.png") for name in names)
+    assert not any(name.endswith("record_date_categories.png") for name in names)
+
+
 def test_static_plots_zip_trend_uses_forecast_renderer(monkeypatch):
     """ZIP trend images should use generate_forecast_plot for consistent rendering."""
     filename = "b" * 40 + ".csv"
@@ -1559,6 +1807,38 @@ def test_analyze_forecast_zero_pct_renders_history_only_forecast(monkeypatch):
     assert "forecast" in grouped_types
 
 
+def test_analyze_categories_skips_active_temporal_axis_column(monkeypatch):
+    """Categories view should not render redundant charts for the dataset temporal index column."""
+    filename = "2" * 40 + ".csv"
+    idx = pd.date_range("2024-01-01", periods=12, freq="D")
+    df = pd.DataFrame(
+        {
+            "record_date": idx.strftime("%Y-%m-%d"),
+            "segment": ["A", "B", "C", "A", "B", "C", "A", "B", "C", "A", "B", "C"],
+        },
+        index=idx,
+    )
+    df.index.name = "record_date"
+    DATAFRAME_CACHE.set(filename, df)
+
+    captured: dict[str, Any] = {}
+
+    def fake_render_template(_template, **kwargs):
+        captured["analysis"] = kwargs.get("analysis", {})
+        return "ok"
+
+    monkeypatch.setattr(app_module, "render_template", fake_render_template)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=categories")
+
+    assert response.status_code == 200
+    charts = captured.get("analysis", {}).get("category_charts", {})
+    assert "segment" in charts
+    assert "record_date" not in charts
+
+
 def test_download_full_report_pdf_categories_not_capped_to_top_50(monkeypatch):
     """PDF categories should render all category bars via shared helper (no top-50 truncation)."""
     import data_analysis.reports.pdf_report as pdf_report_mod
@@ -1597,3 +1877,42 @@ def test_download_full_report_pdf_categories_not_capped_to_top_50(monkeypatch):
     assert response.data.startswith(b"%PDF")
     assert captured_counts
     assert max(captured_counts) == 75
+
+
+def test_download_full_report_pdf_skips_active_temporal_axis_category(monkeypatch):
+    """PDF export should skip redundant categorical chart for active temporal index column."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = "e" * 40 + ".csv"
+    idx = pd.date_range("2024-01-01", periods=14, freq="D")
+    df = pd.DataFrame(
+        {
+            "record_date": idx.strftime("%Y-%m-%d"),
+            "segment": ["A", "B", "C", "A", "B", "C", "A", "B", "C", "A", "B", "C", "A", "B"],
+        },
+        index=idx,
+    )
+    df.index.name = "record_date"
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+
+    captured_columns: list[str] = []
+    original_builder = pdf_report_mod._build_static_category_chart
+
+    def _spy_builder(all_counts, col):
+        captured_columns.append(str(col))
+        return original_builder(all_counts, col)
+
+    monkeypatch.setattr(pdf_report_mod, "_build_static_category_chart", _spy_builder)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert response.data.startswith(b"%PDF")
+    assert "segment" in captured_columns
+    assert "record_date" not in captured_columns

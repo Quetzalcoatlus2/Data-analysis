@@ -320,11 +320,11 @@ def _is_active_temporal_axis_column(
         return False
 
     try:
-        index_is_temporal = (
-            bool(is_reliable_timeseries_index(df.index))
-            if callable(is_reliable_timeseries_index)
-            else isinstance(df.index, pd.DatetimeIndex)
-        )
+        # Consider DatetimeIndex temporal even when "reliable" checks fail
+        # (for example, duplicate timestamps in transactional datasets).
+        index_is_temporal = isinstance(df.index, pd.DatetimeIndex)
+        if (not index_is_temporal) and callable(is_reliable_timeseries_index):
+            index_is_temporal = bool(is_reliable_timeseries_index(df.index))
     except Exception:
         index_is_temporal = isinstance(df.index, pd.DatetimeIndex)
 
@@ -528,10 +528,13 @@ def get_dataframe_for(
                 if picked is not None:
                     ts = _to_datetime_candidate(df[picked])
                     # Do not drop the column so it remains available in tables
-                    df.index = ts
-                    df.index.name = picked
                     with contextlib.suppress(Exception):
-                        df = df[ts.notna()].sort_index()
+                        valid_mask = ts.notna().to_numpy(dtype=bool)
+                        if valid_mask.any():
+                            df = df.loc[valid_mask].copy()
+                            ts_values = ts.loc[ts.notna()].to_numpy()
+                            df.index = pd.DatetimeIndex(ts_values, name=picked)
+                            df = df.sort_index()
         except Exception as exc:
             if logger is not None:
                 logger.debug("get_dataframe_for: datetime inference skipped: %s", exc)

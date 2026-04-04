@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import math
-import textwrap
 
 from data_analysis.analysis.plot import (
     _add_static_distribution_overlays,
@@ -44,19 +43,6 @@ _LOCAL_SYMBOLS = {
 
 def _bind_runtime_globals():
     return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
-
-
-def _wrap_category_tick_label(label: str, width: int = 18, max_lines: int = 4) -> str:
-    """Wrap long category labels for static export charts."""
-    raw = str(label or "")
-    if not raw:
-        return raw
-    wrapped = textwrap.wrap(raw, width=width, break_long_words=False, break_on_hyphens=False) or [raw]
-    if len(wrapped) > max_lines:
-        wrapped = wrapped[: max_lines - 1] + [
-            textwrap.shorten(" ".join(wrapped[max_lines - 1 :]), width=width, placeholder="…")
-        ]
-    return "\n".join(wrapped)
 
 
 def handle_download_cleaned_csv(filename):
@@ -250,61 +236,72 @@ def handle_download_static_plots_zip(filename):
             try:
                 from matplotlib.figure import Figure
                 fig = Figure(figsize=get_export_chart_figsize("distribution", context="zip"))
-                ax = fig.subplots()
-                s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
-                ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
-                ax.set_title(f"Distribution: {col}", fontsize=10)
-                ax.set_xlabel(col, fontsize=9, labelpad=2)
-                ax.set_ylabel("Frequency", fontsize=9)
-                ax.grid(True, alpha=0.3)
-
+                buf = None
                 try:
-                    from matplotlib.ticker import MaxNLocator
-                    ax.yaxis.set_major_locator(MaxNLocator(nbins=7, integer=True, min_n_ticks=4))
-                except Exception:
-                    pass
+                    ax = fig.subplots()
+                    s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
+                    ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
+                    ax.set_title(f"Distribution: {col}", fontsize=10)
+                    ax.set_xlabel(col, fontsize=9, labelpad=2)
+                    ax.set_ylabel("Frequency", fontsize=9)
+                    ax.grid(True, alpha=0.3)
 
-                finite_unique_values = np.unique(s_arr[np.isfinite(s_arr)]) if s_arr.size else np.asarray([], dtype=float)
-                tick_policy = _resolve_static_tick_policy(
-                    finite_unique_values.tolist(),
-                    chart_type='distribution',
-                )
-                tick_values, tick_labels = _sample_numeric_axis_ticks(
-                    s_arr.tolist(),
-                    max_tick_labels=int(tick_policy['max_tick_labels']),
-                    min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
-                )
-                if tick_values:
-                    ax.set_xticks(tick_values)
-                    ax.set_xticklabels(
-                        tick_labels,
-                        rotation=int(tick_policy['tick_angle']),
-                        ha=str(tick_policy['tick_ha']),
-                        fontsize=float(tick_policy['tick_fontsize']),
+                    try:
+                        from matplotlib.ticker import MaxNLocator
+                        ax.yaxis.set_major_locator(MaxNLocator(nbins=7, integer=True, min_n_ticks=4))
+                    except Exception:
+                        pass
+
+                    finite_unique_values = np.unique(s_arr[np.isfinite(s_arr)]) if s_arr.size else np.asarray([], dtype=float)
+                    tick_policy = _resolve_static_tick_policy(
+                        finite_unique_values.tolist(),
+                        chart_type='distribution',
                     )
-                
-                # Add vertical stat lines on the histogram
-                try:
-                    _add_static_distribution_overlays(
-                        ax,
-                        s_arr,
-                        value_formatter=_format_stat_value,
-                        legend_fontsize=6,
-                        legend_columns=6,
-                        legend_y=-0.18,
+                    tick_values, tick_labels = _sample_numeric_axis_ticks(
+                        s_arr.tolist(),
+                        max_tick_labels=int(tick_policy['max_tick_labels']),
+                        min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
                     )
-                    fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
-                    
-                    # Apply compact K/M/B/T axis labels for large values.
-                    _apply_sci_formatter(ax)
-                except Exception as stats_err:
-                    app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
-                
-                buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
-                plt.close(fig)
-                buf.seek(0)
-                zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
+                    if tick_values:
+                        ax.set_xticks(tick_values)
+                        ax.set_xticklabels(
+                            tick_labels,
+                            rotation=int(tick_policy['tick_angle']),
+                            ha=str(tick_policy['tick_ha']),
+                            fontsize=float(tick_policy['tick_fontsize']),
+                        )
+
+                    # Add vertical stat lines on the histogram
+                    try:
+                        _add_static_distribution_overlays(
+                            ax,
+                            s_arr,
+                            value_formatter=_format_stat_value,
+                            legend_fontsize=6,
+                            legend_columns=6,
+                            legend_y=-0.18,
+                        )
+                        fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
+
+                        # Apply compact K/M/B/T axis labels for large values.
+                        _apply_sci_formatter(ax)
+                    except Exception as stats_err:
+                        app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
+
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                    buf.seek(0)
+                    zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
+                finally:
+                    if buf is not None:
+                        try:
+                            buf.close()
+                        except Exception:
+                            pass
+                    try:
+                        plt.close(fig)
+                    except Exception:
+                        pass
             except Exception as dist_err:
                 app.logger.debug("ZIP distribution plot skipped for %s/%s: %s", filename, col, dist_err)
             
@@ -348,10 +345,15 @@ def handle_download_static_plots_zip(filename):
 
         # Generate Categories bar charts for non-numeric columns.
         for col in df.columns:
+            fig = None
+            buf = None
             try:
                 # Skip numeric columns already processed above
                 if col in numeric_cols:
                     continue  # Skip - already processed as numeric
+
+                if _is_active_temporal_axis_column(df, col):
+                    continue
                 
                 # Process as categorical
                 s_cat = df[col].dropna().astype(str)
@@ -366,14 +368,24 @@ def handle_download_static_plots_zip(filename):
                 if built_chart is None:
                     continue
                 fig, _ax = built_chart
-                
+
                 buf = io.BytesIO()
                 fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
-                plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_categories.png", buf.read())
             except Exception as cat_err:
                 app.logger.debug("ZIP categories plot skipped for %s/%s: %s", filename, col, cat_err)
+            finally:
+                if buf is not None:
+                    try:
+                        buf.close()
+                    except Exception:
+                        pass
+                if fig is not None:
+                    try:
+                        plt.close(fig)
+                    except Exception:
+                        pass
 
 
     bio.seek(0)
@@ -497,6 +509,8 @@ def handle_download_full_report_html(filename):
         an_idx, an_score = get_cached_anomalies(filename, col, s, user_contam)
         
         # Generate distribution histogram for this column
+        fig = None
+        buf = None
         try:
             from matplotlib.figure import Figure
             fig = Figure(figsize=(10, 4))
@@ -511,13 +525,20 @@ def handle_download_full_report_html(filename):
             fig.savefig(buf, format='png', bbox_inches='tight')
             buf.seek(0)
             dist_img = base64.b64encode(buf.read()).decode('utf-8')
-            plt.close(fig)
             distribution_sections.append(f'<figure><figcaption><strong>Distribution: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{dist_img}" /></figure>')
-        except Exception:
-            try:
-                plt.close(fig)
-            except Exception as fig_close_err:
-                app.logger.debug("HTML report figure cleanup skipped for %s/%s: %s", filename, col, fig_close_err)
+        except Exception as dist_err:
+            app.logger.debug("HTML report distribution plot skipped for %s/%s: %s", filename, col, dist_err)
+        finally:
+            if buf is not None:
+                try:
+                    buf.close()
+                except Exception as buf_close_err:
+                    app.logger.debug("HTML report buffer cleanup skipped for %s/%s: %s", filename, col, buf_close_err)
+            if fig is not None:
+                try:
+                    plt.close(fig)
+                except Exception as fig_close_err:
+                    app.logger.debug("HTML report figure cleanup skipped for %s/%s: %s", filename, col, fig_close_err)
         
         # STL decomposition (for timeseries with sufficient data)
         if is_ts and len(s) >= 28:
