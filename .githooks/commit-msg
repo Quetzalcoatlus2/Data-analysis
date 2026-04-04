@@ -16,11 +16,11 @@ path = pathlib.Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 
 def is_copilot_coauthor(line: str) -> bool:
-    lowered = line.lstrip().lower()
+    lowered = line.lower()
     return lowered.startswith("co-authored-by:") and "copilot" in lowered
 
 filtered_lines = [
-    chunk for chunk in text.splitlines(keepends=True) if not is_copilot_coauthor(chunk.rstrip("\r\n"))
+    line for line in text.splitlines(keepends=True) if not is_copilot_coauthor(line.rstrip("\r\n"))
 ]
 result = "".join(filtered_lines)
 
