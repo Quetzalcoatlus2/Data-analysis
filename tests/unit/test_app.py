@@ -1483,6 +1483,74 @@ def test_static_plots_zip_includes_category_images(monkeypatch):
     assert any(name.endswith("_categories.png") for name in names)
 
 
+def test_analyze_categories_skips_active_temporal_axis_column(monkeypatch):
+    """Categories view should not render a category chart for the active temporal axis column."""
+    filename = "d" * 40 + ".csv"
+    dates = pd.date_range("2024-01-01", periods=6, freq="D")
+    df = pd.DataFrame(
+        {
+            "record_date": dates,
+            "city": ["Iasi", "Cluj", "Iasi", "Bacau", "Cluj", "Iasi"],
+            "value": [10, 11, 12, 13, 14, 15],
+        }
+    )
+    df.index = pd.DatetimeIndex(df["record_date"], name="record_date")
+    DATAFRAME_CACHE.set(filename, df)
+
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=categories")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    match = re.search(r'<script type="application/json" id="category-data">\s*(.*?)\s*</script>', html, flags=re.DOTALL)
+    assert match is not None
+    category_charts = json.loads(match.group(1))
+    assert "city" in category_charts
+    assert "record_date" not in category_charts
+
+
+def test_static_plots_zip_skips_active_temporal_axis_categories(monkeypatch):
+    """ZIP categories should exclude the active temporal axis column chart."""
+    import matplotlib.pyplot as plt
+    import data_analysis.routes.downloads as downloads_mod
+
+    filename = "e" * 40 + ".csv"
+    NUMERIC_DF_CACHE.clear()
+    dates = pd.date_range("2024-01-01", periods=6, freq="D")
+    df = pd.DataFrame(
+        {
+            "record_date": dates,
+            "city": ["Iasi", "Cluj", "Iasi", "Bacau", "Cluj", "Iasi"],
+            "value": [10, 11, 12, 13, 14, 15],
+        }
+    )
+    df.index = pd.DatetimeIndex(df["record_date"], name="record_date")
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    def fake_static_category_chart(all_counts, _col):
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax.bar([str(x) for x in all_counts.index], all_counts.to_numpy(dtype=float))
+        return fig, ax
+
+    monkeypatch.setattr(downloads_mod, "_build_static_category_chart", fake_static_category_chart)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip")
+        assert response.status_code == 200
+        assert response.headers.get("Content-Type") == "application/zip"
+
+        with zipfile.ZipFile(io.BytesIO(response.data), "r") as zf:
+            names = zf.namelist()
+
+    assert any(name.endswith("city_categories.png") for name in names)
+    assert not any(name.endswith("record_date_categories.png") for name in names)
+
+
 def test_static_plots_zip_trend_uses_forecast_renderer(monkeypatch):
     """ZIP trend images should use generate_forecast_plot for consistent rendering."""
     filename = "b" * 40 + ".csv"
