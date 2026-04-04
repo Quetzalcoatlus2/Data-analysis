@@ -42,6 +42,9 @@ def test_commit_msg_hook_fails_when_file_missing(tmp_path: Path) -> None:
     result = subprocess.run(
         ["bash", str(hook_path), str(missing_commit_msg_path)],
         check=False,
+        capture_output=True,
+        text=True,
     )
 
     assert result.returncode != 0
+    assert "commit message file not found or invalid" in result.stderr.lower()

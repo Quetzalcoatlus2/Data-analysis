@@ -4,6 +4,7 @@ set -euo pipefail
 commit_msg_file="${1:-}"
 
 if [ -z "$commit_msg_file" ] || [ ! -f "$commit_msg_file" ]; then
+  echo "Error: commit message file not found or invalid." >&2
   exit 1
 fi
 
@@ -18,11 +19,10 @@ def is_copilot_coauthor(line: str) -> bool:
     lowered = line.lstrip().lower()
     return lowered.startswith("co-authored-by:") and "copilot" in lowered
 
-filtered_lines = [line for line in text.splitlines() if not is_copilot_coauthor(line)]
-
-result = "\n".join(filtered_lines)
-if text.endswith("\n"):
-    result += "\n"
+filtered_chunks = [
+    chunk for chunk in text.splitlines(keepends=True) if not is_copilot_coauthor(chunk.rstrip("\r\n"))
+]
+result = "".join(filtered_chunks)
 
 path.write_text(result, encoding="utf-8")
 PY
