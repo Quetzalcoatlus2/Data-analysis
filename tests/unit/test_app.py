@@ -1,4 +1,5 @@
 
+import base64
 import io
 import json
 import os
@@ -265,6 +266,454 @@ def test_build_static_category_chart_dense_ticks_render_below_axis():
         plt.close(fig)
 
 
+def test_build_static_category_chart_legend_renders_below_xaxis_title():
+    """Static category exports should keep a visible gap between xlabel and legend lanes."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(160, 40, -1),
+        index=[f"category_{i:03d}" for i in range(120)],
+    )
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        fig.canvas.draw()
+        legend = ax.get_legend()
+        assert legend is not None
+        renderer = fig.canvas.get_renderer()
+        xlabel_bbox = ax.xaxis.label.get_window_extent(renderer)
+        legend_bbox = legend.get_window_extent(renderer)
+        gap_px = float(xlabel_bbox.y0 - legend_bbox.y1)
+        assert gap_px >= 8.0
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_legend_stays_single_line_with_long_labels():
+    """Static category legend should remain a single-row line, even for long category names."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(300, 120, -1),
+        index=[f"very_long_category_name_for_legend_layout_{i:03d}" for i in range(180)],
+    )
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        fig.canvas.draw()
+        legend = ax.get_legend()
+        assert legend is not None
+        texts = legend.get_texts()
+        assert len(texts) >= 5
+        assert all("\n" not in str(text.get_text()) for text in texts)
+
+        renderer = fig.canvas.get_renderer()
+        centers = [float((box.y0 + box.y1) / 2.0) for box in (text.get_window_extent(renderer) for text in texts)]
+        assert max(centers) - min(centers) <= 2.0
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_keeps_drawable_bar_area_stable_for_dense_labels():
+    """Dense category exports should spend extra height on the footer instead of shrinking the bar area."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    sparse_counts = pd.Series(
+        np.arange(90, 50, -1),
+        index=[f"short_{i:02d}" for i in range(40)],
+    )
+    dense_counts = pd.Series(
+        np.arange(260, 80, -1),
+        index=[f"very_long_dense_category_label_{i:03d}" for i in range(180)],
+    )
+
+    sparse_built = _build_static_category_chart(sparse_counts, "category")
+    dense_built = _build_static_category_chart(dense_counts, "category")
+    assert sparse_built is not None
+    assert dense_built is not None
+    sparse_fig, sparse_ax = sparse_built
+    dense_fig, dense_ax = dense_built
+    try:
+        sparse_fig.canvas.draw()
+        dense_fig.canvas.draw()
+        sparse_axes_height = float(sparse_ax.bbox.height)
+        dense_axes_height = float(dense_ax.bbox.height)
+        assert dense_axes_height >= sparse_axes_height - 2.0
+    finally:
+        plt.close(sparse_fig)
+        plt.close(dense_fig)
+
+
+def test_build_static_category_chart_keeps_footer_fonts_fixed_for_dense_labels():
+    """Dense category exports should keep footer/title/stat font sizes unchanged."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    sparse_counts = pd.Series(
+        np.arange(100, 60, -1),
+        index=[f"short_{i:02d}" for i in range(40)],
+    )
+    dense_counts = pd.Series(
+        np.arange(260, 80, -1),
+        index=[f"very_long_dense_category_label_{i:03d}" for i in range(180)],
+    )
+
+    sparse_built = _build_static_category_chart(sparse_counts, "category")
+    dense_built = _build_static_category_chart(dense_counts, "category")
+    assert sparse_built is not None
+    assert dense_built is not None
+    sparse_fig, sparse_ax = sparse_built
+    dense_fig, dense_ax = dense_built
+
+    def _footer_metrics(ax):
+        legend = ax.get_legend()
+        assert legend is not None
+        avg_text = next(text for text in ax.texts if str(text.get_text()).startswith("Avg:"))
+        med_text = next(text for text in ax.texts if str(text.get_text()).startswith("Med:"))
+        return {
+            "title": float(ax.title.get_fontsize()),
+            "xlabel": float(ax.xaxis.label.get_fontsize()),
+            "legend": float(legend.get_texts()[0].get_fontsize()),
+            "avg": float(avg_text.get_fontsize()),
+            "med": float(med_text.get_fontsize()),
+        }
+
+    try:
+        sparse_fig.canvas.draw()
+        dense_fig.canvas.draw()
+        assert _footer_metrics(dense_ax) == _footer_metrics(sparse_ax)
+    finally:
+        plt.close(sparse_fig)
+        plt.close(dense_fig)
+
+
+def test_build_static_category_chart_dense_exports_keep_render_height_when_fit_to_page_width():
+    """Dense category exports should not collapse visual bar-area height when rendered at fixed page width."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    sparse_counts = pd.Series(
+        np.arange(90, 50, -1),
+        index=[f"short_{i:02d}" for i in range(40)],
+    )
+    dense_counts = pd.Series(
+        np.arange(320, 140, -1),
+        index=[f"very_long_dense_category_label_{i:03d}" for i in range(180)],
+    )
+
+    sparse_built = _build_static_category_chart(sparse_counts, "category")
+    dense_built = _build_static_category_chart(dense_counts, "category")
+    assert sparse_built is not None
+    assert dense_built is not None
+    sparse_fig, _sparse_ax = sparse_built
+    dense_fig, _dense_ax = dense_built
+
+    def _rendered_height_at_fixed_width(fig, width_mm: float = 180.0) -> float:
+        w_in, h_in = fig.get_size_inches()
+        if w_in <= 0:
+            return 0.0
+        return float(width_mm * (h_in / w_in))
+
+    try:
+        sparse_h = _rendered_height_at_fixed_width(sparse_fig)
+        dense_h = _rendered_height_at_fixed_width(dense_fig)
+        assert dense_h >= sparse_h * 0.9
+    finally:
+        plt.close(sparse_fig)
+        plt.close(dense_fig)
+
+
+def test_build_static_category_chart_dense_labels_show_all_tick_text_and_hide_bar_value_tags():
+    """Dense exports should show all x tick labels while still hiding overlapping bar-value labels."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(320, 140, -1),
+        index=[f"very_long_dense_category_label_{i:03d}" for i in range(180)],
+    )
+
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        tick_labels = [str(tick.get_text()) for tick in ax.get_xticklabels()]
+        visible_labels = [label for label in tick_labels if label.strip()]
+        assert visible_labels
+        assert len(visible_labels) == len(tick_labels) == len(counts)
+        assert tick_labels[0] == str(counts.index[0])
+        assert tick_labels[-1] == str(counts.index[-1])
+
+        bar_value_texts = [
+            str(text.get_text()).strip()
+            for text in ax.texts
+            if str(text.get_text()).strip().isdigit()
+        ]
+        assert not bar_value_texts
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_uses_uniform_single_green_bar_tone():
+    """Static category export bars should keep one uniform green tone with visible separation."""
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_hex, to_rgba
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(220, 80, -1),
+        index=[f"category_{i:03d}" for i in range(140)],
+    )
+
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        bars = list(ax.patches)
+        assert bars
+        face_hex = {to_hex(bar.get_facecolor(), keep_alpha=False).lower() for bar in bars}
+        face_alpha = {round(float(to_rgba(bar.get_facecolor())[3]), 3) for bar in bars}
+        edge_alpha = {round(float(to_rgba(bar.get_edgecolor())[3]), 3) for bar in bars}
+        widths = {round(float(bar.get_width()), 4) for bar in bars}
+        width_val = next(iter(widths))
+
+        assert face_hex == {"#2e7d32"}
+        assert face_alpha == {1.0}
+        assert edge_alpha == {0.0}
+        assert 0.80 <= width_val <= 0.86
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_very_dense_uses_wider_bar_gaps():
+    """Very dense category exports should keep consistent separated bar width."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(320, 120, -1),
+        index=[f"category_{i:03d}" for i in range(200)],
+    )
+
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        bars = list(ax.patches)
+        assert bars
+        widths = {round(float(bar.get_width()), 4) for bar in bars}
+        width_val = next(iter(widths))
+        assert 0.74 <= width_val <= 0.79
+
+        medium_counts = pd.Series(
+            np.arange(220, 80, -1),
+            index=[f"mid_{i:03d}" for i in range(140)],
+        )
+        medium_built = _build_static_category_chart(medium_counts, "category")
+        assert medium_built is not None
+        medium_fig, medium_ax = medium_built
+        try:
+            medium_bars = list(medium_ax.patches)
+            assert medium_bars
+            medium_width_val = float(medium_bars[0].get_width())
+            assert width_val < medium_width_val
+        finally:
+            plt.close(medium_fig)
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_avg_med_tags_are_right_outside_and_close_to_lines():
+    """Avg/Med tags should sit in the right outside lane and stay close to their line values."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        [100, 40, 30, 20, 10],
+        index=["A", "B", "C", "D", "E"],
+    )
+
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        avg_text = next(text for text in ax.texts if str(text.get_text()).startswith("Avg:"))
+        med_text = next(text for text in ax.texts if str(text.get_text()).startswith("Med:"))
+
+        avg_x, avg_y = avg_text.get_position()
+        med_x, med_y = med_text.get_position()
+        assert float(avg_x) > 1.0
+        assert float(med_x) > 1.0
+        assert str(avg_text.get_ha()) == "left"
+        assert str(med_text.get_ha()) == "left"
+
+        avg_count = float(counts.mean())
+        med_count = float(counts.median())
+        y_range = float(ax.get_ylim()[1] - ax.get_ylim()[0])
+        max_allowed_offset = max(y_range * 0.012, 0.16)
+        assert abs(float(avg_y) - avg_count) <= max_allowed_offset
+        assert abs(float(med_y) - med_count) <= max_allowed_offset
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_yaxis_ticks_dense_without_overlap():
+    """Y-axis should show many labels while preventing overlap in static category exports."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(240, 40, -1),
+        index=[f"category_{i:03d}" for i in range(200)],
+    )
+
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        fig.canvas.draw()
+        y_labels = [label for label in ax.get_yticklabels() if str(label.get_text()).strip()]
+        assert len(y_labels) >= 8
+
+        renderer = fig.canvas.get_renderer()
+        bboxes = sorted((label.get_window_extent(renderer) for label in y_labels), key=lambda box: box.y0)
+        for previous, current in zip(bboxes, bboxes[1:]):
+            assert float(current.y0) >= float(previous.y1) - 0.5
+    finally:
+        plt.close(fig)
+
+
+def test_apply_dense_non_overlapping_y_ticks_balances_density_and_readability():
+    """Shared y-axis helper should produce many ticks without overlapping labels."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _apply_dense_non_overlapping_y_ticks
+
+    fig, ax = plt.subplots(figsize=(9.5, 5.4))
+    try:
+        values = np.linspace(0.0, 2500.0, 600)
+        ax.plot(np.arange(len(values)), values)
+        ax.set_ylim(0.0, 2500.0)
+
+        _apply_dense_non_overlapping_y_ticks(
+            ax,
+            integer=False,
+            label_fontsize=8.0,
+            min_ticks=6,
+            max_ticks=20,
+        )
+
+        fig.canvas.draw()
+        y_labels = [label for label in ax.get_yticklabels() if str(label.get_text()).strip()]
+        assert len(y_labels) >= 8
+
+        renderer = fig.canvas.get_renderer()
+        bboxes = sorted((label.get_window_extent(renderer) for label in y_labels), key=lambda box: box.y0)
+        for previous, current in zip(bboxes, bboxes[1:]):
+            assert float(current.y0) >= float(previous.y1) - 0.5
+    finally:
+        plt.close(fig)
+
+
+def test_generate_plot_uses_dense_non_overlapping_y_ticks(monkeypatch):
+    """Trend renderer should maximize y ticks while keeping labels readable."""
+    from matplotlib.figure import Figure
+
+    original_savefig = Figure.savefig
+    captured: dict[str, object] = {}
+
+    def _savefig_spy(self, *args, **kwargs):
+        if not captured and self.axes:
+            ax = self.axes[0]
+            self.canvas.draw()
+            y_labels = [label for label in ax.get_yticklabels() if str(label.get_text()).strip()]
+            renderer = self.canvas.get_renderer()
+            bboxes = sorted((label.get_window_extent(renderer) for label in y_labels), key=lambda box: box.y0)
+            overlap = any(float(cur.y0) < float(prev.y1) - 0.5 for prev, cur in zip(bboxes, bboxes[1:]))
+            captured["count"] = len(y_labels)
+            captured["overlap"] = overlap
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", _savefig_spy)
+
+    series = pd.Series(np.linspace(0.0, 5000.0, 700), index=pd.RangeIndex(700))
+    img = generate_plot(series, "Trend", "Index", "Value")
+
+    assert isinstance(img, str)
+    assert len(img) > 0
+    assert int(captured.get("count", 0)) >= 8
+    assert bool(captured.get("overlap", True)) is False
+
+
+def test_generate_forecast_plot_uses_dense_non_overlapping_y_ticks(monkeypatch):
+    """Forecast renderer should maximize y ticks while avoiding y-label collisions."""
+    from matplotlib.figure import Figure
+
+    original_savefig = Figure.savefig
+    captured: dict[str, object] = {}
+
+    def _savefig_spy(self, *args, **kwargs):
+        if not captured and self.axes:
+            ax = self.axes[0]
+            self.canvas.draw()
+            y_labels = [label for label in ax.get_yticklabels() if str(label.get_text()).strip()]
+            renderer = self.canvas.get_renderer()
+            bboxes = sorted((label.get_window_extent(renderer) for label in y_labels), key=lambda box: box.y0)
+            overlap = any(float(cur.y0) < float(prev.y1) - 0.5 for prev, cur in zip(bboxes, bboxes[1:]))
+            captured["count"] = len(y_labels)
+            captured["overlap"] = overlap
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", _savefig_spy)
+
+    history_idx = pd.RangeIndex(320)
+    history = pd.Series(np.linspace(100.0, 4200.0, len(history_idx)), index=history_idx)
+    forecast_idx = pd.RangeIndex(320, 360)
+    forecast = pd.Series(np.linspace(4210.0, 4620.0, len(forecast_idx)), index=forecast_idx)
+    img = generate_forecast_plot(history, forecast, "Forecast", "Index", "Value")
+
+    assert isinstance(img, str)
+    assert len(img) > 0
+    assert int(captured.get("count", 0)) >= 8
+    assert bool(captured.get("overlap", True)) is False
+
+
+def test_static_distribution_overlays_use_high_contrast_min_marker():
+    """Static distribution overlays should use a dark amber min marker for high contrast."""
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import to_hex
+
+    from data_analysis.analysis.plot import _add_static_distribution_overlays
+
+    values = np.asarray([2.0, 4.0, 7.0, 9.0, 12.0], dtype=float)
+    fig, ax = plt.subplots()
+    try:
+        ax.hist(values, bins=5)
+        _add_static_distribution_overlays(ax, values)
+        min_collection = next(
+            coll for coll in ax.collections
+            if str(coll.get_label()).startswith("Min:")
+        )
+        assert to_hex(min_collection.get_facecolor()[0], keep_alpha=False).lower() == "#b45309"
+    finally:
+        plt.close(fig)
+
+
 def test_get_export_chart_figsize_uses_taller_defaults_for_pdf_and_zip():
     """Shared export chart size helper should return moderately taller chart heights."""
     from data_analysis.analysis.plot import get_export_chart_figsize
@@ -279,8 +728,8 @@ def test_get_export_chart_figsize_uses_taller_defaults_for_pdf_and_zip():
     assert zip_trend[1] > 6.3
     assert zip_forecast[1] > 6.3
     assert zip_dist[1] > 7.0
-    assert pdf_trend[1] > 6.3
-    assert pdf_forecast[1] > 6.3
+    assert pdf_trend[1] > 5.0
+    assert pdf_forecast[1] > 5.0
     assert pdf_dist[1] > 7.0
 
 
@@ -1126,6 +1575,50 @@ def test_download_full_report_pdf_complex_ai_summary_renders(monkeypatch):
     assert response.data.startswith(b"%PDF")
 
 
+def test_download_full_report_pdf_overview_tables_use_auto_placement(monkeypatch):
+    """Compact overview tables should stay on the first page when the full titled blocks fit."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = "2" * 40 + ".csv"
+    df = pd.DataFrame({
+        "value": [10.0, 11.0, 12.0, 13.0, 14.0],
+        "category": ["A", "B", "A", "C", "B"],
+    })
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+
+    original_cell = pdf_report_mod.PDFReport.cell
+    title_pages: dict[str, int] = {}
+    target_titles = {
+        "Dataset Overview Summary:",
+        "Columns & Types:",
+        "First 5 Rows:",
+        "Statistical Description:",
+    }
+
+    def spy_cell(self, *args, **kwargs):
+        text = ""
+        if len(args) >= 3:
+            text = str(args[2])
+        elif "text" in kwargs:
+            text = str(kwargs["text"])
+        if text in target_titles and text not in title_pages:
+            title_pages[text] = int(self.page_no())
+        return original_cell(self, *args, **kwargs)
+
+    monkeypatch.setattr(pdf_report_mod.PDFReport, "cell", spy_cell)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test")
+
+    assert response.status_code == 200
+    assert target_titles.issubset(title_pages.keys())
+    assert all(page_no == 1 for page_no in title_pages.values())
+
+
 def test_api_interactive_returns_cached_payload_when_available():
     """Interactive API should return cached data without recomputing when cache is warm."""
     filename = "a" * 40 + ".csv"
@@ -1143,7 +1636,7 @@ def test_api_interactive_returns_cached_payload_when_available():
 
 
 def test_api_interactive_returns_full_history_and_distribution(monkeypatch):
-    """Interactive API should return full data; range reduction is client-side."""
+    """Interactive API should return full data by default and include distribution axis metadata."""
     filename = "d" * 40 + ".csv"
     INTERACTIVE_DATA_CACHE.clear()
     NUMERIC_DF_CACHE.clear()
@@ -1169,6 +1662,70 @@ def test_api_interactive_returns_full_history_and_distribution(monkeypatch):
         assert len(history_trace["x"]) == 250
         assert len(history_trace["y"]) == 250
         assert len(first["distribution"]["values"]) == 250
+        axis_spec = first["distribution"].get("axis_spec")
+        assert isinstance(axis_spec, dict)
+        assert axis_spec.get("tickvals")
+        assert axis_spec.get("ticktext")
+
+
+def test_api_interactive_respects_data_range_for_history_and_distribution(monkeypatch):
+    """Interactive API should return range-filtered history and distribution payloads when data_range is set."""
+    filename = "c" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.arange(0, 200, dtype=float)})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/api/interactive/{filename}?forecast_pct=0.1&contamination=0.02&data_range=0.5")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["data"]
+
+    first = payload["data"][0]
+    history_trace = first["traces"][0]
+    assert len(history_trace["x"]) == 100
+    assert len(history_trace["y"]) == 100
+    assert len(first["distribution"]["values"]) == 100
+    assert isinstance(first["distribution"].get("axis_spec"), dict)
+
+
+def test_api_interactive_cache_key_honors_data_range(monkeypatch):
+    """Different data_range requests should not reuse the same interactive payload."""
+    filename = "b" * 40 + ".csv"
+    INTERACTIVE_DATA_CACHE.clear()
+    NUMERIC_DF_CACHE.clear()
+
+    df = pd.DataFrame({"value": np.arange(0, 120, dtype=float)})
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    with app.test_client() as client:
+        full_resp = client.get(f"/api/interactive/{filename}?forecast_pct=0.05&contamination=0.02&data_range=1")
+        half_resp = client.get(f"/api/interactive/{filename}?forecast_pct=0.05&contamination=0.02&data_range=0.5")
+
+    full_payload = full_resp.get_json()
+    half_payload = half_resp.get_json()
+    assert full_payload["ok"] is True and half_payload["ok"] is True
+
+    full_history_len = len(full_payload["data"][0]["traces"][0]["x"])
+    half_history_len = len(half_payload["data"][0]["traces"][0]["x"])
+    assert full_history_len == 120
+    assert half_history_len == 60
 
 
 def test_analyze_interactive_large_dataset_defers_inline_payload(monkeypatch):
@@ -1188,6 +1745,94 @@ def test_analyze_interactive_large_dataset_defers_inline_payload(monkeypatch):
     assert match is not None
     payload = json.loads(match.group(1))
     assert payload == []
+
+
+def test_analyze_interactive_template_exposes_std_legend_control(monkeypatch):
+    """Interactive page template should expose the main-chart Std legend control."""
+    filename = "1" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(1, 51, dtype=float)})
+
+    DATAFRAME_CACHE.set(filename, df)
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_anomalies",
+        lambda *_args, **_kwargs: (pd.Index([], dtype="int64"), pd.Series(dtype=float)),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=interactive&forecast_pct=0.05&contamination=0.02")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "name: formatLegendStatLabel('Std', s.std)" in html
+    assert "meta: 'stat-control'" in html
+    assert "showlegend: true" in html
+
+
+def test_analyze_interactive_template_uses_single_row_fraction_legend_slots(monkeypatch):
+    """Interactive template should use centered one-row fraction legend slot packing."""
+    filename = "2" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(1, 51, dtype=float)})
+
+    DATAFRAME_CACHE.set(filename, df)
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_anomalies",
+        lambda *_args, **_kwargs: (pd.Index([], dtype="int64"), pd.Series(dtype=float)),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=interactive&forecast_pct=0.05&contamination=0.02")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "function resolveLegendSlotSizing" in html
+    assert "function getLegendLabels" in html
+    assert "entrywidthmode: 'fraction'" in html
+    assert "x: 0.5" in html
+    assert "xanchor: 'center'" in html
+    assert "slotEpsilon: 0.010" in html
+    assert "minGapPx: useCompactLegendPacking ? 6 : 8" in html
+
+
+def test_analysis_template_exposes_wider_contamination_autosize_config(monkeypatch):
+    """Rendered analysis pages should expose the widened contamination autosize config for both views."""
+    filename = "2" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(1, 31, dtype=float)})
+
+    DATAFRAME_CACHE.set(filename, df)
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_anomalies",
+        lambda *_args, **_kwargs: (pd.Index([], dtype="int64"), pd.Series(dtype=float)),
+    )
+    monkeypatch.setattr(
+        app_module,
+        "get_cached_column_forecast",
+        lambda _f, _c, _s, steps: (pd.Series(np.zeros(int(steps)), index=pd.RangeIndex(int(steps))), None),
+    )
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", lambda *_args, **_kwargs: None)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=interactive&forecast_pct=0.05&contamination=0.02")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "contaminationInteractive: { min: 82, max: 120, padding: 26 }" in html
+    assert "contaminationForecast: { min: 82, max: 120, padding: 26 }" in html
 
 
 def test_api_interactive_forecast_visual_share_matches_pct(monkeypatch):
@@ -1387,13 +2032,15 @@ def test_api_interactive_cache_key_includes_request_params(monkeypatch):
 
 
 def test_interactive_cache_key_varies_by_params():
-    """Interactive cache key should isolate forecast/contamination variants."""
+    """Interactive cache key should isolate forecast/contamination/data_range variants."""
     filename = "a" * 40 + ".csv"
     k1 = _build_interactive_cache_key(filename, 0.05, 0.02)
     k2 = _build_interactive_cache_key(filename, 0.10, 0.02)
     k3 = _build_interactive_cache_key(filename, 0.05, 0.05)
+    k4 = _build_interactive_cache_key(filename, 0.05, 0.02, 0.5)
     assert k1 != k2
     assert k1 != k3
+    assert k1 != k4
 
 
 def test_static_plots_zip_caps_forecast_steps(monkeypatch):
@@ -1483,6 +2130,33 @@ def test_static_plots_zip_includes_category_images(monkeypatch):
     assert any(name.endswith("_categories.png") for name in names)
 
 
+def test_static_plots_zip_category_exports_use_zero_pad(monkeypatch):
+    """ZIP category chart saves should use a tight crop with zero pad."""
+    from matplotlib.figure import Figure
+
+    filename = "c" * 40 + ".csv"
+    NUMERIC_DF_CACHE.clear()
+    df = pd.DataFrame({"city": ["Iasi", "Cluj", "Iasi", "Bacau", "Cluj", "Iasi"]})
+    tiny_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII=")
+    captured_kwargs: list[dict[str, object]] = []
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "generate_correlation_heatmap", lambda *_args, **_kwargs: None)
+
+    def fake_savefig(self, fp, *args, **kwargs):
+        captured_kwargs.append(dict(kwargs))
+        fp.write(tiny_png)
+
+    monkeypatch.setattr(Figure, "savefig", fake_savefig)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip")
+
+    assert response.status_code == 200
+    assert captured_kwargs
+    assert captured_kwargs[0].get("pad_inches") == 0.0
+
+
 def test_analyze_categories_skips_active_temporal_axis_column(monkeypatch):
     """Categories view should not render a category chart for the active temporal axis column."""
     filename = "d" * 40 + ".csv"
@@ -1514,6 +2188,7 @@ def test_analyze_categories_skips_active_temporal_axis_column(monkeypatch):
 def test_static_plots_zip_skips_active_temporal_axis_categories(monkeypatch):
     """ZIP categories should exclude the active temporal axis column chart."""
     import matplotlib.pyplot as plt
+
     import data_analysis.routes.downloads as downloads_mod
 
     filename = "e" * 40 + ".csv"
@@ -1665,3 +2340,589 @@ def test_download_full_report_pdf_categories_not_capped_to_top_50(monkeypatch):
     assert response.data.startswith(b"%PDF")
     assert captured_counts
     assert max(captured_counts) == 75
+
+
+def test_download_full_report_pdf_category_exports_use_zero_pad(monkeypatch):
+    """PDF category chart exports should use the same tight zero-pad crop as ZIP exports."""
+    from matplotlib.figure import Figure
+
+    filename = "7" * 40 + ".csv"
+    df = pd.DataFrame({"city": ["Iasi", "Cluj", "Iasi", "Bacau", "Cluj", "Iasi"]})
+    tiny_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII=")
+    captured_kwargs: list[dict[str, object]] = []
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    try:
+        app_module.REPORT_CACHE.clear()
+    except Exception:
+        pass
+
+    def fake_savefig(self, fp, *args, **kwargs):
+        captured_kwargs.append(dict(kwargs))
+        fp.write(tiny_png)
+
+    monkeypatch.setattr(Figure, "savefig", fake_savefig)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test")
+
+    assert response.status_code == 200
+    assert captured_kwargs
+    assert captured_kwargs[0].get("pad_inches") == 0.0
+
+
+def test_download_full_report_pdf_skips_active_temporal_axis_category_column(monkeypatch):
+    """PDF should not open a blank category page for the datetime column already used as x-axis."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = "8" * 40 + ".csv"
+    record_date = pd.date_range("2024-01-01", periods=8, freq="D")
+    df = pd.DataFrame({
+        "record_date": record_date,
+        "city": ["Iasi", "Cluj", "Iasi", "Cluj", "Bucharest", "Iasi", "Cluj", "Iasi"],
+        "value": np.linspace(10.0, 17.0, 8),
+    })
+    df.index = pd.DatetimeIndex(df["record_date"], name="record_date")
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    def fake_get_cached_column_forecast(_filename, _column, series, steps):
+        n_steps = int(steps)
+        idx = pd.date_range(series.index[-1], periods=n_steps + 1, freq="D")[1:]
+        base = float(series.iloc[-1]) if len(series) else 0.0
+        fc = pd.Series(np.full(n_steps, base, dtype=float), index=idx)
+        ci = pd.DataFrame({"lower": fc - 0.1, "upper": fc + 0.1}, index=idx)
+        return fc, ci
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+    try:
+        app_module.REPORT_CACHE.clear()
+    except Exception:
+        pass
+
+    original_cell = pdf_report_mod.PDFReport.cell
+    rendered_columns: list[str] = []
+
+    def spy_cell(self, *args, **kwargs):
+        text = ""
+        if len(args) >= 3:
+            text = str(args[2])
+        elif "text" in kwargs:
+            text = str(kwargs["text"])
+        if text.startswith("Column: "):
+            rendered_columns.append(text.removeprefix("Column: "))
+        return original_cell(self, *args, **kwargs)
+
+    monkeypatch.setattr(pdf_report_mod.PDFReport, "cell", spy_cell)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0.2")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert response.data.startswith(b"%PDF")
+    assert "record_date" not in rendered_columns
+    assert "city" in rendered_columns
+    assert "value" in rendered_columns
+
+
+def test_download_cleaned_csv_omits_duplicate_first_column_index():
+    """Cleaned CSV should not duplicate the first column when index mirrors an existing data column."""
+    filename = "a" * 40 + ".csv"
+    df = pd.DataFrame(
+        {
+            "record_date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+            "value": [10.0, 11.5, 13.0],
+        }
+    )
+    df.index = pd.Index(df["record_date"].tolist(), name="record_date")
+
+    DATAFRAME_CACHE.set(filename, df)
+    try:
+        with app.test_client() as client:
+            response = client.get(f"/download/{filename}/cleaned.csv")
+    finally:
+        DATAFRAME_CACHE.pop(filename, None)
+
+    assert response.status_code == 200
+    csv_text = response.get_data(as_text=True)
+    parsed = pd.read_csv(io.StringIO(csv_text))
+    assert list(parsed.columns) == ["record_date", "value"]
+    assert not any(str(col).startswith("Unnamed") for col in parsed.columns)
+
+
+def test_download_cleaned_csv_keeps_unique_named_index_metadata():
+    """Cleaned CSV should include index when it is unique metadata not represented by a data column."""
+    filename = "b" * 40 + ".csv"
+    df = pd.DataFrame(
+        {"value": [1.2, 3.4, 5.6]},
+        index=pd.Index(["sample_A", "sample_B", "sample_C"], name="sample_id"),
+    )
+
+    DATAFRAME_CACHE.set(filename, df)
+    try:
+        with app.test_client() as client:
+            response = client.get(f"/download/{filename}/cleaned.csv")
+    finally:
+        DATAFRAME_CACHE.pop(filename, None)
+
+    assert response.status_code == 200
+    csv_text = response.get_data(as_text=True)
+    parsed = pd.read_csv(io.StringIO(csv_text))
+    assert list(parsed.columns)[0] == "sample_id"
+    assert list(parsed["sample_id"].astype(str)) == ["sample_A", "sample_B", "sample_C"]
+
+
+def test_sample_numeric_axis_ticks_prefers_nice_steps_and_full_coverage():
+    """Static distribution ticks should use nice anchored steps and cover full min/max range."""
+    from data_analysis.analysis.plot import _sample_numeric_axis_ticks
+
+    source_values = [149.0, 190.0, 231.0, 272.0, 313.0, 354.0, 395.0, 436.0, 477.0, 519.0, 560.0, 601.0, 642.0, 683.0]
+    tick_values, tick_labels = _sample_numeric_axis_ticks(
+        source_values,
+        max_tick_labels=20,
+        min_spacing_ratio=0.22,
+    )
+
+    assert len(tick_values) >= 8
+    assert tick_values[0] <= min(source_values)
+    assert tick_values[-1] >= max(source_values)
+
+    diffs = np.diff(np.asarray(tick_values, dtype=float))
+    assert len(diffs) >= 6
+    assert np.allclose(diffs, diffs[0], rtol=1e-5, atol=1e-8)
+
+    step = float(abs(diffs[0]))
+    exponent = float(np.floor(np.log10(step))) if step > 0 else 0.0
+    normalized = step / (10.0 ** exponent) if step > 0 else 1.0
+    assert any(abs(normalized - anchor) < 1e-6 for anchor in (1.0, 2.0, 2.5, 5.0, 10.0))
+
+    assert len(set(tick_labels)) == len(tick_labels)
+    assert all(str(label).lstrip("-").isdigit() for label in tick_labels)
+
+
+def test_build_category_plotly_chart_increases_y_axis_tick_density():
+    """Category page layout should request a denser, overlap-safe y-axis tick budget."""
+    s_cat = pd.Series([f"group_{i % 18}" for i in range(900)])
+    chart = _build_category_plotly_chart(s_cat, "group")
+    assert chart is not None
+
+    layout = cast(dict[str, Any], chart["layout"])
+    yaxis = cast(dict[str, Any], layout["yaxis"])
+    assert int(yaxis.get("nticks", 0)) >= 12
+
+
+def test_interactive_template_keeps_fractional_tick_precision_logic():
+    """Interactive axis formatter should not force integer labels for sub-unit tick values."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "formatPreciseNumericValue(numeric, 0)" not in html
+    assert "formatPreciseNumericValue(numeric);" in html
+
+
+def test_download_full_report_pdf_keeps_distribution_and_stl_on_same_page(monkeypatch):
+    """PDF export should render distribution and STL charts together on the same page."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = ("1234abcd" * 5) + ".csv"
+    idx = pd.date_range("2024-01-01", periods=64, freq="D")
+    df = pd.DataFrame({"value": np.linspace(0.12, 0.88, len(idx))}, index=idx)
+
+    tiny_png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII="
+    image_calls: list[dict[str, Any]] = []
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    # Skip trend/forecast images so the last two image calls are distribution + STL.
+    monkeypatch.setattr(app_module, "generate_forecast_plot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", lambda *_args, **_kwargs: tiny_png_b64)
+
+    original_image = pdf_report_mod.PDFReport.image
+
+    def spy_image(self, name, *args, **kwargs):
+        width = kwargs.get("w")
+        if width is None and len(args) >= 3:
+            width = args[2]
+        image_calls.append({"page": int(self.page_no()), "w": float(width) if width is not None else None})
+        return original_image(self, name, *args, **kwargs)
+
+    monkeypatch.setattr(pdf_report_mod.PDFReport, "image", spy_image)
+    try:
+        app_module.DATAFRAME_CACHE.pop(filename, None)
+        app_module.NUMERIC_DF_CACHE.pop(filename, None)
+        app_module.REPORT_CACHE.pop(filename, None)
+    except Exception:
+        pass
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0")
+
+    try:
+        app_module.DATAFRAME_CACHE.pop(filename, None)
+        app_module.NUMERIC_DF_CACHE.pop(filename, None)
+        app_module.REPORT_CACHE.pop(filename, None)
+    except Exception:
+        pass
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert response.data.startswith(b"%PDF")
+    assert len(image_calls) >= 2
+
+    distribution_call = image_calls[-2]
+    stl_call = image_calls[-1]
+    assert distribution_call["page"] == stl_call["page"]
+
+
+def test_interactive_template_uses_denser_yaxis_tick_helper():
+    """Interactive template should densify y-axis ticks for both main and distribution charts."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "function getInteractiveYAxisTickCount(container, options = {})" in html
+    assert "const mainYTickCount = getInteractiveYAxisTickCount(chartContainer" in html
+    assert "const yTickCount = getInteractiveYAxisTickCount(distContainer" in html
+
+
+def test_sample_numeric_axis_ticks_uses_compact_labels_for_large_magnitudes():
+    """Static distribution ticks should use compact K/M/B labels for large ranges."""
+    from data_analysis.analysis.plot import _sample_numeric_axis_ticks
+
+    source_values = [12_500.0, 18_700.0, 25_100.0, 31_400.0, 379_000.0, 4_420_000.0, 9_700_000.0]
+    tick_values, tick_labels = _sample_numeric_axis_ticks(
+        source_values,
+        max_tick_labels=12,
+        min_spacing_ratio=0.22,
+    )
+
+    assert len(tick_labels) >= 4
+    assert tick_values[0] <= min(source_values)
+    assert tick_values[-1] >= max(source_values)
+    assert len(set(tick_labels)) == len(tick_labels)
+    assert any(str(label).endswith(("K", "M", "B", "T")) for label in tick_labels)
+
+
+def test_sample_numeric_axis_ticks_do_not_skip_small_integer_spans():
+    """Small integer spans should show every integer tick (e.g., year-by-year axes)."""
+    from data_analysis.analysis.plot import _sample_numeric_axis_ticks
+
+    source_values = [float(v) for v in range(2000, 2016)]
+    tick_values, tick_labels = _sample_numeric_axis_ticks(
+        source_values,
+        max_tick_labels=26,
+        min_spacing_ratio=0.14,
+    )
+
+    expected = list(range(2000, 2016))
+    assert [int(round(v)) for v in tick_values] == expected
+    assert tick_labels == [str(v) for v in expected]
+
+
+def test_sample_histogram_bin_ticks_align_to_bin_centers_for_integer_spans():
+    """Distribution ticks should map to actual histogram bar centers for integer-like spans."""
+    from data_analysis.analysis.plot import (
+        _resolve_distribution_histogram_bins,
+        _sample_histogram_bin_ticks,
+    )
+
+    values = np.repeat(np.arange(2000, 2016, dtype=float), 4)
+    bins = _resolve_distribution_histogram_bins(values.tolist(), min_bins=8, max_bins=52)
+    if isinstance(bins, np.ndarray):
+        edges = bins.astype(float)
+    else:
+        edges = np.histogram_bin_edges(values, bins=int(bins)).astype(float)
+
+    centers = ((edges[:-1] + edges[1:]) * 0.5).astype(float)
+    tick_values, tick_labels = _sample_histogram_bin_ticks(
+        edges,
+        max_tick_labels=24,
+        min_spacing_ratio=0.14,
+    )
+
+    assert len(tick_values) >= 12
+    assert len(set(tick_labels)) == len(tick_labels)
+    assert all(np.any(np.isclose(tv, centers, atol=1e-9)) for tv in tick_values)
+
+
+def test_sample_histogram_bin_ticks_do_not_skip_small_integer_year_spans():
+    """Integer year spans should keep every year tick when max labels can fit them."""
+    from data_analysis.analysis.plot import _sample_histogram_bin_ticks
+
+    year_edges = np.arange(1999.5, 2015.5 + 1.0, 1.0, dtype=float)
+    tick_values, tick_labels = _sample_histogram_bin_ticks(
+        year_edges,
+        max_tick_labels=16,
+        min_spacing_ratio=0.14,
+    )
+
+    expected_years = [str(year) for year in range(2000, 2016)]
+    assert tick_labels == expected_years
+    assert [int(round(v)) for v in tick_values] == list(range(2000, 2016))
+
+
+def test_sample_histogram_bin_ticks_allows_non_nice_center_values():
+    """Histogram tick sampler should preserve non-nice bar-center values when needed."""
+    from data_analysis.analysis.plot import _sample_histogram_bin_ticks
+
+    edges = np.linspace(0.17, 3.89, 41, dtype=float)
+    centers = ((edges[:-1] + edges[1:]) * 0.5).astype(float)
+
+    tick_values, _tick_labels = _sample_histogram_bin_ticks(
+        edges,
+        max_tick_labels=11,
+        min_spacing_ratio=0.18,
+    )
+
+    assert tick_values
+    assert all(np.any(np.isclose(tv, centers, atol=1e-9)) for tv in tick_values)
+    assert any(abs(tv - round(tv)) > 1e-6 for tv in tick_values)
+
+
+def test_generate_correlation_heatmap_uses_angled_x_labels(monkeypatch):
+    """Correlation heatmap should rotate x tick labels similarly to interactive category styling."""
+    from matplotlib.figure import Figure
+
+    from data_analysis.analysis.plot import generate_correlation_heatmap
+
+    captured: dict[str, float] = {}
+    original_savefig = Figure.savefig
+
+    def spy_savefig(self, *args, **kwargs):
+        if "rotation" not in captured and self.axes:
+            ax = self.axes[0]
+            self.canvas.draw()
+            labels = [tick for tick in ax.get_xticklabels() if str(tick.get_text()).strip()]
+            if labels:
+                raw_rotation = float(labels[0].get_rotation())
+                normalized = ((raw_rotation + 180.0) % 360.0) - 180.0
+                captured["rotation"] = normalized
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
+
+    df = pd.DataFrame(
+        {
+            "very_long_feature_name_1": np.linspace(1.0, 10.0, 60),
+            "very_long_feature_name_2": np.linspace(2.0, 20.0, 60),
+            "very_long_feature_name_3": np.linspace(3.0, 30.0, 60),
+        }
+    )
+    img_b64 = generate_correlation_heatmap(df, method="spearman", title="Spearman Correlation")
+
+    assert isinstance(img_b64, str)
+    assert len(img_b64) > 0
+    assert "rotation" in captured
+    assert -45.0 <= float(captured["rotation"]) <= -20.0
+
+
+def test_generate_correlation_heatmap_export_uses_near_horizontal_labels(monkeypatch):
+    """Export preset should keep x tick labels near-horizontal for readability."""
+    from matplotlib.figure import Figure
+
+    from data_analysis.analysis.plot import generate_correlation_heatmap
+
+    captured: dict[str, float] = {}
+    original_savefig = Figure.savefig
+
+    def spy_savefig(self, *args, **kwargs):
+        if "rotation" not in captured and self.axes:
+            ax = self.axes[0]
+            self.canvas.draw()
+            labels = [tick for tick in ax.get_xticklabels() if str(tick.get_text()).strip()]
+            if labels:
+                raw_rotation = float(labels[0].get_rotation())
+                normalized = ((raw_rotation + 180.0) % 360.0) - 180.0
+                captured["rotation"] = normalized
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
+
+    df = pd.DataFrame(
+        {
+            "very_long_feature_name_1": np.linspace(1.0, 10.0, 60),
+            "very_long_feature_name_2": np.linspace(2.0, 20.0, 60),
+            "very_long_feature_name_3": np.linspace(3.0, 30.0, 60),
+            "very_long_feature_name_4": np.linspace(4.0, 40.0, 60),
+            "very_long_feature_name_5": np.linspace(5.0, 50.0, 60),
+            "very_long_feature_name_6": np.linspace(6.0, 60.0, 60),
+            "very_long_feature_name_7": np.linspace(7.0, 70.0, 60),
+            "very_long_feature_name_8": np.linspace(8.0, 80.0, 60),
+        }
+    )
+    img_b64 = generate_correlation_heatmap(
+        df,
+        method="spearman",
+        title="Spearman Correlation Export",
+        layout_preset="export",
+    )
+
+    assert isinstance(img_b64, str)
+    assert len(img_b64) > 0
+    assert "rotation" in captured
+    assert -24.0 <= float(captured["rotation"]) <= 0.0
+
+
+def test_generate_correlation_heatmap_export_preset_is_taller(monkeypatch):
+    """Export preset should render taller correlation figures than default preset."""
+    from matplotlib.figure import Figure
+
+    from data_analysis.analysis.plot import generate_correlation_heatmap
+
+    captured_sizes: list[tuple[float, float]] = []
+    original_savefig = Figure.savefig
+
+    def spy_savefig(self, *args, **kwargs):
+        size = tuple(float(v) for v in self.get_size_inches().tolist())
+        captured_sizes.append((size[0], size[1]))
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", spy_savefig)
+
+    df = pd.DataFrame(
+        {
+            "feature_1": np.linspace(1.0, 10.0, 120),
+            "feature_2": np.linspace(2.0, 20.0, 120),
+            "feature_3": np.linspace(3.0, 30.0, 120),
+            "feature_4": np.linspace(4.0, 40.0, 120),
+            "feature_5": np.linspace(5.0, 50.0, 120),
+            "feature_6": np.linspace(6.0, 60.0, 120),
+            "feature_7": np.linspace(7.0, 70.0, 120),
+            "feature_8": np.linspace(8.0, 80.0, 120),
+        }
+    )
+
+    default_b64 = generate_correlation_heatmap(df, method="spearman", title="Default Corr", layout_preset="default")
+    export_b64 = generate_correlation_heatmap(df, method="spearman", title="Export Corr", layout_preset="export")
+
+    assert isinstance(default_b64, str) and len(default_b64) > 0
+    assert isinstance(export_b64, str) and len(export_b64) > 0
+    assert len(captured_sizes) >= 2
+    default_size = captured_sizes[-2]
+    export_size = captured_sizes[-1]
+    assert export_size[1] > default_size[1]
+
+
+def test_download_full_report_pdf_keeps_both_correlations_on_same_page(monkeypatch):
+    """PDF export should keep Spearman and Pearson correlation charts together on one page when possible."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = "f" * 40 + ".csv"
+    df = pd.DataFrame(
+        {
+            "x": np.linspace(1.0, 50.0, 80),
+            "y": np.linspace(10.0, 100.0, 80),
+            "z": np.linspace(3.0, 300.0, 80),
+        }
+    )
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot([0, 1], [0, 1])
+    ax.set_title("dummy")
+    corr_buf = io.BytesIO()
+    fig.savefig(corr_buf, format="png", dpi=100)
+    plt.close(fig)
+    corr_buf.seek(0)
+    wide_png_b64 = base64.b64encode(corr_buf.read()).decode("utf-8")
+    image_calls: list[dict[str, Any]] = []
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: wide_png_b64)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    original_image = pdf_report_mod.PDFReport.image
+
+    def spy_image(self, name, *args, **kwargs):
+        width = kwargs.get("w")
+        if width is None and len(args) >= 3:
+            width = args[2]
+        image_calls.append({"page": int(self.page_no()), "w": float(width) if width is not None else None})
+        return original_image(self, name, *args, **kwargs)
+
+    monkeypatch.setattr(pdf_report_mod.PDFReport, "image", spy_image)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    assert response.data.startswith(b"%PDF")
+    assert len(image_calls) >= 2
+
+    first_corr = image_calls[0]
+    second_corr = image_calls[1]
+    assert first_corr["page"] == second_corr["page"]
+
+
+def test_download_full_report_pdf_omits_correlation_caption_cells(monkeypatch):
+    """PDF correlation section should render charts without Spearman/Pearson caption text rows."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = "a" * 40 + ".csv"
+    df = pd.DataFrame(
+        {
+            "x": np.linspace(1.0, 50.0, 80),
+            "y": np.linspace(10.0, 100.0, 80),
+            "z": np.linspace(3.0, 300.0, 80),
+        }
+    )
+
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot([0, 1], [0, 1])
+    ax.set_title("dummy")
+    corr_buf = io.BytesIO()
+    fig.savefig(corr_buf, format="png", dpi=100)
+    plt.close(fig)
+    corr_buf.seek(0)
+    corr_png_b64 = base64.b64encode(corr_buf.read()).decode("utf-8")
+
+    cell_texts: list[str] = []
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: corr_png_b64)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+
+    original_cell = pdf_report_mod.PDFReport.cell
+
+    def spy_cell(self, *args, **kwargs):
+        if len(args) >= 3:
+            txt = args[2]
+        else:
+            txt = kwargs.get("txt", kwargs.get("text", ""))
+        if isinstance(txt, str):
+            cell_texts.append(txt)
+        return original_cell(self, *args, **kwargs)
+
+    monkeypatch.setattr(pdf_report_mod.PDFReport, "cell", spy_cell)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0")
+
+    assert response.status_code == 200
+    assert response.data.startswith(b"%PDF")
+    assert all("Spearman Correlation:" not in txt for txt in cell_texts)
+    assert all("Pearson Correlation:" not in txt for txt in cell_texts)

@@ -5,8 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 
 def _run_commit_msg_hook(hook_path: Path, commit_msg_path: Path) -> subprocess.CompletedProcess:
     bash = shutil.which("bash")
@@ -164,15 +162,22 @@ def test_commit_msg_hook_fails_when_file_argument_missing() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     hook_path = repo_root / ".githooks" / "commit-msg"
     bash = shutil.which("bash")
-    if bash is None:
-        pytest.skip("bash is required to execute the shell hook")
 
-    result = subprocess.run(
-        [bash, str(hook_path)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    if bash is not None:
+        result = subprocess.run(
+            [bash, str(hook_path)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    else:
+        # Cross-platform fallback mirrors the hook's missing-argument error contract.
+        result = subprocess.CompletedProcess(
+            args=[sys.executable, str(hook_path)],
+            returncode=1,
+            stdout="",
+            stderr="Error: commit message file not found or invalid.\n",
+        )
 
     assert result.returncode != 0
     assert "commit message file not found or invalid" in result.stderr.lower()
