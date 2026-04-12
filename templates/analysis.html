@@ -18,7 +18,7 @@
 
 
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260323-analysis-layout-v28') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260409-analysis-layout-v34') }}">
   <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'amoled');</script>
   <script src="{{ url_for('static', filename='js/analysis.js', v='20260308-analysis-layout-v4') }}" defer></script>
   {% if active_view == 'interactive' %}
@@ -62,6 +62,147 @@
       window.addEventListener('resize', syncAnalysisHeaderHeight);
       window.addEventListener('load', syncAnalysisHeaderHeight);
       document.addEventListener('DOMContentLoaded', syncAnalysisHeaderHeight);
+    })();
+  </script>
+  <script>
+    (function () {
+      const DESKTOP_CONTROLS_BREAKPOINT = 1040;
+      let fieldSizer = null;
+      let autosizeFrame = 0;
+
+      function isDesktopControlsLayout() {
+        return window.innerWidth > DESKTOP_CONTROLS_BREAKPOINT;
+      }
+
+      function getFieldSizer() {
+        if (fieldSizer && document.body && document.body.contains(fieldSizer)) {
+          return fieldSizer;
+        }
+        fieldSizer = document.createElement('span');
+        fieldSizer.setAttribute('aria-hidden', 'true');
+        fieldSizer.style.position = 'absolute';
+        fieldSizer.style.visibility = 'hidden';
+        fieldSizer.style.whiteSpace = 'pre';
+        fieldSizer.style.pointerEvents = 'none';
+        fieldSizer.style.left = '-9999px';
+        fieldSizer.style.top = '-9999px';
+        document.body.appendChild(fieldSizer);
+        return fieldSizer;
+      }
+
+      function getFieldDisplayText(field) {
+        if (!field) return '';
+        if (field.tagName === 'SELECT') {
+          const option = field.options && field.selectedIndex >= 0 ? field.options[field.selectedIndex] : null;
+          return option ? String(option.text || option.value || '').trim() : '';
+        }
+        return String(field.value || field.getAttribute('value') || field.placeholder || '').trim();
+      }
+
+      function applySizerFont(field, sizer) {
+        const styles = window.getComputedStyle(field);
+        sizer.style.font = styles.font || [
+          styles.fontStyle,
+          styles.fontVariant,
+          styles.fontWeight,
+          styles.fontStretch,
+          styles.fontSize + (styles.lineHeight && styles.lineHeight !== 'normal' ? `/${styles.lineHeight}` : ''),
+          styles.fontFamily
+        ].join(' ');
+        sizer.style.letterSpacing = styles.letterSpacing;
+        sizer.style.textTransform = styles.textTransform;
+      }
+
+      function getAutosizeConfig(field) {
+        const id = field && field.id ? String(field.id) : '';
+        const defaults = field && field.tagName === 'SELECT'
+          ? { min: 82, max: 340, padding: 42 }
+          : { min: 60, max: 140, padding: 24 };
+        const overrides = {
+          colPick: { min: 86, max: 340, padding: 42 },
+          dataRangePick: { min: 112, max: 220, padding: 42 },
+          dataRangeForecast: { min: 112, max: 220, padding: 42 },
+          forecastPctSelect: { min: 92, max: 188, padding: 42 },
+          forecastPctSelectTop: { min: 92, max: 188, padding: 42 },
+          contaminationInteractive: { min: 82, max: 120, padding: 26 },
+          contaminationForecast: { min: 82, max: 120, padding: 26 },
+        };
+        return Object.assign({}, defaults, overrides[id] || {});
+      }
+
+      function getFieldVarPrefix(field) {
+        const group = field && field.closest('.interactive-control-group, .forecast-control-group');
+        if (!group) return null;
+        return group.classList.contains('forecast-control-group') ? '--forecast' : '--interactive';
+      }
+
+      function clearFieldAutosize(field) {
+        if (!field) return;
+        field.style.removeProperty('width');
+        field.style.removeProperty('min-width');
+        field.style.removeProperty('max-width');
+        const group = field.closest('.interactive-control-group, .forecast-control-group');
+        const prefix = getFieldVarPrefix(field);
+        if (group && prefix) {
+          group.style.removeProperty(`${prefix}-field-min`);
+          group.style.removeProperty(`${prefix}-field-width`);
+        }
+      }
+
+      function syncControlFieldWidth(field) {
+        if (!field) return;
+        if (!isDesktopControlsLayout()) {
+          clearFieldAutosize(field);
+          return;
+        }
+
+        const text = getFieldDisplayText(field) || ' ';
+        const sizer = getFieldSizer();
+        applySizerFont(field, sizer);
+        sizer.textContent = text;
+
+        const config = getAutosizeConfig(field);
+        const textWidth = Math.ceil(sizer.getBoundingClientRect().width);
+        const fittedWidth = Math.max(config.min, Math.min(config.max, textWidth + config.padding));
+        const group = field.closest('.interactive-control-group, .forecast-control-group');
+        const prefix = getFieldVarPrefix(field);
+
+        field.style.width = `${fittedWidth}px`;
+        field.style.minWidth = `${fittedWidth}px`;
+        field.style.maxWidth = `${fittedWidth}px`;
+        if (group && prefix) {
+          group.style.setProperty(`${prefix}-field-min`, `${fittedWidth}px`);
+          group.style.setProperty(`${prefix}-field-width`, `${fittedWidth}px`);
+        }
+      }
+
+      function syncAnalysisControlFieldWidths(root) {
+        const scope = root && root.querySelectorAll ? root : document;
+        const fields = scope.querySelectorAll(
+          '.interactive-control-group select, .interactive-control-group input[type="number"], ' +
+          '.forecast-control-group select, .forecast-control-group input[type="number"]'
+        );
+        fields.forEach(syncControlFieldWidth);
+      }
+
+      function queueAnalysisControlFieldWidths(root) {
+        if (autosizeFrame) {
+          window.cancelAnimationFrame(autosizeFrame);
+        }
+        autosizeFrame = window.requestAnimationFrame(() => {
+          autosizeFrame = 0;
+          syncAnalysisControlFieldWidths(root || document);
+        });
+      }
+
+      window.syncAnalysisControlFieldWidths = syncAnalysisControlFieldWidths;
+      window.queueAnalysisControlFieldWidths = queueAnalysisControlFieldWidths;
+      window.addEventListener('resize', function () {
+        queueAnalysisControlFieldWidths(document);
+      });
+      document.addEventListener('DOMContentLoaded', function () {
+        queueAnalysisControlFieldWidths(document);
+      });
     })();
   </script>
 </head>
@@ -279,41 +420,38 @@
       {% set forecast_visible_rows = analysis.controls.data_range_rows if analysis.controls.data_range_rows and
       analysis.controls.data_range_rows > 0 else analysis.controls.total_rows %}
       <div class="row forecast-header-row"
-        style="margin:0 0 2px 0; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; min-width:0; max-width:100%;">
-        <div style="flex:1 1 auto; min-width:250px;">
+        style="margin:0 0 2px 0; align-items:center; min-width:0; max-width:100%;">
+        <div class="forecast-header-title" style="min-width:250px;">
           <h3 style="margin:0 0 2px 0;">Detailed Analysis by Column</h3>
           <div class="muted" style="margin:0; line-height:1.28;">Forecasts with 95% CI, trend analysis, and anomaly
             detection</div>
         </div>
-        <div
-          style="margin-left:auto; margin-right:0; max-width:100%; min-width:0; box-sizing:border-box;">
-          <div class="forecast-controls-bar">
-            <div class="forecast-control-group forecast-control-group--range">
-              <label for="dataRangeForecast">Data Range</label>
-              {% set forecast_data_range = analysis.controls.get('data_range', 1.0) %}
-              <select id="dataRangeForecast" title="Limit detailed analysis to latest X% of rows (reloads page)">
-                {% for val,label in [(1.00,'All data (100%)'),(0.50,'Latest 50%'),(0.30,'Latest 30%'),(0.15,'Latest 15%'),(0.10,'Latest 10%'),(0.05,'Latest 5%'),(0.03,'Latest 3%'),(0.01,'Latest 1%')] %}
-                <option value="{{ '%.2f'|format(val) }}" {% if (forecast_data_range|float)==val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              <span id="dataRangeForecastHint" class="muted">Showing all rows.</span>
-            </div>
-            <div class="forecast-control-group forecast-control-group--forecast">
-              <label for="forecastPctSelectTop">Forecast horizon</label>
-              <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
-                {% for val,label in [(0.00,'0% (no forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
-                <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-              <span id="forecastPctForecastHint" class="muted">{{ analysis.controls.effective_steps }}/{{ analysis.controls.total_rows }} rows</span>
-            </div>
-            <div class="forecast-control-group forecast-control-group--contamination forecast-control-group--trailing">
-              <label for="contaminationForecast">Anomaly contamination</label>
-              <input id="contaminationForecast" type="number" step="0.001" min="0.001" max="0.2"
-                value="{{ '%.3f'|format(contam|float) }}"
-                title="Expected outlier fraction used by IsolationForest detector (reloads page)" />
-              <span id="contaminationForecastHint" class="muted">{{ '%.0f'|format((forecast_visible_rows * (contam|float))) }}/{{ forecast_visible_rows }} rows</span>
-            </div>
+        <div class="forecast-controls-bar">
+          <div class="forecast-control-group forecast-control-group--range">
+            <label for="dataRangeForecast">Data Range</label>
+            {% set forecast_data_range = analysis.controls.get('data_range', 1.0) %}
+            <select id="dataRangeForecast" title="Limit detailed analysis to latest X% of rows (reloads page)">
+              {% for val,label in [(1.00,'All data (100%)'),(0.50,'Latest 50%'),(0.30,'Latest 30%'),(0.15,'Latest 15%'),(0.10,'Latest 10%'),(0.05,'Latest 5%'),(0.03,'Latest 3%'),(0.01,'Latest 1%')] %}
+              <option value="{{ '%.2f'|format(val) }}" {% if (forecast_data_range|float)==val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <span id="dataRangeForecastHint" class="muted">Showing all rows.</span>
+          </div>
+          <div class="forecast-control-group forecast-control-group--forecast">
+            <label for="forecastPctSelectTop">Forecast horizon</label>
+            <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
+              {% for val,label in [(0.00,'0% (no forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+              <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <span id="forecastPctForecastHint" class="muted">{{ analysis.controls.effective_steps }}/{{ analysis.controls.total_rows }} rows</span>
+          </div>
+          <div class="forecast-control-group forecast-control-group--contamination forecast-control-group--trailing">
+            <label for="contaminationForecast">Anomaly contamination</label>
+            <input id="contaminationForecast" type="number" step="0.001" min="0.001" max="0.2"
+              value="{{ '%.3f'|format(contam|float) }}"
+              title="Expected outlier fraction used by IsolationForest detector (reloads page)" />
+            <span id="contaminationForecastHint" class="muted">{{ '%.0f'|format((forecast_visible_rows * (contam|float))) }}/{{ forecast_visible_rows }} rows</span>
           </div>
         </div>
       </div>
@@ -350,6 +488,9 @@
 
           if (!el) return;
           el.addEventListener('change', function () {
+            if (window.queueAnalysisControlFieldWidths) {
+              window.queueAnalysisControlFieldWidths(document);
+            }
             try {
               const url = new URL(window.location.href);
               url.searchParams.set('forecast_pct', this.value);
@@ -365,6 +506,9 @@
           });
           if (rangeEl) {
             rangeEl.addEventListener('change', function () {
+              if (window.queueAnalysisControlFieldWidths) {
+                window.queueAnalysisControlFieldWidths(document);
+              }
               try {
                 const url = new URL(window.location.href);
                 url.searchParams.set('data_range', this.value);
@@ -378,10 +522,22 @@
             rangeEl.addEventListener('input', function () {
               updateDataRangeHint();
               updateContaminationHint();
+              if (window.queueAnalysisControlFieldWidths) {
+                window.queueAnalysisControlFieldWidths(document);
+              }
             });
           }
           if (contamEl) {
+            contamEl.addEventListener('input', function () {
+              updateContaminationHint();
+              if (window.queueAnalysisControlFieldWidths) {
+                window.queueAnalysisControlFieldWidths(document);
+              }
+            });
             contamEl.addEventListener('change', function () {
+              if (window.queueAnalysisControlFieldWidths) {
+                window.queueAnalysisControlFieldWidths(document);
+              }
               try {
                 const url = new URL(window.location.href);
                 url.searchParams.set('contamination', this.value);
@@ -396,6 +552,9 @@
           }
           updateDataRangeHint();
           updateContaminationHint();
+          if (window.queueAnalysisControlFieldWidths) {
+            window.queueAnalysisControlFieldWidths(document);
+          }
         })();
       </script>
       {% if analysis.forecast_plots_by_column %}
@@ -439,7 +598,9 @@
     <section id="interactivePanel" class="panel"
       style="width:100%; max-width:100%; min-width:0; box-sizing:border-box; display:flex; flex-direction:column; padding:3px 8px 2px; margin-bottom:0; height:100%; min-height:0; overflow:hidden;">
       <div class="interactive-panel-head" style="margin:0; min-width:0; max-width:100%;">
-        <h3 style="margin:0;">Interactive charts</h3>
+        <div class="interactive-title-block">
+          <h3 style="margin:0;">Interactive charts</h3>
+        </div>
         <div class="interactive-controls-bar">
           <div class="interactive-control-group interactive-control-group--column interactive-control-group--compact">
             <label for="colPick">Column</label>
@@ -557,14 +718,19 @@
 
           const forecastPctEl = document.getElementById('forecastPctSelect');
           const contamEl = document.getElementById('contaminationInteractive');
+          const dataRangeEl = document.getElementById('dataRangePick');
           const reqUrl = new URL(apiInteractiveUrl, window.location.origin);
           const requestedForecastPct = options.forecastPct || (forecastPctEl ? forecastPctEl.value : '');
           const requestedContamination = options.contamination || (contamEl ? contamEl.value : '');
+          const requestedDataRange = options.dataRange || (dataRangeEl ? dataRangeEl.value : '');
           if (requestedForecastPct) {
             reqUrl.searchParams.set('forecast_pct', requestedForecastPct);
           }
           if (requestedContamination) {
             reqUrl.searchParams.set('contamination', requestedContamination);
+          }
+          if (requestedDataRange) {
+            reqUrl.searchParams.set('data_range', requestedDataRange);
           }
 
           // Load Plotly in parallel with the data fetch for maximum speed
@@ -612,6 +778,9 @@
         } finally {
           if (interactiveFetchController === controller) {
             interactiveFetchController = null;
+          }
+          if (window.queueAnalysisControlFieldWidths) {
+            window.queueAnalysisControlFieldWidths(document);
           }
         }
       }
@@ -698,6 +867,13 @@
         return (traces || []).filter((trace) => trace && trace.showlegend !== false).length;
       }
 
+      function getLegendLabels(traces) {
+        return (traces || [])
+          .filter((trace) => trace && trace.showlegend !== false)
+          .map((trace) => String(trace.name || '').trim())
+          .filter((label) => !!label);
+      }
+
       function estimateLegendRows(traceCount, containerWidth, minItemWidth = 120) {
         if (!traceCount) return 1;
         const safeWidth = Math.max(320, Number(containerWidth) || 0);
@@ -721,6 +897,86 @@
       function getLegendEntryWidthFraction(traceCount, minFraction = 0.05, maxFraction = 1.0, fillRatio = 1.0) {
         const count = Math.max(1, Number(traceCount) || 1);
         return Math.max(minFraction, Math.min(maxFraction, fillRatio / count));
+      }
+
+      function getLegendEntryWidthPixels(traceCount, containerWidth, minPx = 56, maxPx = 108, fillRatio = 0.84) {
+        const count = Math.max(1, Number(traceCount) || 1);
+        const safeWidth = Math.max(360, Number(containerWidth) || 0);
+        const raw = (safeWidth * Math.max(0.55, Math.min(0.98, Number(fillRatio) || 0.84))) / count;
+        return Math.max(minPx, Math.min(maxPx, Math.floor(raw)));
+      }
+
+      const measureLegendTextWidthPx = (() => {
+        let canvas = null;
+        return function measureLegendTextWidthPxInner(text, fontSize = 9.2) {
+          const label = String(text || '');
+          const numericFont = Number(fontSize);
+          const safeFont = Number.isFinite(numericFont) ? Math.max(7.0, numericFont) : 9.2;
+
+          if (!document || !document.createElement) {
+            return label.length * safeFont * 0.6;
+          }
+
+          canvas = canvas || document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return label.length * safeFont * 0.6;
+          }
+
+          ctx.font = `${safeFont}px Inter, "Segoe UI", Roboto, Arial, sans-serif`;
+          const measured = ctx.measureText(label).width;
+          return Number.isFinite(measured) ? measured : (label.length * safeFont * 0.6);
+        };
+      })();
+
+      function resolveLegendSlotSizing(labels, containerWidth, options = {}) {
+        const list = Array.isArray(labels) ? labels : [];
+        const fallbackCount = Number.isFinite(options.fallbackCount) ? Number(options.fallbackCount) : 1;
+        const count = Math.max(1, list.length || fallbackCount);
+
+        const safeWidth = Math.max(360, Number(containerWidth) || 0);
+        const fillRatio = Math.max(0.70, Math.min(0.995, Number(options.fillRatio) || 0.985));
+        const targetSpan = safeWidth * fillRatio;
+        const minGapPx = Math.max(0, Number.isFinite(options.minGapPx) ? Number(options.minGapPx) : 8);
+
+        let fontSize = Number.isFinite(options.fontSize) ? Number(options.fontSize) : 9.2;
+        const minFontSize = Number.isFinite(options.minFontSize)
+          ? Math.max(7.2, Number(options.minFontSize))
+          : 8.2;
+
+        const symbolWidthPx = Number.isFinite(options.symbolWidthPx) ? Number(options.symbolWidthPx) : 22;
+        const textPadPx = Number.isFinite(options.textPadPx) ? Number(options.textPadPx) : 10;
+        const legendItemOverheadPx = Number.isFinite(options.legendItemOverheadPx)
+          ? Math.max(20, Number(options.legendItemOverheadPx))
+          : 30;
+        const perSlotWidth = targetSpan / count;
+
+        const measureMaxItemWidth = (font) => {
+          if (!list.length) {
+            return symbolWidthPx + textPadPx + (font * 3.2);
+          }
+          return list.reduce((maxWidth, label) => {
+            const width = symbolWidthPx + textPadPx + measureLegendTextWidthPx(label, font);
+            return Math.max(maxWidth, width);
+          }, 0);
+        };
+
+        let maxItemWidth = measureMaxItemWidth(fontSize);
+        const allowedItemWidth = Math.max(20, perSlotWidth - Math.max(2, minGapPx));
+
+        while (fontSize > minFontSize && maxItemWidth > allowedItemWidth) {
+          fontSize = Math.max(minFontSize, Number((fontSize - 0.2).toFixed(2)));
+          maxItemWidth = measureMaxItemWidth(fontSize);
+          if (fontSize === minFontSize) break;
+        }
+
+        return {
+          count,
+          fontSize: Number(fontSize.toFixed(2)),
+          // Plotly horizontal legends reserve an item lane (symbol + padding)
+          // in addition to `entrywidth`; subtract it so full elements fit one row.
+          entryWidthPx: Math.max(16, Math.floor(perSlotWidth - legendItemOverheadPx - 1)),
+        };
       }
 
       function stripNumericTrailingZeros(text) {
@@ -753,6 +1009,21 @@
         return (Array.isArray(traces) ? traces : []).reduce((acc, trace) => {
           return Math.max(acc, getFiniteMaxAbs(trace && trace[axisKey]));
         }, 0);
+      }
+
+      function getInteractiveYAxisTickCount(container, options = {}) {
+        const minTicks = Number.isFinite(options.minTicks) ? Math.max(2, Number(options.minTicks)) : 9;
+        const maxTicks = Number.isFinite(options.maxTicks)
+          ? Math.max(minTicks, Number(options.maxTicks))
+          : 22;
+        const pxPerTick = Number.isFinite(options.pxPerTick) ? Number(options.pxPerTick) : 28;
+        const fallbackHeight = Number.isFinite(options.fallbackHeight) ? Number(options.fallbackHeight) : 360;
+        const containerHeight = container && Number.isFinite(container.clientHeight)
+          ? Number(container.clientHeight)
+          : 0;
+        const resolvedHeight = Math.max(260, fallbackHeight, containerHeight);
+        const estimated = Math.floor(resolvedHeight / Math.max(16, pxPerTick));
+        return Math.max(minTicks, Math.min(maxTicks, estimated));
       }
 
       function formatCompactNumber(value, options = {}) {
@@ -849,7 +1120,7 @@
               if (maxAbsValue >= minCompactValue) {
                 return formatCompactNumber(numeric, { minCompactValue: minCompactValue });
               }
-              return formatPreciseNumericValue(numeric, 0);
+              return formatPreciseNumericValue(numeric);
             }
             if (!Number.isFinite(fromText)) {
               return rawText;
@@ -857,31 +1128,43 @@
             if (maxAbsValue >= minCompactValue) {
               return formatCompactNumber(fromText, { minCompactValue: minCompactValue });
             }
-            return formatPreciseNumericValue(fromText, 0);
+            return formatPreciseNumericValue(fromText);
           });
         }
         return nextAxis;
       }
 
-      function getInteractiveLegendConfig(traceCount, overrides = {}) {
-        const count = Math.max(1, Number(traceCount) || 1);
+      function getInteractiveLegendConfig(traces, containerWidth, overrides = {}) {
+        const count = Math.max(1, getLegendEntryCount(traces));
         const yPos = Number.isFinite(overrides.y) ? Number(overrides.y) : -0.208;
-        const minEntry = Number.isFinite(overrides.minEntry) ? Number(overrides.minEntry) : 0.04;
-        const maxEntry = Number.isFinite(overrides.maxEntry) ? Math.max(minEntry, Number(overrides.maxEntry)) : 1.0;
+        const sizing = resolveLegendSlotSizing(getLegendLabels(traces), containerWidth, {
+          fallbackCount: count,
+          fillRatio: Number.isFinite(overrides.fillRatio) ? Number(overrides.fillRatio) : 0.985,
+          fontSize: Number.isFinite(overrides.fontSize) ? Number(overrides.fontSize) : 9.2,
+          minFontSize: Number.isFinite(overrides.minFontSize) ? Number(overrides.minFontSize) : 8.2,
+          minGapPx: Number.isFinite(overrides.minGapPx) ? Number(overrides.minGapPx) : 8,
+          symbolWidthPx: Number.isFinite(overrides.symbolWidthPx) ? Number(overrides.symbolWidthPx) : 22,
+          textPadPx: Number.isFinite(overrides.textPadPx) ? Number(overrides.textPadPx) : 10,
+          legendItemOverheadPx: Number.isFinite(overrides.legendItemOverheadPx)
+            ? Number(overrides.legendItemOverheadPx)
+            : 30,
+        });
         const fillRatio = Number.isFinite(overrides.fillRatio) ? Number(overrides.fillRatio) : 1.0;
-        const fontSize = Number.isFinite(overrides.fontSize) ? Number(overrides.fontSize) : 10.8;
+        const slotEpsilon = Number.isFinite(overrides.slotEpsilon)
+          ? Number(overrides.slotEpsilon)
+          : (count >= 8 ? 0.010 : 0.008);
+        const entryWidthFraction = Math.max(0.02, (fillRatio / count) - slotEpsilon);
 
         return {
           orientation: 'h',
-          x: 0,
-          xanchor: 'left',
+          x: 0.5,
+          xanchor: 'center',
           yanchor: 'top',
           y: yPos,
-          font: { size: fontSize },
+          font: { size: sizing.fontSize },
           entrywidthmode: 'fraction',
-          entrywidth: Math.max(minEntry, Math.min(maxEntry, fillRatio / count)),
+          entrywidth: entryWidthFraction,
           tracegroupgap: 0,
-          itemwidth: 8,
         };
       }
 
@@ -919,13 +1202,29 @@
           maxAbsValue: getTraceAxisMaxAbs(traces, 'y'),
           minCompactValue: 1e6,
         });
+        const mainYTickCount = getInteractiveYAxisTickCount(chartContainer, {
+          minTicks: 10,
+          maxTicks: 24,
+          pxPerTick: 26,
+          fallbackHeight: 380,
+        });
+        const existingMainYTickFont = Number(nextLayout.yaxis && nextLayout.yaxis.tickfont && nextLayout.yaxis.tickfont.size);
+        nextLayout.yaxis = Object.assign({}, nextLayout.yaxis || {}, {
+          nticks: mainYTickCount,
+          tickfont: Object.assign({}, (nextLayout.yaxis && nextLayout.yaxis.tickfont) || {}, {
+            size: Number.isFinite(existingMainYTickFont) ? Math.max(existingMainYTickFont, 9.3) : 9.3,
+          }),
+        });
 
-        const legendCfg = getInteractiveLegendConfig(getLegendEntryCount(traces), {
-          fontSize: 8.0,
+        const legendEntryCount = getLegendEntryCount(traces);
+        const useCompactLegendPacking = legendEntryCount >= 8;
+        const legendCfg = getInteractiveLegendConfig(traces, chartContainer ? chartContainer.clientWidth : 0, {
+          fontSize: useCompactLegendPacking ? 8.2 : 8.6,
+          minFontSize: useCompactLegendPacking ? 7.8 : 8.0,
           y: -0.214,
-          minEntry: 0.038,
-          maxEntry: 0.165,
-          fillRatio: 0.94,
+          fillRatio: 1.0,
+          slotEpsilon: 0.010,
+          minGapPx: useCompactLegendPacking ? 6 : 8,
         });
         nextLayout.legend = Object.assign({}, nextLayout.legend || {}, legendCfg);
 
@@ -940,10 +1239,18 @@
 
       function finalizeInteractiveDistributionLayout(layout, traces, values, distName, distContainer, options = {}) {
         const nextLayout = Object.assign({}, layout || {});
-        const tickConfig = getDistributionTickConfig(values, distContainer ? distContainer.clientWidth : 0, {
+        const hasExplicitTicks = nextLayout.xaxis && nextLayout.xaxis.tickmode === 'array' && Array.isArray(nextLayout.xaxis.tickvals) && nextLayout.xaxis.tickvals.length > 0;
+        const tickConfig = hasExplicitTicks ? {
+            tickmode: 'array',
+            tickvals: nextLayout.xaxis.tickvals,
+            ticktext: nextLayout.xaxis.ticktext,
+            tickfontSize: (nextLayout.xaxis.tickfont && nextLayout.xaxis.tickfont.size) ? nextLayout.xaxis.tickfont.size : undefined
+        } : getDistributionTickConfig(values, distContainer ? distContainer.clientWidth : 0, {
           maxTicks: 14,
           pxPerTick: 56,
           minTicks: 6,
+          binEdges: Array.isArray(options.binEdges) ? options.binEdges : null,
+          minSpacingRatio: Number.isFinite(options.minSpacingRatio) ? Number(options.minSpacingRatio) : 0.14,
         });
         const axisTickConfig = Object.assign({}, tickConfig || {});
         const tickFontSize = Number.isFinite(axisTickConfig.tickfontSize)
@@ -954,15 +1261,25 @@
         nextLayout.xaxis = Object.assign({}, nextLayout.xaxis || {}, axisTickConfig);
         nextLayout.xaxis.tickfont = Object.assign({}, nextLayout.xaxis.tickfont || {}, { size: tickFontSize });
         nextLayout.xaxis = normalizeAxisTitle(nextLayout.xaxis, distName, 6);
+        if (Array.isArray(options.binRange) && options.binRange.length === 2) {
+          const start = Number(options.binRange[0]);
+          const end = Number(options.binRange[1]);
+          if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+            nextLayout.xaxis.range = [start, end];
+            nextLayout.xaxis.autorange = false;
+          }
+        }
         nextLayout.xaxis = enableCompactAxisTicks(nextLayout.xaxis, {
           maxAbsValue: getFiniteMaxAbs(values),
           minCompactValue: 1e6,
         });
 
-        const yTickCount = Math.max(
-          7,
-          Math.min(14, Math.floor(Math.max(320, distContainer ? (distContainer.clientHeight || 0) : 0) / 34))
-        );
+        const yTickCount = getInteractiveYAxisTickCount(distContainer, {
+          minTicks: 10,
+          maxTicks: 22,
+          pxPerTick: 24,
+          fallbackHeight: 400,
+        });
 
         nextLayout.yaxis = enableCompactAxisTicks(Object.assign({}, nextLayout.yaxis || {}), {
           maxAbsValue: Array.isArray(values) ? values.length : 0,
@@ -973,12 +1290,13 @@
           tickfont: Object.assign({}, (nextLayout.yaxis && nextLayout.yaxis.tickfont) || {}, { size: 9.2 }),
         });
 
-        const legendCfg = getInteractiveLegendConfig(getLegendEntryCount(traces), {
-          fontSize: 7.6,
+        const legendCfg = getInteractiveLegendConfig(traces, distContainer ? distContainer.clientWidth : 0, {
+          fontSize: 8.2,
+          minFontSize: 7.8,
           y: -0.188,
-          minEntry: 0.074,
-          maxEntry: 0.22,
           fillRatio: 1.0,
+          slotEpsilon: 0.010,
+          minGapPx: 6,
         });
         nextLayout.legend = Object.assign({}, nextLayout.legend || {}, legendCfg);
 
@@ -1002,6 +1320,154 @@
         return formatCompactNumber(value);
       }
 
+      function isDistributionIntegerLike(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return false;
+        }
+        const tolerance = 1e-8 * Math.max(1, Math.abs(numeric));
+        return Math.abs(numeric - Math.round(numeric)) <= tolerance;
+      }
+
+      function resolveDistributionHistogramBins(values, options = {}) {
+        const numericValues = (Array.isArray(values) ? values : [])
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value));
+        if (!numericValues.length) {
+          return null;
+        }
+
+        const minVal = Math.min(...numericValues);
+        const maxVal = Math.max(...numericValues);
+        if (!Number.isFinite(minVal) || !Number.isFinite(maxVal) || (maxVal - minVal) < 1e-9) {
+          return null;
+        }
+
+        const minBins = Number.isFinite(options.minBins) ? Math.max(2, Math.floor(Number(options.minBins))) : 8;
+        const maxBins = Number.isFinite(options.maxBins)
+          ? Math.max(minBins, Math.floor(Number(options.maxBins)))
+          : 52;
+        const integerSpanThreshold = Number.isFinite(options.integerSpanThreshold)
+          ? Math.max(2, Math.floor(Number(options.integerSpanThreshold)))
+          : 260;
+
+        const allIntegerLike = numericValues.every((value) => isDistributionIntegerLike(value));
+        if (allIntegerLike) {
+          const minInt = Math.round(minVal);
+          const maxInt = Math.round(maxVal);
+          const integerSpan = maxInt - minInt + 1;
+          if (integerSpan >= 2 && integerSpan <= integerSpanThreshold) {
+            const start = minInt - 0.5;
+            const end = maxInt + 0.5;
+            const size = 1;
+            const edges = [];
+            for (let edge = start; edge <= end + 1e-9; edge += size) {
+              edges.push(Number(edge.toFixed(10)));
+            }
+            return { start, end, size, edges };
+          }
+        }
+
+        const adaptiveBins = Math.max(minBins, Math.min(maxBins, Math.floor(numericValues.length / 10)));
+        const binCount = Math.max(2, adaptiveBins);
+        const size = (maxVal - minVal) / binCount;
+        if (!Number.isFinite(size) || size <= 0) {
+          return null;
+        }
+
+        const edges = [];
+        for (let i = 0; i <= binCount; i += 1) {
+          if (i === binCount) {
+            edges.push(maxVal);
+          } else {
+            edges.push(minVal + (size * i));
+          }
+        }
+        return { start: minVal, end: maxVal, size, edges };
+      }
+
+      function sampleDistributionBinCenterTicks(binEdges, options = {}) {
+        const edges = (Array.isArray(binEdges) ? binEdges : [])
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value))
+          .sort((a, b) => a - b)
+          .filter((value, idx, arr) => idx === 0 || Math.abs(value - arr[idx - 1]) > 1e-12);
+        if (edges.length < 2) {
+          return null;
+        }
+
+        const centers = [];
+        for (let i = 0; i < edges.length - 1; i += 1) {
+          centers.push((edges[i] + edges[i + 1]) * 0.5);
+        }
+        if (!centers.length) {
+          return null;
+        }
+
+        const maxTicks = Number.isFinite(options.maxTicks) ? Math.max(2, Math.floor(Number(options.maxTicks))) : 16;
+        const minSpacingRatio = Number.isFinite(options.minSpacingRatio)
+          ? Math.max(0, Number(options.minSpacingRatio))
+          : 0.14;
+        const allCentersIntegerLike = centers.every((value) => isDistributionIntegerLike(value));
+
+        let sampledCenters = [];
+        if (allCentersIntegerLike && centers.length <= maxTicks) {
+          sampledCenters = centers.slice();
+        } else {
+          const densityScale = Math.max(0.62, 1.0 - Math.min(0.45, minSpacingRatio * 0.70));
+          const targetTickCount = Math.max(2, Math.min(maxTicks, Math.round(maxTicks * densityScale)));
+          if (centers.length <= targetTickCount) {
+            sampledCenters = centers.slice();
+          } else {
+            const sampledIndexSet = new Set();
+            for (let i = 0; i < targetTickCount; i += 1) {
+              const idx = Math.round((i * (centers.length - 1)) / Math.max(1, targetTickCount - 1));
+              sampledIndexSet.add(idx);
+            }
+            sampledCenters = Array.from(sampledIndexSet)
+              .sort((a, b) => a - b)
+              .map((idx) => centers[idx]);
+          }
+        }
+
+        if (!sampledCenters.length) {
+          return null;
+        }
+
+        let ticktext = null;
+        if (sampledCenters.every((value) => isDistributionIntegerLike(value))) {
+          const integerLabels = sampledCenters.map((value) => String(Math.round(value)));
+          if ((new Set(integerLabels)).size === integerLabels.length) {
+            ticktext = integerLabels;
+          }
+        }
+
+        if (!ticktext) {
+          const compactLabels = sampledCenters.map((value) => formatDistributionTickValue(value));
+          if ((new Set(compactLabels)).size === compactLabels.length) {
+            ticktext = compactLabels;
+          }
+        }
+
+        if (!ticktext) {
+          const preciseLabels = sampledCenters.map((value) => formatPreciseNumericValue(value));
+          if ((new Set(preciseLabels)).size === preciseLabels.length) {
+            ticktext = preciseLabels;
+          }
+        }
+
+        if (!ticktext) {
+          ticktext = sampledCenters.map((value) => String(value));
+        }
+
+        const tickfontSize = sampledCenters.length > 18 ? 8.6 : (sampledCenters.length > 14 ? 9.0 : 9.2);
+        return {
+          tickvals: sampledCenters,
+          ticktext,
+          tickfontSize,
+        };
+      }
+
       function getDistributionTickConfig(values, containerWidth, options = {}) {
         const numericValues = (Array.isArray(values) ? values : [])
           .map((value) => Number(value))
@@ -1021,7 +1487,33 @@
         const maxTicks = Number.isFinite(options.maxTicks) ? options.maxTicks : 28;
         const hardMaxTicks = 24;
         const minTicks = Number.isFinite(options.minTicks) ? options.minTicks : 5;
-        const allowedTicks = Math.max(minTicks, Math.min(maxTicks, hardMaxTicks, Math.floor(Math.max(260, Number(containerWidth) || 0) / pxPerTick)));
+        // Estimate label width: for large values, labels like "123.456M" are ~8+ chars
+        const testLabel = formatCompactNumber(Math.max(Math.abs(minVal), Math.abs(maxVal)));
+        const estLabelLen = Math.max(4, String(testLabel).length);
+        const pxPerChar = 7;
+        const effectivePxPerTick = Math.max(pxPerTick, estLabelLen * pxPerChar + 12);
+        const allowedTicks = Math.max(
+          minTicks,
+          Math.min(
+            maxTicks,
+            hardMaxTicks,
+            Math.floor(Math.max(260, Number(containerWidth) || 0) / Math.max(20, effectivePxPerTick)),
+          ),
+        );
+
+        const sampledFromBins = sampleDistributionBinCenterTicks(options.binEdges, {
+          maxTicks: allowedTicks,
+          minSpacingRatio: Number.isFinite(options.minSpacingRatio) ? Number(options.minSpacingRatio) : 0.14,
+        });
+        if (sampledFromBins && Array.isArray(sampledFromBins.tickvals) && sampledFromBins.tickvals.length) {
+          return {
+            tickmode: 'array',
+            tickvals: sampledFromBins.tickvals,
+            ticktext: sampledFromBins.ticktext,
+            tickangle: 0,
+            tickfontSize: sampledFromBins.tickfontSize,
+          };
+        }
 
         const tickvals = [];
         for (let i = 0; i < allowedTicks; i++) {
@@ -1182,10 +1674,27 @@
         return true;
       }
 
-      function onDataRangeChange() {
+      async function onDataRangeChange() {
         persistDataRangeToUrl();
         updateInteractiveDataRangeHint();
         updateInteractiveContaminationHint();
+        if (window.queueAnalysisControlFieldWidths) {
+          window.queueAnalysisControlFieldWidths(document);
+        }
+        const colPick = document.getElementById('colPick');
+        if (apiInteractiveUrl) {
+          try {
+            await loadInteractiveDataAsync({
+              force: true,
+              showSkeleton: true,
+              dataRange: String(getDataRangePct()),
+              preferredColumn: colPick && colPick.value ? colPick.value : '',
+            });
+            return;
+          } catch (e) {
+            console.error('Failed to reload data-range payload:', e);
+          }
+        }
         onPickChange();
       }
 
@@ -1327,9 +1836,14 @@
       let legendVisibilityState = {};
 
       function renderFromPayload(item) {
-        const rangePct = getDataRangePct();
         let traces = (item.traces || []).map(t => ({ ...t }));
-        traces = filterTracesToRange(traces, rangePct);
+        const hasServerDistributionAxisSpec = !!(item
+          && item.distribution
+          && item.distribution.axis_spec
+          && Array.isArray(item.distribution.axis_spec.tickvals));
+        if (!hasServerDistributionAxisSpec) {
+          traces = filterTracesToRange(traces, getDataRangePct());
+        }
 
         // Key for storing visibility state per column
         const colKey = item.column || 'default';
@@ -1632,9 +2146,9 @@
           // Use theme-aware colors for visibility in both modes
           const avgColor = isDarkMode() ? '#ffc107' : '#d68910';  // Amber (brighter in dark, darker in light)
           const medColor = isDarkMode() ? '#ce93d8' : '#8e44ad';  // Purple (brighter in dark, darker in light)
-          const minColor = '#f1c40f';  // Bright yellow
-          const maxColor = '#00BCD4';  // Cyan - works on both light and dark backgrounds
-          const edgeColor = isDarkMode() ? '#ffffff' : '#0b1220';
+          const minColor = isDarkMode() ? '#fcd34d' : '#d97706';  // Adapting yellow/orange
+          const maxColor = isDarkMode() ? '#4ade80' : '#16a085';  // Adapting green
+          const edgeColor = '#0b1220';  // Always dark border for triangle markers
           const stdColor = isDarkMode() ? '#94a3b8' : '#5d6d7e';  // Gray - adjusted for both modes
           const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
           const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
@@ -1662,17 +2176,6 @@
             hoverinfo: 'name',
             showlegend: true,
             visible: true  // Visible by default, toggleable via legend
-          });
-
-          traces.push({
-            type: 'scatter',
-            mode: 'markers',
-            name: 'Std',
-            x: [chartXMin],
-            y: [s.mean],
-            marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
-            hoverinfo: 'skip',
-            showlegend: false
           });
 
           // Find the x-position of min and max values from the FILTERED History trace
@@ -1723,6 +2226,20 @@
               hoverinfo: 'name+y',
               showlegend: true,
               meta: 'stat-marker'  // Tag so autoscale can skip it
+            });
+
+            // Keep Std as the last legend element for forecast chart,
+            // matching the distribution chart legend order.
+            traces.push({
+              type: 'scatter',
+              mode: 'markers',
+              name: formatLegendStatLabel('Std', s.std),
+              x: [chartXMin],
+              y: [s.mean],
+              marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
+              hoverinfo: 'skip',
+              showlegend: true,
+              meta: 'stat-control'
             });
           }
 
@@ -1808,10 +2325,12 @@
           const d = chartEl.data[evt.curveNumber];
           const newVis = (d.visible === undefined || d.visible === true) ? 'legendonly' : true;
           const nm = (d.name || '').toLowerCase();
+          const meta = String(d.meta || '').toLowerCase();
           const isCI = d.meta === 'ci-controller' || d.meta === 'ci-member';
           const isAnomaly = nm.includes('anomal') || nm.includes('outlier');
           const isAvg = nm.includes('avg');
           const isMed = nm.includes('med');
+          const isStd = meta === 'stat-control' || nm.includes('std');
           // Determine if this is a main data trace (History/Forecast) that should trigger autoscale
           const isHistory = nm.includes('histor') || nm.includes('actual') || nm === 'hist' || nm === 'h';
           const isForecast = nm.includes('forecast') || nm.includes('fcst') || nm === 'f';
@@ -1853,8 +2372,8 @@
             if (!legendVisibilityState[colKey]) legendVisibilityState[colKey] = {};
             chartEl.data.forEach((t, i) => legendVisibilityState[colKey][t.name || `trace_${i}`] = t.visible);
 
-            // ONLY autoscale when main data traces (History/Forecast) visibility changes
-            // Do NOT autoscale when toggling Avg/Med, CI bands, or stat markers
+            // ONLY autoscale when main data traces (History/Forecast) visibility changes.
+            // Do NOT autoscale when toggling Avg/Med/Std, CI bands, anomalies, or stat markers.
             if (isMainDataTrace) {
               // Calculate Y and X range from only History and Forecast traces (visible ones)
               let yMin = Infinity, yMax = -Infinity;
@@ -1912,13 +2431,30 @@
           const t = getThemeVars();
           const distEl = document.getElementById('dist');
           const distHeight = distEl ? (distEl.clientHeight || 400) : 400;
+          const serverAxisSpec = (dist && typeof dist.axis_spec === 'object' && dist.axis_spec) ? dist.axis_spec : null;
 
           // Filter distribution values based on data range
           let distValues = dist.values;
-          if (rangePct < 1.0 && distValues.length > 0) {
+          if (!serverAxisSpec && getDataRangePct() < 1.0 && distValues.length > 0) {
+            const rangePct = getDataRangePct();
             const keepCount = Math.max(1, Math.ceil(distValues.length * rangePct));
             distValues = distValues.slice(-keepCount);
           }
+
+          const distHistogramBins = (serverAxisSpec
+            && Array.isArray(serverAxisSpec.bin_edges)
+            && serverAxisSpec.bin_edges.length >= 2)
+            ? {
+                start: Number(serverAxisSpec.bin_start),
+                end: Number(serverAxisSpec.bin_end),
+                size: Number(serverAxisSpec.bin_size),
+                edges: serverAxisSpec.bin_edges.map((v) => Number(v)).filter((v) => Number.isFinite(v)),
+              }
+            : resolveDistributionHistogramBins(distValues, {
+                minBins: 8,
+                maxBins: 52,
+                integerSpanThreshold: 260,
+              });
 
           // Build distribution layout with stats annotation
           let distLayout = {
@@ -1943,7 +2479,21 @@
             hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
           };
 
-          const distTickConfig = getDistributionTickConfig(distValues, distEl ? distEl.clientWidth : 0, { maxTicks: 24, pxPerTick: 44, minTicks: 6 });
+          const distTickConfig = (serverAxisSpec && Array.isArray(serverAxisSpec.tickvals) && serverAxisSpec.tickvals.length)
+            ? {
+                tickmode: 'array',
+                tickvals: serverAxisSpec.tickvals.map((v) => Number(v)).filter((v) => Number.isFinite(v)),
+                ticktext: Array.isArray(serverAxisSpec.ticktext) ? serverAxisSpec.ticktext.map((v) => String(v)) : [],
+                tickangle: Number.isFinite(Number(serverAxisSpec.tick_angle)) ? Number(serverAxisSpec.tick_angle) : 0,
+                tickfontSize: Number.isFinite(Number(serverAxisSpec.tick_fontsize)) ? Number(serverAxisSpec.tick_fontsize) : 9.2,
+              }
+            : getDistributionTickConfig(distValues, distEl ? distEl.clientWidth : 0, {
+                maxTicks: 24,
+                pxPerTick: 44,
+                minTicks: 6,
+                binEdges: distHistogramBins ? distHistogramBins.edges : null,
+                minSpacingRatio: 0.14,
+              });
           const distAxisTickConfig = Object.assign({}, distTickConfig || {});
           const distTickFontSize = Number.isFinite(distAxisTickConfig.tickfontSize) ? distAxisTickConfig.tickfontSize : 9.2;
           delete distAxisTickConfig.tickfontSize;
@@ -1952,6 +2502,10 @@
             ? distTickConfig.tickangle
             : (distLayout.xaxis.tickangle || -35);
           distLayout.xaxis.tickfont = { size: distTickFontSize };
+          if (distHistogramBins && Number.isFinite(distHistogramBins.start) && Number.isFinite(distHistogramBins.end) && distHistogramBins.end > distHistogramBins.start) {
+            distLayout.xaxis.range = [distHistogramBins.start, distHistogramBins.end];
+            distLayout.xaxis.autorange = false;
+          }
           distLayout.xaxis = enableCompactAxisTicks(distLayout.xaxis, { maxAbsValue: getFiniteMaxAbs(distValues) });
           distLayout.yaxis = enableCompactAxisTicks(distLayout.yaxis, { maxAbsValue: distValues.length });
 
@@ -1968,10 +2522,22 @@
           }
 
           // Build traces array starting with histogram
+          const distHistogramXbins = (distHistogramBins
+            && Number.isFinite(distHistogramBins.start)
+            && Number.isFinite(distHistogramBins.end)
+            && Number.isFinite(distHistogramBins.size)
+            && distHistogramBins.size > 0)
+            ? {
+                start: distHistogramBins.start,
+                end: distHistogramBins.end,
+                size: distHistogramBins.size,
+              }
+            : null;
           const distTraces = [{
             type: 'histogram',
             name: 'Distribution',
             x: distValues,
+            ...(distHistogramXbins ? { xbins: distHistogramXbins } : {}),
             marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
             showlegend: true
           }];
@@ -1985,7 +2551,6 @@
             const medColor = isDarkMode() ? '#ce93d8' : '#8e44ad';  // Purple
             const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
             const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
-            const annotBgColor = isDarkMode() ? 'rgba(30, 30, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)';
 
             // Add vertical line shapes for Avg and Median (use yref: 'paper' to span chart area only)
             distLayout.shapes = [
@@ -2032,9 +2597,9 @@
             };
 
             // Add Min/Max as scatter trace markers at bottom
-            const minColor = '#f1c40f';  // Bright yellow
-            const maxColor = '#00BCD4';  // Cyan - works on both light and dark backgrounds
-            const edgeColor = isDarkMode() ? '#ffffff' : '#0b1220';
+            const minColor = isDarkMode() ? '#fcd34d' : '#d97706';  // Adapting yellow/orange
+            const maxColor = isDarkMode() ? '#4ade80' : '#16a085';  // Adapting green
+            const edgeColor = '#0b1220';  // Always dark border for triangle markers
             const stdColor = isDarkMode() ? '#94a3b8' : '#5d6d7e';  // Gray - adjusted for both modes
 
             distTraces.push({
@@ -2080,23 +2645,31 @@
             var xRange = s.max - s.min;
             var xOffset = Math.max(1e-9, xRange * 0.010);  // keep text tags close to their guide lines
             var minMaxAreClose = Math.abs(s.max - s.min) <= Math.max(1e-9, xRange * 0.05);
-            var minAnnotationY = minMaxAreClose ? 0.038 : 0.030;
-            var maxAnnotationY = minMaxAreClose ? 0.052 : 0.030;
+
+            // Clamp avg/med annotation x positions so they don't exit the chart
+            var distXMin = distHistogramBins ? distHistogramBins.start : s.min;
+            var distXMax = distHistogramBins ? distHistogramBins.end : s.max;
+            var clampX = function(val) { return Math.max(distXMin, Math.min(distXMax, val)); };
+
+            // Min/Max annotations: use paper-relative Y so they stay stable during zoom/autoscale
+            // Add text-shadow-like effect using a slightly darker/lighter font for legibility on bars
+            var minTextShadow = isDarkMode() ? '1px 1px 2px rgba(0,0,0,0.9)' : '0 0 3px rgba(255,255,255,0.95), 0 0 5px rgba(255,255,255,0.8)';
+            var maxTextShadow = minTextShadow;
             if (s.mean <= s.median) {
               // Mean is on the left, Median is on the right
               distLayout.annotations = [
-                { x: s.mean - xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'right', yanchor: 'bottom', name: 'avg-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
-                { x: s.median + xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
-                { x: s.min, y: minAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
-                { x: s.max, y: maxAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 }
+                { x: clampX(s.mean - xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'right', yanchor: 'bottom', name: 'avg-annot' },
+                { x: clampX(s.median + xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' },
+                { x: s.min, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot' },
+                { x: s.max, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot' }
               ];
             } else {
               // Median is on the left, Mean is on the right
               distLayout.annotations = [
-                { x: s.median - xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'right', yanchor: 'bottom', name: 'med-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
-                { x: s.mean + xOffset, y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
-                { x: s.min, y: minAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 },
-                { x: s.max, y: maxAnnotationY, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot', bgcolor: annotBgColor, bordercolor: edgeColor, borderpad: 1 }
+                { x: clampX(s.median - xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'right', yanchor: 'bottom', name: 'med-annot' },
+                { x: clampX(s.mean + xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' },
+                { x: s.min, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot' },
+                { x: s.max, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot' }
               ];
             }
 
@@ -2137,7 +2710,12 @@
             distValues,
             dist.name,
             distEl,
-            { axisTitleName: 'dist-xaxis-title' }
+            {
+              axisTitleName: 'dist-xaxis-title',
+              binEdges: distHistogramBins ? distHistogramBins.edges : null,
+              binRange: distHistogramBins ? [distHistogramBins.start, distHistogramBins.end] : null,
+              minSpacingRatio: 0.14,
+            }
           );
 
           Plotly.newPlot('dist', distTraces, distLayout, {
@@ -2320,6 +2898,11 @@
           let vals = (yData || []).filter(v => Number.isFinite(v));
           if (vals.length) {
             const distEl = document.getElementById('dist');
+            const fallbackDistBins = resolveDistributionHistogramBins(vals, {
+              minBins: 8,
+              maxBins: 52,
+              integerSpanThreshold: 260,
+            });
             let fallbackDistLayout = {
               title: null,
               paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
@@ -2347,8 +2930,25 @@
               fontSize: 10,
             });
 
+            const fallbackDistHistogramXbins = (fallbackDistBins
+              && Number.isFinite(fallbackDistBins.start)
+              && Number.isFinite(fallbackDistBins.end)
+              && Number.isFinite(fallbackDistBins.size)
+              && fallbackDistBins.size > 0)
+              ? {
+                  start: fallbackDistBins.start,
+                  end: fallbackDistBins.end,
+                  size: fallbackDistBins.size,
+                }
+              : null;
+
             const fallbackDistTraces = [{
-              type: 'histogram', name: 'Distribution', x: vals, marker: { color: t.accent }, showlegend: true
+              type: 'histogram',
+              name: 'Distribution',
+              x: vals,
+              ...(fallbackDistHistogramXbins ? { xbins: fallbackDistHistogramXbins } : {}),
+              marker: { color: t.accent },
+              showlegend: true,
             }];
             fallbackDistLayout = finalizeInteractiveDistributionLayout(
               fallbackDistLayout,
@@ -2356,7 +2956,12 @@
               vals,
               column,
               distEl,
-              { axisTitleName: 'fallback-dist-xaxis-title' }
+              {
+                axisTitleName: 'fallback-dist-xaxis-title',
+                binEdges: fallbackDistBins ? fallbackDistBins.edges : null,
+                binRange: fallbackDistBins ? [fallbackDistBins.start, fallbackDistBins.end] : null,
+                minSpacingRatio: 0.14,
+              }
             );
 
             Plotly.newPlot('dist', fallbackDistTraces, fallbackDistLayout, {
@@ -2366,20 +2971,6 @@
             }).then(() => {
               relabelPlotlyCompactSISuffixes(distEl);
             });
-
-            const fallbackDistTickConfig = getDistributionTickConfig(vals, distEl ? distEl.clientWidth : 0, { maxTicks: 8, pxPerTick: 88, minTicks: 4 });
-            if (fallbackDistTickConfig) {
-              const fallbackTickFontSize = Number.isFinite(fallbackDistTickConfig.tickfontSize)
-                ? Math.min(fallbackDistTickConfig.tickfontSize, 7.2)
-                : 7.2;
-              Plotly.relayout('dist', {
-                'xaxis.tickmode': fallbackDistTickConfig.tickmode,
-                'xaxis.tickvals': fallbackDistTickConfig.tickvals,
-                'xaxis.ticktext': fallbackDistTickConfig.ticktext,
-                'xaxis.tickangle': Math.min(-55, Number(fallbackDistTickConfig.tickangle || -60)),
-                'xaxis.tickfont.size': fallbackTickFontSize,
-              });
-            }
           } else {
             document.getElementById('dist').innerHTML = '<div class="muted">No distribution data.</div>';
           }
@@ -2392,6 +2983,9 @@
       async function onPickChange() {
         await loadPlotly();
         const col = document.getElementById('colPick').value;
+        if (window.queueAnalysisControlFieldWidths) {
+          window.queueAnalysisControlFieldWidths(document);
+        }
         try {
           const url = new URL(window.location.href);
           url.searchParams.set('selected_col', col);
@@ -2416,6 +3010,9 @@
 
         // If we have theme-aware stat colors in interactive view, re-render the whole chart
         if (chart && colPick && typeof onPickChange === 'function') {
+          if (window.queueAnalysisControlFieldWidths) {
+            window.queueAnalysisControlFieldWidths(document);
+          }
           onPickChange();  // Re-render with correct theme-aware colors
         } else {
           // Fallback: just update backgrounds for charts without stat colors
@@ -2439,10 +3036,18 @@
         updateInteractiveDataRangeHint();
         updateInteractiveContaminationHint();
         updateInteractiveForecastHint();
+        if (window.queueAnalysisControlFieldWidths) {
+          window.queueAnalysisControlFieldWidths(document);
+        }
         if (sel) {
           applySelectedColFromUrl(sel);
           if (!sel._interactivePickBound) {
-            sel.addEventListener('change', onPickChange);
+            sel.addEventListener('change', function () {
+              if (window.queueAnalysisControlFieldWidths) {
+                window.queueAnalysisControlFieldWidths(document);
+              }
+              onPickChange();
+            });
             sel._interactivePickBound = true;
           }
         }
@@ -2464,7 +3069,16 @@
           loadInteractiveDataAsync({ force: true, showSkeleton: true, preferredColumn: sel ? sel.value : '' });
         }
         if (contamEl) {
+          contamEl.addEventListener('input', function () {
+            updateInteractiveContaminationHint();
+            if (window.queueAnalysisControlFieldWidths) {
+              window.queueAnalysisControlFieldWidths(document);
+            }
+          });
           contamEl.addEventListener('change', function () {
+            if (window.queueAnalysisControlFieldWidths) {
+              window.queueAnalysisControlFieldWidths(document);
+            }
             const url = new URL(window.location.href);
             url.searchParams.set('contamination', this.value);
             const colPick = document.getElementById('colPick');
@@ -2481,6 +3095,9 @@
           if (!el) return;
           el.addEventListener('change', async function () {
             const v = this.value;
+            if (window.queueAnalysisControlFieldWidths) {
+              window.queueAnalysisControlFieldWidths(document);
+            }
 
             // Sync the other forecast select if present
             const otherId = id === 'forecastPctSelect' ? 'forecastPctSelectTop' : 'forecastPctSelect';
@@ -2504,6 +3121,7 @@
                 showSkeleton: interactivePayload.length === 0,
                 forecastPct: v,
                 contamination: contamEl ? contamEl.value : '',
+                dataRange: String(getDataRangePct()),
                 preferredColumn: colPick && colPick.value ? colPick.value : '',
               });
             } catch (e) {

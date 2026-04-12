@@ -342,36 +342,54 @@ img.plot {
 }
 
 .interactive-panel-head {
+  --settings-inline-gap: clamp(10px, 1vw, 14px);
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px 12px;
+  gap: 0;
   align-items: center;
   justify-content: flex-start;
   min-width: 0;
 }
 
-.interactive-panel-head>h3 {
+.interactive-title-block,
+.forecast-header-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.interactive-panel-head h3 {
   flex: 0 0 auto;
 }
 
+.settings-row-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .interactive-controls-bar {
-  --settings-inline-gap: clamp(10px, 1vw, 14px);
-  --settings-right-pad: 0px;
-  margin-left: 0;
-  margin-right: 0;
   display: flex !important;
   flex-wrap: nowrap !important;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
-  gap: 6px var(--settings-inline-gap) !important;
-  padding-right: var(--settings-right-pad);
+  gap: 0 !important;
+  padding-inline-start: 0;
+  padding-inline-end: 0;
   flex: 1 1 auto;
-  width: 100%;
+  width: auto;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  overflow-x: auto;
+  overflow-x: visible;
   overflow-y: visible;
+}
+
+.interactive-controls-bar::before,
+.forecast-controls-bar::before {
+  content: "";
+  display: block;
+  flex: 0 0 0;
+  width: 0;
 }
 
 .interactive-control-group {
@@ -424,16 +442,16 @@ img.plot {
 
 .interactive-control-group--contamination {
   order: 4;
-  --interactive-field-width: 78px;
-  --interactive-field-min: 78px;
+  --interactive-field-width: 82px;
+  --interactive-field-min: 82px;
   --interactive-hint-width: clamp(8ch, 8.5vw, 12ch);
 }
 
 .interactive-control-group--trailing,
 .forecast-control-group--trailing {
-  margin-inline-start: auto;
-  margin-left: auto;
-  justify-self: end;
+  margin-inline-start: 0;
+  margin-left: 0;
+  justify-self: auto;
 }
 
 .interactive-control-group label {
@@ -495,43 +513,31 @@ img.plot {
 }
 
 .forecast-controls-bar {
-  --settings-inline-gap: clamp(10px, 1vw, 14px);
-  --settings-right-pad: 0px;
   display: flex !important;
   flex-wrap: nowrap !important;
-  gap: 6px var(--settings-inline-gap) !important;
-  padding-right: var(--settings-right-pad);
+  gap: 0 !important;
+  padding-inline-start: 0;
+  padding-inline-end: 0;
   align-items: center;
-  justify-content: flex-start;
-  width: 100%;
+  justify-content: space-between;
+  width: auto;
   flex: 1 1 auto;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  overflow-x: auto;
+  overflow-x: visible;
   overflow-y: visible;
 }
 
-.forecast-header-row > div:last-child {
-  display: flex;
-  flex: 1 1 640px;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.forecast-header-row > div:last-child .forecast-controls-bar {
-  margin-left: auto;
-  margin-right: 0;
-}
-
 .forecast-header-row {
+  --settings-inline-gap: clamp(10px, 1vw, 14px);
+  gap: 0;
   flex-wrap: nowrap !important;
 }
 
-.forecast-header-row>div:first-child {
-  flex: 0 1 470px;
-  max-width: 470px;
-  min-width: 280px !important;
+.forecast-header-title {
+  min-width: 280px;
+  max-width: min(620px, 100%);
 }
 
 .forecast-control-group {
@@ -563,8 +569,8 @@ img.plot {
 }
 
 .forecast-control-group--contamination {
-  --forecast-field-width: 78px;
-  --forecast-field-min: 78px;
+  --forecast-field-width: 82px;
+  --forecast-field-min: 82px;
   --forecast-hint-width: clamp(8ch, 8.5vw, 12ch);
 }
 
@@ -666,12 +672,22 @@ img.plot {
     gap: 8px;
   }
 
+  .settings-row-spacer {
+    display: none;
+  }
+
   .interactive-controls-bar {
     flex-direction: column;
     align-items: stretch;
+    justify-content: flex-start;
     width: min(100%, 760px);
-    margin-left: 0;
-    margin-right: 0;
+    padding-left: 0;
+    overflow-x: auto;
+  }
+
+  .interactive-controls-bar::before,
+  .forecast-controls-bar::before {
+    display: none;
   }
 
   .interactive-control-group,
@@ -713,7 +729,10 @@ img.plot {
   .forecast-controls-bar {
     flex-direction: column;
     align-items: stretch;
+    justify-content: flex-start;
     width: min(100%, 760px);
+    padding-left: 0;
+    overflow-x: auto;
   }
 
   .forecast-header-row {

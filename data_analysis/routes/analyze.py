@@ -8,10 +8,13 @@ from data_analysis.analysis.dataframe_ops import (
 )
 from data_analysis.analysis.plot import (
     _add_static_distribution_overlays,
+    _apply_dense_non_overlapping_y_ticks,
+    _apply_sci_formatter,
     _build_non_timeseries_tick_labels,
     _resolve_plot_display_axis,
-    _resolve_static_tick_policy,
-    _sample_numeric_axis_ticks,
+    apply_distribution_axis_spec,
+    apply_static_distribution_compact_layout,
+    build_distribution_axis_spec,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
@@ -396,7 +399,7 @@ def handle_analyze_file(filename):
             except Exception:
                 full_series = pd.Series(dtype=float)
             series = full_series
-            if build_forecast and data_range_rows > 0:
+            if (build_forecast or build_interactive) and data_range_rows > 0:
                 series = full_series.tail(data_range_rows)
             if series.empty:
                 continue
@@ -521,49 +524,54 @@ def handle_analyze_file(filename):
                 try:
                     fig, ax = plt.subplots(figsize=(7.2, 4.2))
                     series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
-                    ax.hist(series_arr, bins=min(50, max(10, len(series) // 10)), color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=column)
-                    ax.set_title(f"Distribution: {column}", fontsize=10)
-                    ax.set_xlabel(column, fontsize=9, labelpad=2)
-                    ax.set_ylabel("Frequency", fontsize=9)
-                    ax.grid(True, alpha=0.3)
-
-                    try:
-                        from matplotlib.ticker import MaxNLocator
-                        ax.yaxis.set_major_locator(MaxNLocator(nbins=9, integer=True, min_n_ticks=6))
-                    except Exception:
-                        pass
-
-                    finite_unique_values = np.unique(series_arr[np.isfinite(series_arr)]) if series_arr.size else np.asarray([], dtype=float)
-                    tick_policy = _resolve_static_tick_policy(
-                        finite_unique_values.tolist(),
-                        chart_type='distribution',
-                    )
-                    tick_values, tick_labels = _sample_numeric_axis_ticks(
+                    axis_spec = build_distribution_axis_spec(
                         series_arr.tolist(),
-                        max_tick_labels=int(tick_policy['max_tick_labels']),
-                        min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
+                        min_bins=max(8, min(12, len(series_arr) // 5)) if len(series_arr) >= 20 else 8,
+                        max_bins=52,
+                        integer_span_threshold=260,
                     )
-                    if tick_values:
-                        ax.set_xticks(tick_values)
-                        ax.set_xticklabels(
-                            tick_labels,
-                            rotation=int(tick_policy['tick_angle']),
-                            ha=str(tick_policy['tick_ha']),
-                            fontsize=float(tick_policy['tick_fontsize']),
-                        )
+                    hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
+                    if not hist_bins:
+                        hist_bins = max(8, min(52, int(len(series_arr) // 10) if len(series_arr) >= 20 else 8))
+                    _hist_counts, hist_edges, _hist_patches = ax.hist(
+                        series_arr,
+                        bins=hist_bins,
+                        color='tab:blue',
+                        alpha=0.7,
+                        edgecolor='black',
+                        linewidth=0.5,
+                        label=column,
+                    )
+                    ax.set_title(f"Distribution: {column}", fontsize=10, pad=16)
+                    ax.set_xlabel(column, fontsize=9, labelpad=0)
+                    ax.set_ylabel("Frequency", fontsize=9, labelpad=8)
+                    ax.grid(True, alpha=0.3)
+                    _apply_dense_non_overlapping_y_ticks(
+                        ax,
+                        integer=True,
+                        label_fontsize=8.0,
+                        min_ticks=6,
+                        max_ticks=18,
+                    )
+                    if isinstance(axis_spec, dict) and axis_spec:
+                        apply_distribution_axis_spec(ax, axis_spec)
+                    elif len(hist_edges) >= 2:
+                        ax.set_xlim(float(hist_edges[0]), float(hist_edges[-1]))
 
                     _add_static_distribution_overlays(
                         ax,
                         series_arr,
                         legend_fontsize=6,
                         legend_columns=6,
-                        legend_y=-0.18,
+                        legend_y=-0.12,
+                        expand_xlim=False,
                     )
-                    fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
+                    _apply_sci_formatter(ax)
+                    apply_static_distribution_compact_layout(fig, ax, right=0.95, top=0.90)
                     
                     
                     buf = io.BytesIO()
-                    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2, dpi=150)
+                    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.0, dpi=150)
                     plt.close(fig)
                     buf.seek(0)
                     dist_img = base64.b64encode(buf.read()).decode('utf-8')
@@ -805,7 +813,18 @@ def handle_analyze_file(filename):
                     "margin": {"l": 40, "r": 10, "t": 40, "b": 40}
                 }
 
-                dist = {"name": column, "values": [float(v) for v in series.dropna().values]}
+                dist_values = [float(v) for v in series.dropna().values]
+                dist_axis_spec = build_distribution_axis_spec(
+                    dist_values,
+                    min_bins=max(8, min(12, len(dist_values) // 5)) if len(dist_values) >= 20 else 8,
+                    max_bins=52,
+                    integer_span_threshold=260,
+                )
+                dist = {
+                    "name": column,
+                    "values": dist_values,
+                    "axis_spec": dist_axis_spec,
+                }
                 
                 # Compute statistics for the column
                 try:

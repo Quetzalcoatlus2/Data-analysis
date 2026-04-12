@@ -9,12 +9,14 @@ from data_analysis.analysis.dataframe_ops import (
 )
 from data_analysis.analysis.plot import (
     _add_static_distribution_overlays,
+    _apply_dense_non_overlapping_y_ticks,
     _apply_sci_formatter,
     _build_static_category_chart,
     _format_stat_value,
     _resolve_plot_display_axis,
-    _resolve_static_tick_policy,
-    _sample_numeric_axis_ticks,
+    apply_distribution_axis_spec,
+    apply_static_distribution_compact_layout,
+    build_distribution_axis_spec,
     get_export_chart_figsize,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
@@ -80,6 +82,39 @@ def handle_download_cleaned_csv(filename):
 
     
     cleaned = df.copy()
+
+    def _normalized_row_values(values) -> list[str]:
+        normalized = pd.Series(list(values), dtype="object")
+        normalized = normalized.where(normalized.notna(), None)
+        return normalized.astype(str).tolist()
+
+    def _should_include_index_metadata(frame: pd.DataFrame) -> bool:
+        idx = frame.index
+        idx_name = str(idx.name).strip() if idx.name is not None else ""
+
+        # Unnamed/default positional indexes are not meaningful metadata.
+        if not idx_name:
+            return False
+        if not bool(getattr(idx, "is_unique", False)):
+            return False
+        if idx.equals(pd.RangeIndex(start=0, stop=len(idx), step=1)):
+            return False
+
+        idx_values = _normalized_row_values(list(idx))
+
+        for col in frame.columns:
+            # If a data column already carries the same semantic key, avoid duplicating it.
+            if str(col) == idx_name:
+                return False
+            try:
+                col_values = _normalized_row_values(frame[col].tolist())
+            except Exception:
+                continue
+            if col_values == idx_values:
+                return False
+
+        return True
+
     try:
         for col in cleaned.columns:
             ser = cleaned[col]
@@ -97,7 +132,7 @@ def handle_download_cleaned_csv(filename):
     except Exception as clean_err:
         app.logger.warning("Cleaned CSV normalization fallback for %s: %s", filename, clean_err)
 
-    csv = cleaned.to_csv(index=True)
+    csv = cleaned.to_csv(index=_should_include_index_metadata(cleaned))
     resp = make_response(csv)
     resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
     display = request.args.get('display') or filename
@@ -184,7 +219,12 @@ def handle_download_static_plots_zip(filename):
     with zipfile.ZipFile(bio, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
         # Generate correlation heatmaps
         try:
-            spearman_heatmap = get_cached_heatmap(filename, df, method='spearman')
+            spearman_heatmap = get_cached_heatmap(
+                filename,
+                df,
+                method='spearman',
+                layout_preset='export',
+            )
             if spearman_heatmap:
                 raw = base64.b64decode(spearman_heatmap.encode('utf-8'))
                 zf.writestr("correlation_spearman.png", raw)
@@ -192,7 +232,12 @@ def handle_download_static_plots_zip(filename):
             app.logger.debug("ZIP spearman heatmap skipped for %s: %s", filename, heatmap_err)
         
         try:
-            pearson_heatmap = get_cached_heatmap(filename, df, method='pearson')
+            pearson_heatmap = get_cached_heatmap(
+                filename,
+                df,
+                method='pearson',
+                layout_preset='export',
+            )
             if pearson_heatmap:
                 raw = base64.b64decode(pearson_heatmap.encode('utf-8'))
                 zf.writestr("correlation_pearson.png", raw)
@@ -255,36 +300,39 @@ def handle_download_static_plots_zip(filename):
                 fig = Figure(figsize=get_export_chart_figsize("distribution", context="zip"))
                 ax = fig.subplots()
                 s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
-                ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label=col)
-                ax.set_title(f"Distribution: {col}", fontsize=10)
-                ax.set_xlabel(col, fontsize=9, labelpad=2)
-                ax.set_ylabel("Frequency", fontsize=9)
-                ax.grid(True, alpha=0.3)
-
-                try:
-                    from matplotlib.ticker import MaxNLocator
-                    ax.yaxis.set_major_locator(MaxNLocator(nbins=7, integer=True, min_n_ticks=4))
-                except Exception:
-                    pass
-
-                finite_unique_values = np.unique(s_arr[np.isfinite(s_arr)]) if s_arr.size else np.asarray([], dtype=float)
-                tick_policy = _resolve_static_tick_policy(
-                    finite_unique_values.tolist(),
-                    chart_type='distribution',
-                )
-                tick_values, tick_labels = _sample_numeric_axis_ticks(
+                axis_spec = build_distribution_axis_spec(
                     s_arr.tolist(),
-                    max_tick_labels=int(tick_policy['max_tick_labels']),
-                    min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
+                    min_bins=max(8, min(12, len(s_arr) // 5)) if len(s_arr) >= 20 else 8,
+                    max_bins=52,
+                    integer_span_threshold=260,
                 )
-                if tick_values:
-                    ax.set_xticks(tick_values)
-                    ax.set_xticklabels(
-                        tick_labels,
-                        rotation=int(tick_policy['tick_angle']),
-                        ha=str(tick_policy['tick_ha']),
-                        fontsize=float(tick_policy['tick_fontsize']),
-                    )
+                hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
+                if not hist_bins:
+                    hist_bins = max(8, min(52, int(len(s_arr) // 10) if len(s_arr) >= 20 else 8))
+                _hist_counts, hist_edges, _hist_patches = ax.hist(
+                    s_arr,
+                    bins=hist_bins,
+                    color='tab:blue',
+                    alpha=0.7,
+                    edgecolor='black',
+                    linewidth=0.5,
+                    label=col,
+                )
+                ax.set_title(f"Distribution: {col}", fontsize=10, pad=16)
+                ax.set_xlabel(col, fontsize=9, labelpad=0)
+                ax.set_ylabel("Frequency", fontsize=9, labelpad=8)
+                ax.grid(True, alpha=0.3)
+                _apply_dense_non_overlapping_y_ticks(
+                    ax,
+                    integer=True,
+                    label_fontsize=8.0,
+                    min_ticks=6,
+                    max_ticks=18,
+                )
+                if isinstance(axis_spec, dict) and axis_spec:
+                    apply_distribution_axis_spec(ax, axis_spec)
+                elif len(hist_edges) >= 2:
+                    ax.set_xlim(float(hist_edges[0]), float(hist_edges[-1]))
                 
                 # Add vertical stat lines on the histogram
                 try:
@@ -294,9 +342,10 @@ def handle_download_static_plots_zip(filename):
                         value_formatter=_format_stat_value,
                         legend_fontsize=6,
                         legend_columns=6,
-                        legend_y=-0.18,
+                        legend_y=-0.12,
+                        expand_xlim=False,
                     )
-                    fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
+                    apply_static_distribution_compact_layout(fig, ax, right=0.95, top=0.90)
                     
                     # Apply compact K/M/B/T axis labels for large values.
                     _apply_sci_formatter(ax)
@@ -304,7 +353,7 @@ def handle_download_static_plots_zip(filename):
                     app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
                 
                 buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150, pad_inches=0.0)
                 plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
@@ -377,7 +426,7 @@ def handle_download_static_plots_zip(filename):
                 fig, _ax = built_chart
                 
                 buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=120, pad_inches=0.0)
                 plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_categories.png", buf.read())
@@ -512,10 +561,17 @@ def handle_download_full_report_html(filename):
             ax = fig.subplots()
             s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
             ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
-            ax.set_title(f"Distribution: {col}")
+            ax.set_title(f"Distribution: {col}", pad=16)
             ax.set_xlabel(col)
-            ax.set_ylabel("Frequency")
+            ax.set_ylabel("Frequency", labelpad=8)
             ax.grid(True, alpha=0.3)
+            _apply_dense_non_overlapping_y_ticks(
+                ax,
+                integer=True,
+                label_fontsize=8.0,
+                min_ticks=6,
+                max_ticks=18,
+            )
             buf = io.BytesIO()
             fig.savefig(buf, format='png', bbox_inches='tight')
             buf.seek(0)

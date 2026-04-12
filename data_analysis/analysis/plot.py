@@ -126,7 +126,7 @@ def _sample_numeric_axis_ticks(
     max_tick_labels: int,
     min_spacing_ratio: float = 0.0,
 ) -> tuple[list[float], list[str]]:
-    """Sample numeric axis ticks while preserving as many unique values as feasible."""
+    """Sample readable numeric ticks using nice-step anchors and full-range coverage."""
     finite_values: list[float] = []
     for value in list(values):
         try:
@@ -139,53 +139,274 @@ def _sample_numeric_axis_ticks(
     if not finite_values:
         return [], []
 
-    unique_sorted = sorted(set(finite_values))
+    min_value = float(min(finite_values))
+    max_value = float(max(finite_values))
+    safe_max = max(2, int(max_tick_labels))
+    value_range = float(max_value - min_value)
+
+    if value_range <= 0:
+        return [min_value], [_format_precise_axis_value(min_value)]
+
+    try:
+        ratio = max(0.0, float(min_spacing_ratio))
+    except Exception:
+        ratio = 0.0
+
+    # Keep ticks dense while allowing spacing ratio to soften overly crowded labels.
+    density_scale = max(0.60, 1.0 - min(0.42, ratio * 0.55))
+    target_tick_count = max(2, min(safe_max, int(round(safe_max * density_scale))))
+    if safe_max >= 4:
+        target_tick_count = max(4, target_tick_count)
+
+    def _is_integer_like(v: float) -> bool:
+        tol = 1e-9 * max(1.0, abs(v))
+        return abs(v - round(v)) <= tol
+
+    all_integer_like = bool(finite_values) and all(_is_integer_like(v) for v in finite_values)
+    min_int = int(round(min_value))
+    max_int = int(round(max_value))
+    integer_span = max_int - min_int + 1
+
+    # If the integer span is reasonably small, show every value (avoid skipped years/categories).
+    if all_integer_like and integer_span >= 2 and integer_span <= safe_max:
+        tick_values = [float(v) for v in range(min_int, max_int + 1)]
+        return tick_values, [str(int(v)) for v in tick_values]
+
+    anchors = (1.0, 2.0, 2.5, 5.0, 10.0)
+
+    def _candidate_nice_steps(raw_step: float) -> list[float]:
+        if raw_step <= 0 or not math.isfinite(raw_step):
+            return [1.0]
+        exponent = int(math.floor(math.log10(raw_step)))
+        candidates: list[float] = []
+        for exp in range(exponent - 1, exponent + 12):
+            base = 10.0 ** exp
+            for anchor in anchors:
+                step = anchor * base
+                if step > 0:
+                    candidates.append(step)
+        floor_step = raw_step * 0.999999
+        return [step for step in sorted(set(candidates)) if step >= floor_step]
+
+    def _build_ticks(step: float) -> list[float]:
+        start = math.floor(min_value / step) * step
+        end = math.ceil(max_value / step) * step
+        tick_count = max(2, int(round((end - start) / step)) + 1)
+        raw_ticks = [start + idx * step for idx in range(tick_count)]
+
+        if raw_ticks and raw_ticks[0] > min_value:
+            raw_ticks.insert(0, raw_ticks[0] - step)
+        if raw_ticks and raw_ticks[-1] < max_value:
+            raw_ticks.append(raw_ticks[-1] + step)
+
+        if step >= 1:
+            round_decimals = 6
+        else:
+            round_decimals = min(12, max(4, int(math.ceil(-math.log10(step))) + 2))
+
+        ticks: list[float] = []
+        for raw in raw_ticks:
+            value = float(round(raw, round_decimals))
+            if abs(value) < 1e-12:
+                value = 0.0
+            if not ticks or not math.isclose(value, ticks[-1], rel_tol=0.0, abs_tol=1e-12):
+                ticks.append(value)
+        return ticks
+
+    rough_step = value_range / max(1, target_tick_count - 1)
+    chosen_step = rough_step
+    sampled_ticks: list[float] = []
+
+    for step in _candidate_nice_steps(rough_step):
+        candidate_ticks = _build_ticks(step)
+        chosen_step = step
+        sampled_ticks = candidate_ticks
+        if len(candidate_ticks) <= safe_max:
+            break
+
+    if not sampled_ticks:
+        sampled_ticks = [min_value, max_value]
+
+    if len(sampled_ticks) > safe_max:
+        sampled_idx = sorted({
+            int(round(i))
+            for i in np.linspace(0, len(sampled_ticks) - 1, num=safe_max)
+        })
+        sampled_ticks = [sampled_ticks[i] for i in sampled_idx]
+
+    max_abs_bound = max(abs(min_value), abs(max_value))
+    small_fractional_window = bool(value_range <= 4.0 and max_abs_bound <= 4.0)
+    prefer_plain_integer_labels = bool(
+        chosen_step >= 1.0
+        and not small_fractional_window
+        and max_abs_bound < 1e3
+    )
+
+    if prefer_plain_integer_labels:
+        integer_labels = [str(int(round(v))) for v in sampled_ticks]
+        if len(set(integer_labels)) == len(integer_labels):
+            return sampled_ticks, integer_labels
+
+    if small_fractional_window:
+        base_decimals = min(
+            10,
+            max(2, int(math.ceil(-math.log10(max(chosen_step, 1e-12)))) + 1),
+        )
+        for extra in range(0, 4):
+            decimals = min(10, base_decimals + extra)
+            fractional = [_format_precise_axis_value(v, decimals=decimals) for v in sampled_ticks]
+            if len(set(fractional)) == len(fractional):
+                return sampled_ticks, fractional
+
+    compact_labels = [_format_axis_tick_value(v) for v in sampled_ticks]
+    if len(set(compact_labels)) == len(compact_labels):
+        return sampled_ticks, compact_labels
+
+    spacing = value_range / max(1, len(sampled_ticks) - 1)
+    base_decimals = 2 if spacing >= 1 else min(
+        10,
+        max(3, int(math.ceil(-math.log10(max(spacing, 1e-12)))) + 1),
+    )
+    for extra in range(0, 5):
+        decimals = min(10, base_decimals + extra)
+        precise_labels = [_format_precise_axis_value(v, decimals=decimals) for v in sampled_ticks]
+        if len(set(precise_labels)) == len(precise_labels):
+            return sampled_ticks, precise_labels
+
+    return sampled_ticks, [f"{float(v):.12g}" for v in sampled_ticks]
+
+
+def _resolve_distribution_histogram_bins(
+    values: Sequence[Any] | np.ndarray | pd.Series,
+    *,
+    min_bins: int = 10,
+    max_bins: int = 50,
+    integer_span_threshold: int = 240,
+) -> np.ndarray | int:
+    """Resolve histogram bins for static distribution charts.
+
+    For integer-like ranges (e.g., years), prefer unit bins centered on each
+    integer value so x-ticks can map exactly to bar centers.
+    """
+    finite_values: list[float] = []
+    for value in list(values):
+        try:
+            numeric = float(value)
+        except Exception:
+            continue
+        if math.isfinite(numeric):
+            finite_values.append(numeric)
+
+    if not finite_values:
+        return max(2, int(min_bins))
+
+    safe_min_bins = max(2, int(min_bins))
+    safe_max_bins = max(safe_min_bins, int(max_bins))
+
+    def _is_integer_like(v: float) -> bool:
+        tol = 1e-9 * max(1.0, abs(v))
+        return abs(v - round(v)) <= tol
+
+    all_integer_like = bool(finite_values) and all(_is_integer_like(v) for v in finite_values)
+    if all_integer_like:
+        min_int = int(round(min(finite_values)))
+        max_int = int(round(max(finite_values)))
+        integer_span = max_int - min_int + 1
+        if integer_span >= 2 and integer_span <= int(integer_span_threshold):
+            start = float(min_int) - 0.5
+            stop = float(max_int) + 1.5
+            return np.arange(start, stop, 1.0, dtype=float)
+
+    adaptive_bins = max(safe_min_bins, min(safe_max_bins, int(len(finite_values) // 10)))
+    return int(adaptive_bins)
+
+
+def _sample_histogram_bin_ticks(
+    bin_edges: Sequence[Any] | np.ndarray,
+    max_tick_labels: int,
+    min_spacing_ratio: float = 0.0,
+) -> tuple[list[float], list[str]]:
+    """Return x-ticks sampled directly from histogram bar centers.
+
+    Sampling from actual bin centers guarantees that each rendered tick maps to
+    a real bar position, avoiding center/label drift.
+    """
+    if isinstance(bin_edges, np.ndarray):
+        edges_arr = bin_edges.astype(float, copy=False)
+    else:
+        with contextlib.suppress(Exception):
+            edges_arr = np.asarray(list(bin_edges), dtype=float)
+        if 'edges_arr' not in locals():
+            edges_arr = np.asarray([], dtype=float)
+
+    edges = edges_arr[np.isfinite(edges_arr)]
+    if edges.size < 2:
+        return [], []
+
+    edges = np.unique(np.sort(edges))
+    if edges.size < 2:
+        return [], []
+
+    centers = ((edges[:-1] + edges[1:]) * 0.5).astype(float)
+    if centers.size == 0:
+        return [], []
+
     safe_max = max(2, int(max_tick_labels))
 
-    if len(unique_sorted) > safe_max:
-        sampled_positions = sorted({
-            int(round(pos))
-            for pos in np.linspace(0, len(unique_sorted) - 1, num=safe_max)
-        })
-        if sampled_positions[0] != 0:
-            sampled_positions.insert(0, 0)
-        if sampled_positions[-1] != len(unique_sorted) - 1:
-            sampled_positions.append(len(unique_sorted) - 1)
-        tick_values = [unique_sorted[pos] for pos in sampled_positions]
-    else:
-        tick_values = unique_sorted
+    def _is_integer_like(v: float) -> bool:
+        tol = 1e-8 * max(1.0, abs(v))
+        return abs(v - round(v)) <= tol
 
-    if len(tick_values) > 2:
+    all_centers_integer_like = bool(centers.size) and all(
+        _is_integer_like(float(v)) for v in centers.tolist()
+    )
+
+    if all_centers_integer_like and centers.size <= safe_max:
+        sampled = centers
+    else:
         try:
             ratio = max(0.0, float(min_spacing_ratio))
         except Exception:
             ratio = 0.0
-        if ratio > 0:
-            data_range = float(unique_sorted[-1] - unique_sorted[0])
-            if data_range > 0:
-                base_spacing = data_range / max(1, safe_max - 1)
-                min_spacing = base_spacing * ratio
-                if min_spacing > 0:
-                    spaced_values: list[float] = [float(tick_values[0])]
-                    for value in tick_values[1:-1]:
-                        numeric = float(value)
-                        if (numeric - spaced_values[-1]) >= min_spacing:
-                            spaced_values.append(numeric)
-                    if tick_values[-1] != spaced_values[-1]:
-                        spaced_values.append(float(tick_values[-1]))
-                    tick_values = spaced_values
+        density_scale = max(0.62, 1.0 - min(0.45, ratio * 0.70))
+        target_tick_count = max(2, min(safe_max, int(round(safe_max * density_scale))))
 
-    if len(tick_values) > safe_max:
-        step = max(1, int(math.ceil(len(tick_values) / safe_max)))
-        reduced_tick_values = tick_values[::step]
-        if reduced_tick_values[-1] != tick_values[-1]:
-            reduced_tick_values.append(tick_values[-1])
-        tick_values = reduced_tick_values
+        if centers.size <= target_tick_count:
+            sampled = centers
+        else:
+            sampled_idx = sorted({
+                int(round(i))
+                for i in np.linspace(0, centers.size - 1, num=target_tick_count)
+            })
+            sampled = centers[sampled_idx]
 
-    compact_labels = [_format_axis_tick_value(value) for value in tick_values]
-    if len(set(compact_labels)) != len(compact_labels):
-        return tick_values, [_format_precise_axis_value(value) for value in tick_values]
-    return tick_values, compact_labels
+    tick_values = [float(v) for v in sampled.tolist()]
+    if not tick_values:
+        return [], []
+
+    if all(_is_integer_like(v) for v in tick_values):
+        integer_labels = [str(int(round(v))) for v in tick_values]
+        if len(set(integer_labels)) == len(integer_labels):
+            return tick_values, integer_labels
+
+    compact_labels = [_format_axis_tick_value(v) for v in tick_values]
+    if len(set(compact_labels)) == len(compact_labels):
+        return tick_values, compact_labels
+
+    step_candidates = np.diff(edges)
+    finite_steps = step_candidates[np.isfinite(step_candidates) & (step_candidates > 0)]
+    step = float(np.median(finite_steps)) if finite_steps.size else 0.0
+    base_decimals = 1 if step >= 1 else min(
+        10,
+        max(3, int(math.ceil(-math.log10(max(step, 1e-12)))) + 1),
+    )
+    for extra in range(0, 5):
+        decimals = min(10, base_decimals + extra)
+        precise_labels = [_format_precise_axis_value(v, decimals=decimals) for v in tick_values]
+        if len(set(precise_labels)) == len(precise_labels):
+            return tick_values, precise_labels
+
+    return tick_values, [f"{float(v):.12g}" for v in tick_values]
 
 
 def _tick_fontsize_for_labels(
@@ -214,6 +435,53 @@ def _tick_fontsize_for_labels(
     return 8.0
 
 
+def _apply_dense_non_overlapping_y_ticks(
+    ax: Any,
+    *,
+    integer: bool = False,
+    label_fontsize: float = 8.0,
+    min_ticks: int = 6,
+    max_ticks: int = 22,
+    min_spacing_factor: float = 1.9,
+) -> None:
+    """Maximize y-axis tick density while avoiding label overlap."""
+    try:
+        fig = getattr(ax, "figure", None)
+        fig_height_inches = float(fig.get_size_inches()[1]) if fig is not None else 6.0
+        axes_height_fraction = float(getattr(ax.get_position(), "height", 0.75))
+        axes_height_inches = max(1.0, fig_height_inches * max(0.2, axes_height_fraction))
+
+        safe_fontsize = max(6.0, float(label_fontsize))
+        safe_spacing_factor = max(1.6, float(min_spacing_factor))
+        min_label_spacing_inches = max(0.11, (safe_fontsize * safe_spacing_factor) / 72.0)
+        candidate_ticks = int(math.floor(axes_height_inches / min_label_spacing_inches))
+
+        safe_min = max(3, int(min_ticks))
+        safe_max = max(safe_min, int(max_ticks))
+        nbins = max(safe_min, min(safe_max, candidate_ticks))
+        min_target = max(safe_min, min(12, nbins))
+
+        ax.yaxis.set_major_locator(
+            mticker.MaxNLocator(
+                nbins=nbins,
+                min_n_ticks=min_target,
+                integer=bool(integer),
+                steps=[1, 2, 2.5, 5, 10],
+            )
+        )
+        ax.tick_params(axis='y', labelsize=safe_fontsize)
+    except Exception:
+        with contextlib.suppress(Exception):
+            ax.yaxis.set_major_locator(
+                mticker.MaxNLocator(
+                    nbins=max(6, int(min_ticks)),
+                    min_n_ticks=max(4, int(min_ticks) - 1),
+                    integer=bool(integer),
+                )
+            )
+            ax.tick_params(axis='y', labelsize=max(6.0, float(label_fontsize)))
+
+
 def _resolve_static_tick_policy(
     labels: Sequence[object] | pd.Index,
     *,
@@ -228,16 +496,20 @@ def _resolve_static_tick_policy(
         # to increase readability while avoiding overlaps.
         tick_angle = 0
         tick_ha = 'center'
-        target_tick_labels = min(16, label_count)
-        if label_count <= 8:
+        target_tick_labels = min(24, max(6, label_count))
+        if label_count <= 26:
             max_tick_labels = max(4, label_count)
-        elif label_count <= 16:
-            max_tick_labels = min(14, label_count)
+        elif label_count <= 40:
+            max_tick_labels = 24
+        elif label_count <= 80:
+            max_tick_labels = 20
         else:
-            max_tick_labels = min(12, label_count)
-        if max_label_length > 12:
-            max_tick_labels = max(6, min(max_tick_labels, 10))
-        min_spacing_ratio = 0.34 if (label_count > 16 or max_label_length > 10) else 0.28
+            max_tick_labels = 18
+        if max_label_length > 18 and label_count > 26:
+            max_tick_labels = max(10, max_tick_labels - 4)
+        elif max_label_length > 14 and label_count > 26:
+            max_tick_labels = max(12, max_tick_labels - 2)
+        min_spacing_ratio = 0.14 if label_count <= 26 else 0.20 if (label_count > 30 or max_label_length > 10) else 0.16
     else:
         target_tick_labels = min(25, label_count)
         can_fit_horizontal = target_tick_labels * (max_label_length + 1) <= 75
@@ -269,6 +541,127 @@ def _resolve_static_tick_policy(
         "tick_ha": tick_ha,
         "min_spacing_ratio": float(min_spacing_ratio),
     }
+
+
+def build_distribution_axis_spec(
+    values: Sequence[Any] | np.ndarray | pd.Series,
+    *,
+    min_bins: int = 8,
+    max_bins: int = 52,
+    integer_span_threshold: int = 260,
+) -> dict[str, Any]:
+    """Return a canonical distribution axis/bin spec shared across views/exports."""
+    finite = pd.to_numeric(pd.Series(values), errors='coerce').dropna().astype(float)
+    if finite.empty:
+        return {}
+
+    values_arr = np.asarray(finite.to_numpy(dtype=float), dtype=float)
+    hist_bins = _resolve_distribution_histogram_bins(
+        values_arr.tolist(),
+        min_bins=min_bins,
+        max_bins=max_bins,
+        integer_span_threshold=integer_span_threshold,
+    )
+    if isinstance(hist_bins, np.ndarray):
+        hist_edges = hist_bins.astype(float, copy=False)
+    else:
+        hist_edges = np.histogram_bin_edges(values_arr, bins=int(hist_bins)).astype(float)
+
+    hist_edges = hist_edges[np.isfinite(hist_edges)]
+    hist_edges = np.unique(np.sort(hist_edges))
+    if hist_edges.size < 2:
+        return {}
+
+    finite_unique_values = np.unique(values_arr[np.isfinite(values_arr)])
+    tick_policy = _resolve_static_tick_policy(
+        finite_unique_values.tolist(),
+        chart_type='distribution',
+    )
+    tick_values, tick_labels = _sample_histogram_bin_ticks(
+        hist_edges,
+        max_tick_labels=int(tick_policy['max_tick_labels']),
+        min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
+    )
+
+    bin_size: float | None = None
+    widths = np.diff(hist_edges)
+    finite_widths = widths[np.isfinite(widths) & (widths > 0)]
+    if finite_widths.size and np.allclose(finite_widths, finite_widths[0], rtol=1e-9, atol=1e-12):
+        bin_size = float(finite_widths[0])
+
+    return {
+        'hist_bins': [float(edge) for edge in hist_edges.tolist()],
+        'bin_edges': [float(edge) for edge in hist_edges.tolist()],
+        'bin_start': float(hist_edges[0]),
+        'bin_end': float(hist_edges[-1]),
+        'bin_size': bin_size,
+        'tickvals': [float(v) for v in tick_values],
+        'ticktext': [str(v) for v in tick_labels],
+        'tick_angle': int(tick_policy['tick_angle']),
+        'tick_ha': str(tick_policy['tick_ha']),
+        'tick_fontsize': float(tick_policy['tick_fontsize']),
+        'max_tick_labels': int(tick_policy['max_tick_labels']),
+        'min_spacing_ratio': float(tick_policy['min_spacing_ratio']),
+    }
+
+
+def apply_distribution_axis_spec(ax: Any, axis_spec: dict[str, Any] | None) -> None:
+    """Apply a distribution axis spec produced by ``build_distribution_axis_spec``."""
+    if not isinstance(axis_spec, dict) or not axis_spec:
+        return
+
+    tick_values = axis_spec.get('tickvals')
+    tick_labels = axis_spec.get('ticktext')
+    if isinstance(tick_values, list) and tick_values:
+        ax.set_xticks([float(v) for v in tick_values])
+        if isinstance(tick_labels, list) and tick_labels:
+            ax.set_xticklabels(
+                [str(label) for label in tick_labels],
+                rotation=int(axis_spec.get('tick_angle', 0)),
+                ha=str(axis_spec.get('tick_ha', 'center')),
+                fontsize=float(axis_spec.get('tick_fontsize', 8.0)),
+            )
+
+    try:
+        raw_start = axis_spec.get('bin_start')
+        raw_end = axis_spec.get('bin_end')
+        if raw_start is None or raw_end is None:
+            return
+        start = float(raw_start)
+        end = float(raw_end)
+        if math.isfinite(start) and math.isfinite(end) and end > start:
+            ax.set_xlim(start, end)
+    except Exception:
+        pass
+
+
+def apply_static_distribution_compact_layout(
+    fig: Any,
+    ax: Any,
+    *,
+    right: float = 0.95,
+    top: float = 0.90,
+) -> None:
+    """Compact distribution footer spacing while preserving no-overlap guardrails."""
+    with contextlib.suppress(Exception):
+        ax.xaxis.set_label_coords(0.5, -0.072)
+
+    max_rotation = 0.0
+    max_label_len = 0
+    with contextlib.suppress(Exception):
+        tick_labels = [str(tick.get_text() or '').strip() for tick in ax.get_xticklabels()]
+        max_label_len = max((len(label) for label in tick_labels), default=0)
+        rotations = [abs(float(tick.get_rotation() or 0.0)) for tick in ax.get_xticklabels()]
+        max_rotation = max(rotations, default=0.0)
+
+    if max_rotation >= 28 or max_label_len > 16:
+        bottom = 0.255
+    elif max_rotation >= 16 or max_label_len > 11:
+        bottom = 0.235
+    else:
+        bottom = 0.215
+
+    fig.subplots_adjust(bottom=bottom, right=right, top=top)
 
 
 def _stringify_axis_label(label: object) -> str:
@@ -464,8 +857,8 @@ def get_export_chart_figsize(
         ("zip", "trend"): (10.0, 7.4),
         ("zip", "forecast"): (10.0, 7.4),
         ("zip", "distribution"): (8.0, 8.2),
-        ("pdf", "trend"): (10.0, 7.4),
-        ("pdf", "forecast"): (10.0, 7.4),
+        ("pdf", "trend"): (10.0, 5.2),
+        ("pdf", "forecast"): (10.0, 5.2),
         ("pdf", "distribution"): (10.0, 8.2),
     }
     return size_map.get((str(context), str(chart_kind)), (10.0, 7.2))
@@ -484,8 +877,18 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     med_count = float(all_counts.median())
     most_freq = str(all_counts.index[0])
     least_freq = str(all_counts.index[-1]) if len(all_counts) > 0 else "N/A"
-    most_label = f"Most: '{_wrap_category_legend_label(most_freq, width=44, max_lines=3)}' ({max_count})"
-    least_label = f"Least: '{_wrap_category_legend_label(least_freq, width=44, max_lines=3)}' ({min_count})"
+    most_label_value = textwrap.shorten(
+        _stringify_axis_label(most_freq),
+        width=20,
+        placeholder='…',
+    )
+    least_label_value = textwrap.shorten(
+        _stringify_axis_label(least_freq),
+        width=20,
+        placeholder='…',
+    )
+    most_label = f"Most: '{most_label_value}' ({max_count})"
+    least_label = f"Least: '{least_label_value}' ({min_count})"
     legend_labels = [
         "Count",
         f"Avg: {_format_stat_value(avg_count)}",
@@ -496,14 +899,20 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
 
     category_labels = [_stringify_axis_label(label) for label in all_counts.index.tolist()]
     tick_positions: list[float] = [float(i) for i in range(category_count)]
+
+    # Export requirement: always show every category value on the x-axis,
+    # regardless of category count (PDF report + images ZIP).
     tick_labels = category_labels
-    max_label_length = max((len(label) for label in tick_labels), default=0)
+    visible_tick_labels = [label for label in tick_labels if label]
+    visible_tick_count = max(1, len(visible_tick_labels))
+    max_label_length = max((len(label) for label in visible_tick_labels), default=0)
     long_label_scale = min(1.0, max_label_length / 42.0)
-    label_density_scale = min(1.0, category_count / 180.0)
-    legend_fontsize = 12
-    legend_columns = 5
-    legend_rows = int(math.ceil(max(1, len(legend_labels)) / max(1, legend_columns)))
-    can_fit_horizontal = category_count * (max_label_length + 1) <= 120
+    label_density_scale = min(1.0, visible_tick_count / 180.0)
+    max_legend_label_length = max((len(label) for label in legend_labels), default=0)
+    legend_fontsize = 9 if max_legend_label_length > 26 else 10
+    legend_columns = len(legend_labels)
+    legend_rows = 1
+    can_fit_horizontal = visible_tick_count * (max_label_length + 1) <= 120
     tick_ha: Literal['left', 'center', 'right']
     if can_fit_horizontal:
         tick_angle = 0
@@ -517,29 +926,72 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     else:
         tick_angle = -32
         tick_ha = 'left'
-    tick_fontsize = 5.0 if category_count > 180 else 5.6 if category_count > 140 else 6.2 if category_count > 100 else 7.0 if category_count > 60 else 8.0
-    fig_width = min(48.0, max(16.0, category_count * 0.16))
-    fig_height = min(28.0, 18.5 + long_label_scale * 0.55 + label_density_scale * 0.85 + max(0, legend_rows - 1) * 0.24)
-    legend_y = (
-        -0.092
-        - long_label_scale * 0.006
-        - label_density_scale * 0.008
-        - max(0, legend_rows - 1) * 0.014
-        - (0.11 if tick_angle != 0 else 0.0)
+    # Keep x-tick font readable while avoiding overlap on dense category sets.
+    tick_fontsize = 6.0 if visible_tick_count > 100 else 7.0 if visible_tick_count > 60 else 8.0
+    # Keep export width in a narrow band so PDF/ZIP renders do not visually shrink
+    # bar heights or footer/title fonts when many categories are present.
+    fig_width = min(18.8, max(16.0, 16.0 + (category_count / 70.0)))
+    plot_area_height = 12.2
+    top_padding_inches = 0.95
+    tick_to_xlabel_gap_inches = 0.04 if tick_angle == 0 else 0.06
+    tick_footer_inches = (
+        0.26
+        if tick_angle == 0
+        else 1.80 + long_label_scale * 0.30 + label_density_scale * 0.25
     )
-    bottom_padding = (
-        0.25
-        + long_label_scale * 0.045
-        + label_density_scale * 0.055
-        + max(0, legend_rows - 1) * 0.02
-        + (0.34 if tick_angle != 0 else 0.0)
+    xlabel_lane_inches = 0.34
+    xlabel_to_legend_gap_inches = 0.06
+    legend_lane_inches = 0.50 + max(0, legend_rows - 1) * 0.22
+    bottom_inches = (
+        tick_footer_inches
+        + tick_to_xlabel_gap_inches
+        + xlabel_lane_inches
+        + xlabel_to_legend_gap_inches
+        + legend_lane_inches
     )
+    fig_height = min(30.0, max(16.0, plot_area_height + bottom_inches + top_padding_inches))
+    # Use actual content height -- no inflated minimum that wastes vertical space
+    bottom_fraction = min(
+        0.86,
+        max(0.10 if tick_angle == 0 else 0.16, bottom_inches / fig_height),
+    )
+    top_fraction = min(0.14, top_padding_inches / fig_height)
+    axes_top_fraction = max(0.72, 1.0 - top_fraction)
+    axes_height_fraction = max(1e-6, axes_top_fraction - bottom_fraction)
+    legend_bottom_axes = (0.0 - bottom_fraction) / axes_height_fraction
+    xlabel_center_fraction = (
+        legend_lane_inches
+        + xlabel_to_legend_gap_inches
+        + (xlabel_lane_inches * 0.5)
+    ) / fig_height
+    xlabel_y_axes = (xlabel_center_fraction - bottom_fraction) / axes_height_fraction
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     x_positions = np.arange(category_count, dtype=np.int64)
     y_values = [int(float(v)) for v in all_counts.to_numpy(dtype=float).tolist()]
-    bar_container = ax.bar(x_positions, y_values, color='tab:green', alpha=0.7, edgecolor='black', label='Count')
+    bar_color = '#2e7d32'
+    # Keep dense-category bar spacing visually consistent in rasterized exports.
+    # We target a minimum gap in *pixels* (not data units) so very dense charts
+    # avoid occasional conjoined-looking neighbors from subpixel rounding.
+    axes_width_fraction = max(1e-6, 0.88 - 0.125)
+    estimated_axes_px = max(320.0, fig_width * 120.0 * axes_width_fraction)
+    slot_px = estimated_axes_px / max(1.0, float(category_count))
+    target_gap_px = 2.0 if category_count >= 100 else 1.5
+    bar_width = 1.0 - (target_gap_px / max(1.0, slot_px))
+    bar_width = float(min(0.90, max(0.68, bar_width)))
+    bar_container = ax.bar(
+        x_positions,
+        y_values,
+        width=bar_width,
+        color=bar_color,
+        alpha=1.0,
+        edgecolor='none',
+        linewidth=0.0,
+        antialiased=False,
+        snap=True,
+        label='Count',
+    )
 
     if isinstance(bar_container, BarContainer):
         with contextlib.suppress(Exception):
@@ -548,7 +1000,7 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
                 for bar in bar_container.patches
             ]
 
-    if category_count <= 120:
+    if category_count <= 72:
         with contextlib.suppress(Exception):
             if isinstance(bar_container, BarContainer):
                 ax.bar_label(
@@ -558,17 +1010,25 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
                     fontsize=8,
                 )
 
-    ax.set_title(f"Categories: {col} ({total_unique} unique values)", fontsize=13)
-    ax.set_xlabel(col, fontsize=13, labelpad=9)
-    ax.set_ylabel("Count", fontsize=11)
+    ax.set_title(f"Categories: {col} ({total_unique} unique values)", fontsize=13, pad=16)
+    ax.set_xlabel(col, fontsize=13, labelpad=0)
+    ax.set_ylabel("Count", fontsize=11, labelpad=8)
     ax.grid(True, alpha=0.3, axis='y')
     ax.margins(x=0.01)
     ax.set_ylim(0, max(max_count * 1.06, 1.0))
     ax.set_xlim(-0.5, category_count - 0.5)
 
+    _apply_dense_non_overlapping_y_ticks(
+        ax,
+        integer=True,
+        label_fontsize=9.0,
+        min_ticks=6,
+        max_ticks=22,
+    )
+
     ax.xaxis.set_major_locator(mticker.FixedLocator(tick_positions))
     ax.xaxis.set_major_formatter(mticker.FixedFormatter(tick_labels))
-    x_tick_pad = 1.0 if tick_angle == 0 else 0.0
+    x_tick_pad = 2.0 if tick_angle == 0 else 0.0
     ax.tick_params(axis='x', pad=x_tick_pad, labelsize=tick_fontsize, direction='out')
     if tick_angle != 0:
         with contextlib.suppress(Exception):
@@ -588,37 +1048,52 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
 
     ylim = ax.get_ylim()
     y_range = ylim[1] - ylim[0]
-    text_offset = max((y_range * 0.02) if y_range else 0.0, 0.25)
+    base_text_offset = max((y_range * 0.006) if y_range else 0.0, 0.08)
+    min_vertical_gap = max(
+        base_text_offset * 2.2,
+        (y_range * 0.012) if y_range else 0.0,
+        0.16,
+    )
     if avg_count >= med_count:
-        avg_y = avg_count + text_offset
+        avg_y = avg_count + base_text_offset
         avg_va = 'bottom'
-        med_y = med_count - text_offset
+        med_y = med_count - base_text_offset
         med_va = 'top'
+        pair_gap = avg_y - med_y
+        if pair_gap < min_vertical_gap:
+            push = (min_vertical_gap - pair_gap) / 2.0
+            avg_y += push
+            med_y -= push
     else:
-        avg_y = avg_count - text_offset
+        avg_y = avg_count - base_text_offset
         avg_va = 'top'
-        med_y = med_count + text_offset
+        med_y = med_count + base_text_offset
         med_va = 'bottom'
+        pair_gap = med_y - avg_y
+        if pair_gap < min_vertical_gap:
+            push = (min_vertical_gap - pair_gap) / 2.0
+            avg_y -= push
+            med_y += push
 
     ax.text(
-        0.995,
+        1.008,
         avg_y,
         f'Avg: {_format_stat_value(avg_count)}',
         transform=ax.get_yaxis_transform(),
         va=avg_va,
-        ha='right',
+        ha='left',
         fontsize=8,
         color='#f39c12',
         fontweight='bold',
         clip_on=False,
     )
     ax.text(
-        0.995,
+        1.008,
         med_y,
         f'Med: {_format_stat_value(med_count)}',
         transform=ax.get_yaxis_transform(),
         va=med_va,
-        ha='right',
+        ha='left',
         fontsize=8,
         color='#9b59b6',
         fontweight='bold',
@@ -646,16 +1121,16 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
 
     ax.legend(
         fontsize=legend_fontsize,
-        loc='upper center',
-        bbox_to_anchor=(0.5, legend_y),
+        loc='lower center',
+        bbox_to_anchor=(0.5, legend_bottom_axes),
         ncol=legend_columns,
         frameon=False,
-        columnspacing=0.35,
-        handletextpad=0.20,
+        columnspacing=0.26,
+        handletextpad=0.16,
+        borderaxespad=0.0,
     )
-    min_bottom = 0.24 if tick_angle == 0 else 0.60
-    max_bottom = 0.42 if tick_angle == 0 else 0.82
-    fig.subplots_adjust(bottom=min(max_bottom, max(min_bottom, bottom_padding)), right=0.94, top=0.93)
+    fig.subplots_adjust(bottom=bottom_fraction, right=0.88, top=axes_top_fraction)
+    ax.xaxis.set_label_coords(0.5, xlabel_y_axes)
     return fig, ax
 
 
@@ -666,7 +1141,8 @@ def _add_static_distribution_overlays(
     value_formatter: Callable[[float], str] | None = None,
     legend_fontsize: float = 6,
     legend_columns: int = 6,
-    legend_y: float = -0.20,
+    legend_y: float = -0.12,
+    expand_xlim: bool = True,
 ) -> dict[str, float]:
     """Add consistent stat overlays to a static histogram axis.
 
@@ -704,12 +1180,13 @@ def _add_static_distribution_overlays(
 
     xlim = ax.get_xlim()
     x_range = max(float(xlim[1] - xlim[0]), 1e-9)
-    ax.set_xlim(xlim[0] - x_range * 0.03, xlim[1] + x_range * 0.03)
-    xlim = ax.get_xlim()
-    x_range = max(float(xlim[1] - xlim[0]), 1e-9)
+    if bool(expand_xlim):
+        ax.set_xlim(xlim[0] - x_range * 0.03, xlim[1] + x_range * 0.03)
+        xlim = ax.get_xlim()
+        x_range = max(float(xlim[1] - xlim[0]), 1e-9)
 
     xaxis_transform = blended_transform_factory(ax.transData, ax.transAxes)
-    top_lane = 0.972
+    top_lane = 0.978
     x_offset = x_range * 0.012
 
     if stats_mean <= stats_median:
@@ -763,15 +1240,17 @@ def _add_static_distribution_overlays(
             clip_on=False,
         )
 
-    marker_lane_y = 0.033
-    min_color = '#f1c40f'  # Bright yellow
-    max_color = '#008fa3'
+    # Min/Max: sit on x-axis (marker_lane_y=0.008), text at 0.04 above
+    marker_lane_y = 0.008
+    # Colors legible on both blue histogram bars and white background
+    min_color = '#b45309'  # Dark amber - high contrast on blue and white
+    max_color = '#15803d'  # Dark green - high contrast on blue and white
     edge_color = '#0b1220'
-    min_xytext = (-2, 4)
-    max_xytext = (2, 4)
+    min_xytext = (2, 5)
+    max_xytext = (-2, 5)
     if abs(stats_max - stats_min) <= x_range * 0.04:
-        min_xytext = (-2, 6)
-        max_xytext = (2, 10)
+        min_xytext = (2, 5)
+        max_xytext = (-2, 12)
 
     ax.scatter(
         [stats_min],
@@ -805,17 +1284,11 @@ def _add_static_distribution_overlays(
         xycoords=xaxis_transform,
         textcoords='offset points',
         xytext=min_xytext,
-        ha='right',
+        ha='left',
         va='bottom',
         fontsize=6,
         color=min_color,
         fontweight='bold',
-        bbox={
-            'boxstyle': 'round,pad=0.16',
-            'facecolor': (1.0, 1.0, 1.0, 0.82),
-            'edgecolor': edge_color,
-            'linewidth': 0.6,
-        },
         annotation_clip=False,
     )
     ax.annotate(
@@ -824,22 +1297,16 @@ def _add_static_distribution_overlays(
         xycoords=xaxis_transform,
         textcoords='offset points',
         xytext=max_xytext,
-        ha='left',
+        ha='right',
         va='bottom',
         fontsize=6,
         color=max_color,
         fontweight='bold',
-        bbox={
-            'boxstyle': 'round,pad=0.16',
-            'facecolor': (1.0, 1.0, 1.0, 0.82),
-            'edgecolor': edge_color,
-            'linewidth': 0.6,
-        },
         annotation_clip=False,
     )
 
     ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {formatter(stats_std)}')
-    legend_anchor = max(-0.24, min(float(legend_y), -0.14))
+    legend_anchor = max(-0.16, min(float(legend_y), -0.09))
     ax.legend(
         fontsize=legend_fontsize,
         loc='upper center',
@@ -1054,12 +1521,19 @@ def generate_plot(
             except Exception:
                 pass
     
-    ax.set_title(title, fontsize=10)
-    ax.set_xlabel(xlabel, fontsize=9, labelpad=10)
-    ax.set_ylabel(ylabel, fontsize=9)
+    ax.set_title(title, fontsize=10, pad=16)
+    ax.set_xlabel(xlabel, fontsize=9, labelpad=2)
+    ax.set_ylabel(ylabel, fontsize=9, labelpad=8)
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
-    ax.tick_params(labelsize=8)
+    ax.tick_params(axis='x', labelsize=8)
+    _apply_dense_non_overlapping_y_ticks(
+        ax,
+        integer=False,
+        label_fontsize=8.0,
+        min_ticks=6,
+        max_ticks=20,
+    )
     
     # Add visual statistics markers on the chart
     try:
@@ -1088,8 +1562,8 @@ def generate_plot(
             ax.text(xlim[1], stats_mean - y_offset, f' Avg: {_format_stat_value(stats_mean)}', va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
         
         # Mark the actual Min and Max points on the data with value annotations
-        min_color = '#ff3b30'
-        max_color = '#00e5ff'
+        min_color = '#b45309'  # Dark amber - high contrast on blue and white
+        max_color = '#15803d'  # Dark green - high contrast on blue and white
         edge_color = '#0b1220'
 
         def _annotate_extreme(x_val, y_val, label_text, color, side):
@@ -1140,10 +1614,10 @@ def generate_plot(
         ax.plot([], [], color='#94a3b8', linestyle=':', label=f'Std: {_format_stat_value(stats_std)}')
 
         # Legend on single line - at the lowest position below x-axis label
-        ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.30), ncol=6, frameon=False, columnspacing=0.6, handletextpad=0.3)
+        ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.16), ncol=6, frameon=False, columnspacing=0.6, handletextpad=0.3)
 
         with contextlib.suppress(Exception):
-            fig.subplots_adjust(bottom=0.36, right=0.98, top=0.90)
+            fig.subplots_adjust(bottom=0.25, right=0.98, top=0.90)
 
         # Std appears in legend only
     except Exception as e:
@@ -1153,11 +1627,18 @@ def generate_plot(
     # PERFORMANCE: Use WebP if available (smaller), fallback to PNG
     fmt = 'webp' if use_webp else 'png'
     try:
+        _apply_dense_non_overlapping_y_ticks(
+            ax,
+            integer=False,
+            label_fontsize=8.0,
+            min_ticks=6,
+            max_ticks=20,
+        )
         _apply_sci_formatter(ax)
-        fig.savefig(buf, format=fmt, bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(buf, format=fmt, bbox_inches='tight', pad_inches=0.0)
     except Exception as e:
         app.logger.debug("generate_plot save as %s failed; falling back to png: %s", fmt, e)
-        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.0)
     buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
@@ -1177,6 +1658,7 @@ def generate_forecast_plot(
     stats=None,
     legend_y=None,
     xlabel_labelpad=None,
+    x_tick_angle_override: int | None = None,
     figsize: tuple[float, float] | None = None,
     display_index: pd.Index | list[object] | tuple[object, ...] | None = None,
 ):
@@ -1388,10 +1870,10 @@ def generate_forecast_plot(
         except Exception as e:
             app.logger.debug("generate_forecast_plot datetime y-limits skipped for '%s': %s", title, e)
 
-    ax.set_title(title)
+    ax.set_title(title, pad=16)
     # Use a sensible x-axis label depending on index type
     try:
-        label_pad = 6 if xlabel_labelpad is None else xlabel_labelpad
+        label_pad = 2 if xlabel_labelpad is None else xlabel_labelpad
         if has_reliable_index:
             resolved_xlabel = xlabel or 'Timestamp'
         else:
@@ -1399,12 +1881,16 @@ def generate_forecast_plot(
             resolved_xlabel = 'Index' if raw_xlabel in {'', 'timestamp', 'time', 'date'} else str(xlabel)
         ax.set_xlabel(resolved_xlabel, labelpad=label_pad)
     except Exception:
-        label_pad = 6 if xlabel_labelpad is None else xlabel_labelpad
+        label_pad = 2 if xlabel_labelpad is None else xlabel_labelpad
         ax.set_xlabel(xlabel, labelpad=label_pad)
-    ax.set_ylabel(ylabel)
-
-    with contextlib.suppress(Exception):
-        ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=10, min_n_ticks=6))
+    ax.set_ylabel(ylabel, labelpad=8)
+    _apply_dense_non_overlapping_y_ticks(
+        ax,
+        integer=False,
+        label_fontsize=8.0,
+        min_ticks=6,
+        max_ticks=20,
+    )
 
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -1418,12 +1904,17 @@ def generate_forecast_plot(
         tick_labels = [tick.get_text() for tick in ax.get_xticklabels() if tick.get_text()]
         final_tick_policy = _resolve_static_tick_policy(tick_labels, chart_type='forecast')
         tick_fontsize = float(final_tick_policy['tick_fontsize'])
+        tick_angle = int(final_tick_policy['tick_angle'])
+        tick_ha = str(final_tick_policy['tick_ha'])
+        if x_tick_angle_override is not None:
+            tick_angle = int(x_tick_angle_override)
+            tick_ha = 'left' if tick_angle != 0 else 'center'
         # Always rotate visible labels for better readability
         # Use small font to fit more labels
         plt.setp(
             ax.get_xticklabels(),
-            rotation=int(final_tick_policy['tick_angle']),
-            ha=str(final_tick_policy['tick_ha']),
+            rotation=tick_angle,
+            ha=tick_ha,
             fontsize=tick_fontsize,
         )
         
@@ -1507,8 +1998,8 @@ def generate_forecast_plot(
             )
 
         # Use global min/max values (from full history) for markers and annotations
-        min_color = '#ff3b30'
-        max_color = '#00BCD4'  # Cyan - works on both light and dark backgrounds
+        min_color = '#b45309'  # Dark amber - high contrast on blue and white
+        max_color = '#15803d'  # Dark green - high contrast on blue and white
         edge_color = '#0b1220'
         # Plot Min marker
         ax.scatter([tail_min_pos], [hist_min], color=min_color, s=30, zorder=10, marker='v', 
@@ -1527,25 +2018,42 @@ def generate_forecast_plot(
         with contextlib.suppress(Exception):
             fig.subplots_adjust(right=0.82)
 
-        # Keep x-axis title above the legend lane for static outputs.
+        # Keep x-axis title close to the legend lane while preserving readability.
+        axis_title_y = -0.10
         with contextlib.suppress(Exception):
-            ax.xaxis.set_label_coords(0.5, -0.18)
+            ax.xaxis.set_label_coords(0.5, axis_title_y)
 
-        # Legend on single line - below x-axis title (Index)
-        legend_floor = -0.34
-        legend_anchor = legend_floor if legend_y is None else max(legend_floor, min(float(legend_y), -0.22))
+        # Keep legend close to axis title with a hard no-overlap minimum lane gap.
+        default_legend_y = -0.16
+        legend_anchor_requested = default_legend_y if legend_y is None else float(legend_y)
+        legend_anchor = max(-0.20, min(legend_anchor_requested, axis_title_y - 0.03))
         ax.legend(fontsize=8, loc='upper center', bbox_to_anchor=(0.5, legend_anchor), ncol=12, frameon=False, columnspacing=0.45, handletextpad=0.25)
 
         with contextlib.suppress(Exception):
-            fig.subplots_adjust(bottom=0.42, right=0.82, top=0.92)
+            tick_rotations = [abs(float(tick.get_rotation() or 0.0)) for tick in ax.get_xticklabels()]
+            max_rotation = max(tick_rotations, default=0.0)
+            if max_rotation >= 30:
+                bottom_margin = 0.31
+            elif max_rotation >= 18:
+                bottom_margin = 0.28
+            else:
+                bottom_margin = 0.245
+            fig.subplots_adjust(bottom=bottom_margin, right=0.82, top=0.92)
         
         # Std appears in legend only
     except Exception as e:
         app.logger.debug("generate_forecast_plot stats overlay skipped for '%s': %s", title, e)
 
     buf = io.BytesIO()
+    _apply_dense_non_overlapping_y_ticks(
+        ax,
+        integer=False,
+        label_fontsize=8.0,
+        min_ticks=6,
+        max_ticks=20,
+    )
     _apply_sci_formatter(ax)
-    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.2)
+    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.0)
     buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
@@ -1622,6 +2130,8 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
     legend_y = round(max(-0.54, -0.43 - long_label_scale * 0.012 - label_density_scale * 0.012 - max(0, legend_rows - 1) * 0.024), 3)
     title_standoff = 0
     chart_height = int(round(1325 + long_label_scale * 14 + label_density_scale * 18 + max(0, legend_rows - 1) * 8))
+    plot_area_px = max(340, chart_height - bottom_margin - 120)
+    y_tick_count = max(9, min(26, int(math.floor(plot_area_px / 38.0))))
     show_bar_labels = len(x_values) <= 120
 
     bar_trace = {
@@ -1681,7 +2191,16 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
             "titlefont": {"color": "#c0c0c0"},
             "automargin": True,
         },
-        "yaxis": {"title": "Count", "showgrid": True, "gridcolor": "rgba(128,128,128,0.3)", "tickfont": {"color": "#b0b0b0"}, "titlefont": {"color": "#c0c0c0"}},
+        "yaxis": {
+            "title": "Count",
+            "showgrid": True,
+            "gridcolor": "rgba(128,128,128,0.3)",
+            "tickfont": {"color": "#b0b0b0"},
+            "titlefont": {"color": "#c0c0c0"},
+            "nticks": y_tick_count,
+            "tickmode": "auto",
+            "automargin": True,
+        },
         "showlegend": True,
         "legend": {
             "orientation": "h",
@@ -1775,7 +2294,13 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
     return {"traces": traces, "layout": layout}
 
 
-def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
+def generate_correlation_heatmap(
+    df,
+    method='spearman',
+    title='Correlation Heatmap',
+    *,
+    layout_preset: Literal['default', 'export'] = 'default',
+):
     """Generate a correlation heatmap as base64 image."""
     rt = _bind_runtime_globals()
     fig = None
@@ -1813,11 +2338,28 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
         n_cols = len(corr.columns)
         
         # Dynamic sizing
-        figsize_dim = max(10, n_cols * 0.6)
+        preset = str(layout_preset).strip().lower()
+        export_layout = preset == 'export'
+        figsize_dim = max(10.8, n_cols * 0.62) if export_layout else max(10, n_cols * 0.6)
         fontsize = max(6, min(10, 150 / n_cols))
+        corr_labels = [_stringify_axis_label(label) for label in corr.columns.tolist()]
+        max_corr_label_len = max((len(label) for label in corr_labels), default=0)
+        if export_layout:
+            if n_cols <= 6 and max_corr_label_len <= 16:
+                corr_x_tick_angle = 0
+            elif n_cols <= 10 and max_corr_label_len <= 24:
+                corr_x_tick_angle = -12
+            elif n_cols <= 16 and max_corr_label_len <= 30:
+                corr_x_tick_angle = -18
+            else:
+                corr_x_tick_angle = -24
+        else:
+            corr_x_tick_angle = -32
+        corr_x_tick_ha = 'center' if corr_x_tick_angle == 0 else 'left'
         
         # Create heatmap
-        fig, ax = plt.subplots(figsize=(figsize_dim, figsize_dim * 0.8))
+        fig_height = max(7.8, figsize_dim * 0.78) if export_layout else max(6.2, figsize_dim * 0.66)
+        fig, ax = plt.subplots(figsize=(figsize_dim, fig_height))
         if sns is not None:
             sns.heatmap(
                 corr,
@@ -1825,20 +2367,41 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
                 fmt='.2f',
                 cmap='coolwarm',
                 center=0,
-                square=True,
+                square=False,
                 linewidths=0.5,
-                cbar_kws={"shrink": 0.8},
+                cbar_kws={"shrink": 0.86 if export_layout else 0.8},
                 vmin=-1,
                 vmax=1,
                 ax=ax,
                 annot_kws={"size": fontsize},
             )
+            with contextlib.suppress(Exception):
+                ax.set_xticklabels(
+                    [str(c) for c in corr.columns],
+                    rotation=corr_x_tick_angle,
+                    ha=corr_x_tick_ha,
+                    rotation_mode='anchor',
+                    fontsize=max(6, fontsize - 1),
+                )
+            with contextlib.suppress(Exception):
+                ax.set_yticklabels(
+                    [str(c) for c in corr.index],
+                    fontsize=max(6, fontsize - 1),
+                )
+            with contextlib.suppress(Exception):
+                ax.tick_params(axis='x', pad=1.5)
         else:
             data = corr.to_numpy(dtype=float)
-            im = ax.imshow(data, cmap='coolwarm', vmin=-1, vmax=1, aspect='equal')
+            im = ax.imshow(data, cmap='coolwarm', vmin=-1, vmax=1, aspect='auto')
             ax.set_xticks(np.arange(n_cols))
             ax.set_yticks(np.arange(n_cols))
-            ax.set_xticklabels([str(c) for c in corr.columns], rotation=45, ha='right', fontsize=max(6, fontsize - 1))
+            ax.set_xticklabels(
+                [str(c) for c in corr.columns],
+                rotation=corr_x_tick_angle,
+                ha=corr_x_tick_ha,
+                rotation_mode='anchor',
+                fontsize=max(6, fontsize - 1),
+            )
             ax.set_yticklabels([str(c) for c in corr.index], fontsize=max(6, fontsize - 1))
             annotate_cells = n_cols <= 28
             if annotate_cells:
@@ -1847,11 +2410,11 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
                         val = data[r, c]
                         color = 'white' if abs(val) > 0.55 else 'black'
                         ax.text(c, r, f"{val:.2f}", ha='center', va='center', fontsize=max(5, fontsize - 2), color=color)
-            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, shrink=0.8)
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, shrink=0.86 if export_layout else 0.8)
             ax.grid(False)
 
         ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
-        plt.tight_layout()
+        plt.tight_layout(pad=0.55 if export_layout else 0.4)
         
         buf = io.BytesIO()
         fig.savefig(buf, format='png', bbox_inches='tight', dpi=100)
@@ -1867,7 +2430,13 @@ def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatm
         return None
 
 
-def get_cached_heatmap(filename: str, df: pd.DataFrame, method: str = 'spearman'):
+def get_cached_heatmap(
+    filename: str,
+    df: pd.DataFrame,
+    method: str = 'spearman',
+    *,
+    layout_preset: Literal['default', 'export'] = 'default',
+):
     """Get correlation heatmap from cache or generate and cache it.
     
     Avoids regenerating identical heatmaps for PDF when already generated for web view.
@@ -1875,13 +2444,18 @@ def get_cached_heatmap(filename: str, df: pd.DataFrame, method: str = 'spearman'
     rt = _bind_runtime_globals()
     logger = rt.app.logger
     cache = rt.HEATMAP_CACHE
-    cache_key = (filename, method)
+    cache_key = (filename, method, str(layout_preset))
     cached = cache.get(cache_key)
     if cached is not None:
-        logger.debug("Heatmap cache HIT: %s/%s", filename[:8], method)
+        logger.debug("Heatmap cache HIT: %s/%s/%s", filename[:8], method, layout_preset)
         return cached
-    logger.debug("Heatmap cache MISS: %s/%s - generating", filename[:8], method)
-    img = generate_correlation_heatmap(df, method=method, title=f'{method.capitalize()} Correlation')
+    logger.debug("Heatmap cache MISS: %s/%s/%s - generating", filename[:8], method, layout_preset)
+    img = generate_correlation_heatmap(
+        df,
+        method=method,
+        title=f'{method.capitalize()} Correlation',
+        layout_preset=layout_preset,
+    )
     if img:
         cache.set(cache_key, img)
     return img
@@ -1907,17 +2481,21 @@ def generate_stl_plot(series: pd.Series, title: str, seasonal_period: int):
         axes[0].plot(s.index, s.values, color='tab:blue', lw=1.2)
         axes[0].set_ylabel("Observed")
         axes[0].grid(True, alpha=0.3)
+        _apply_dense_non_overlapping_y_ticks(axes[0], integer=False, label_fontsize=7.0, min_ticks=4, max_ticks=10)
         axes[1].plot(res.trend.index, res.trend.values, color='tab:orange', lw=1.6)
         axes[1].set_ylabel("Trend")
         axes[1].grid(True, alpha=0.3)
+        _apply_dense_non_overlapping_y_ticks(axes[1], integer=False, label_fontsize=7.0, min_ticks=4, max_ticks=10)
         axes[2].plot(res.seasonal.index, res.seasonal.values, color='tab:green', lw=1.6)
         axes[2].set_ylabel("Seasonal")
         axes[2].grid(True, alpha=0.3)
+        _apply_dense_non_overlapping_y_ticks(axes[2], integer=False, label_fontsize=7.0, min_ticks=4, max_ticks=10)
         axes[3].plot(res.resid.index, res.resid.values, color='tab:red', lw=1.6)
         axes[3].axhline(0, color='gray', ls=':', lw=1)
         axes[3].set_ylabel("Residual")
         axes[3].grid(True, alpha=0.3)
-        axes[0].set_title(title)
+        _apply_dense_non_overlapping_y_ticks(axes[3], integer=False, label_fontsize=7.0, min_ticks=4, max_ticks=10)
+        axes[0].set_title(title, pad=12)
         plt.tight_layout()
 
         buf = io.BytesIO()
@@ -1961,6 +2539,9 @@ def get_cached_stl_plot(filename: str, column: str, series: pd.Series, seasonal_
 __all__ = [
     "_cap_anomalies_for_display",
     "_anomaly_positions_for_index",
+    "build_distribution_axis_spec",
+    "apply_distribution_axis_spec",
+    "apply_static_distribution_compact_layout",
     "generate_plot",
     "generate_forecast_plot",
     "_build_category_plotly_chart",

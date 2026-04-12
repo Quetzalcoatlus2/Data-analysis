@@ -6,6 +6,7 @@ from bisect import bisect_left
 from data_analysis.analysis.plot import (
     _build_non_timeseries_tick_labels,
     _resolve_plot_display_axis,
+    build_distribution_axis_spec,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
@@ -154,20 +155,39 @@ def handle_api_interactive_data(filename):
         app.logger.debug("Interactive API forecast_pct parse fallback used for %s: %s", filename, e)
         pct = 0.05
 
+    raw_data_range = request.args.get('data_range', '1.0')
+    try:
+        parsed_data_range = float(raw_data_range)
+        if not math.isfinite(parsed_data_range) or parsed_data_range <= 0:
+            parsed_data_range = 1.0
+    except Exception:
+        parsed_data_range = 1.0
+
     # Check cache first for instant response (keyed by request parameters)
-    cache_key = _build_interactive_cache_key(filename, pct, user_contam)
+    cache_key = _build_interactive_cache_key(filename, pct, user_contam, parsed_data_range)
     cached = INTERACTIVE_DATA_CACHE.get(cache_key)
     if cached is not None:
         _log_cache_stats_if_needed("interactive-cached")
         elapsed = time.perf_counter() - request_start
-        app.logger.info("Interactive API cache HIT file=%s pct=%.4f contam=%.4f elapsed=%.3fs", filename, pct, user_contam, elapsed)
+        app.logger.info(
+            "Interactive API cache HIT file=%s pct=%.4f contam=%.4f range=%s elapsed=%.3fs",
+            filename,
+            pct,
+            user_contam,
+            parsed_data_range,
+            elapsed,
+        )
         return jsonify({"ok": True, "data": cached, "cached": True})
 
     # Backward compatibility: older callers/tests may warm the cache with the
     # filename-only key used before parameterized interactive cache keys.
     # Restrict fallback to default requests so parameter-specific responses do
     # not collide.
-    legacy_default_request = ('forecast_pct' not in request.args) and ('contamination' not in request.args)
+    legacy_default_request = (
+        ('forecast_pct' not in request.args)
+        and ('contamination' not in request.args)
+        and ('data_range' not in request.args)
+    )
     if legacy_default_request:
         legacy_cached = INTERACTIVE_DATA_CACHE.get(filename)
         if legacy_cached is not None:
@@ -175,10 +195,11 @@ def handle_api_interactive_data(filename):
             _log_cache_stats_if_needed("interactive-cached")
             elapsed = time.perf_counter() - request_start
             app.logger.info(
-                "Interactive API legacy cache HIT file=%s pct=%.4f contam=%.4f elapsed=%.3fs",
+                "Interactive API legacy cache HIT file=%s pct=%.4f contam=%.4f range=%s elapsed=%.3fs",
                 filename,
                 pct,
                 user_contam,
+                parsed_data_range,
                 elapsed,
             )
             return jsonify({"ok": True, "data": legacy_cached, "cached": True})
@@ -187,6 +208,26 @@ def handle_api_interactive_data(filename):
     df = get_dataframe_for(filename)
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         return jsonify({"ok": False, "error": "Dataset not found"}), 404
+
+    total_rows = int(getattr(df, 'shape', (0,))[0]) if hasattr(df, 'shape') else 0
+    data_range_rows = 0
+    try:
+        if parsed_data_range <= 0:
+            parsed_data_range = 1.0
+        elif parsed_data_range <= 1.0:
+            if total_rows > 0:
+                rows = int(math.ceil(total_rows * parsed_data_range))
+                data_range_rows = max(1, min(rows, total_rows))
+                if data_range_rows >= total_rows:
+                    data_range_rows = 0
+        else:
+            rows = int(parsed_data_range)
+            if rows > 0 and total_rows > 0:
+                rows = min(rows, total_rows)
+                if rows < total_rows:
+                    data_range_rows = rows
+    except Exception:
+        data_range_rows = 0
     
     def _steps_for_history_length(history_len: int) -> int:
         """Map forecast_pct to steps for a concrete visible history length."""
@@ -215,17 +256,17 @@ def handle_api_interactive_data(filename):
         series = numeric_df_cached[column].dropna()
         if series.empty or len(series) < 5:
             continue
+        s_tail = series.tail(data_range_rows) if data_range_rows > 0 else series
+        if s_tail.empty:
+            continue
         
         cols_processed += 1
         
         # Reuse shared anomaly cache helper.
-        an_idx, an_score = get_cached_anomalies(filename, column, series, user_contam)
+        an_idx, an_score = get_cached_anomalies(filename, column, s_tail, user_contam)
         
-        # Build traces using NUMERIC indices for proportional X-axis display
-        # This ensures forecast (e.g. 20%) takes proportionally 20% of chart width
-        # Always provide full series to interactive API.
-        # The UI Data Range control applies any user-requested reduction.
-        s_tail = series
+        # Build traces using NUMERIC indices for proportional X-axis display.
+        # API response is range-specific when data_range is provided.
         n_hist = len(s_tail)
         x_axis_title, display_history_index = _resolve_plot_display_axis(
             s_tail,
@@ -520,24 +561,32 @@ def handle_api_interactive_data(filename):
             "margin": {"l": 40, "r": 10, "t": 40, "b": 100}
         }
         
-        # Downsample distribution values to keep JSON payload small
-        dist_raw = [v for v in (_safe_number(x) for x in series.dropna().values) if v is not None]
+        # Build distribution-axis spec from full range-filtered values, then downsample payload values.
+        dist_full = [v for v in (_safe_number(x) for x in s_tail.dropna().values) if v is not None]
+        dist_raw = list(dist_full)
         if len(dist_raw) > _MAX_DIST_POINTS:
             dist_step = max(1, len(dist_raw) // _MAX_DIST_POINTS)
             dist_raw = dist_raw[::dist_step]
+        dist_axis_spec = build_distribution_axis_spec(
+            dist_full,
+            min_bins=max(8, min(12, len(dist_full) // 5)) if len(dist_full) >= 20 else 8,
+            max_bins=52,
+            integer_span_threshold=260,
+        )
         dist = {
             "name": column,
-            "values": dist_raw
+            "values": dist_raw,
+            "axis_spec": dist_axis_spec,
         }
         
         # Compute statistics for the column
         try:
             stats = {
-                "min": _safe_number(series.min()),
-                "max": _safe_number(series.max()),
-                "mean": _safe_number(series.mean()),
-                "median": _safe_number(series.median()),
-                "std": _safe_number(series.std())
+                "min": _safe_number(s_tail.min()),
+                "max": _safe_number(s_tail.max()),
+                "mean": _safe_number(s_tail.mean()),
+                "median": _safe_number(s_tail.median()),
+                "std": _safe_number(s_tail.std())
             }
         except Exception as e:
             app.logger.debug("Interactive stats computation skipped for %s: %s", column, e)
@@ -549,7 +598,15 @@ def handle_api_interactive_data(filename):
     INTERACTIVE_DATA_CACHE.set(cache_key, interactive)
     _log_cache_stats_if_needed("interactive")
     elapsed = time.perf_counter() - request_start
-    app.logger.info("Interactive API cache MISS file=%s pct=%.4f contam=%.4f cols=%d elapsed=%.3fs", filename, pct, user_contam, cols_processed, elapsed)
+    app.logger.info(
+        "Interactive API cache MISS file=%s pct=%.4f contam=%.4f range=%s cols=%d elapsed=%.3fs",
+        filename,
+        pct,
+        user_contam,
+        parsed_data_range,
+        cols_processed,
+        elapsed,
+    )
     
     return jsonify({"ok": True, "data": interactive, "cached": False})
 

@@ -14,11 +14,13 @@ from fpdf import FPDF
 
 from data_analysis.analysis.plot import (
     _add_static_distribution_overlays,
+    _apply_dense_non_overlapping_y_ticks,
     _apply_sci_formatter,
     _build_static_category_chart,
     _format_stat_value,
-    _resolve_static_tick_policy,
-    _sample_numeric_axis_ticks,
+    apply_distribution_axis_spec,
+    apply_static_distribution_compact_layout,
+    build_distribution_axis_spec,
     get_export_chart_figsize,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
@@ -28,6 +30,7 @@ from data_analysis.runtime_app import (
     _display_df_with_index,
     _get_clean_ai_summary_from_cache,
     _infer_seasonal_period,
+    _is_active_temporal_axis_column,
     _is_offline_html,
     _is_reliable_timeseries_index,
 )
@@ -610,17 +613,18 @@ def handle_download_full_report_pdf(filename):
             
             pdf.set_font(font_family, size=10)
 
-        def add_df_table(df_table, title=None, new_page=True):
+        def add_df_table(
+            df_table,
+            title=None,
+            new_page=True,
+            placement_mode: str | None = None,
+        ):
             """Renders a pandas DataFrame as a table in the PDF.
-               If new_page=True (default), ALWAYS starts on a fresh page.
+               placement_mode="always" forces a fresh page, "auto" keeps the titled
+               block together when it fits the remaining space, and "flow" preserves
+               the older lightweight guard behavior.
             """
             ensure_page()
-            # ALWAYS start on fresh page to prevent mid-page tables
-            if new_page:
-                pdf.add_page()
-            else:
-                if (pdf.h - pdf.b_margin - pdf.get_y()) < 34:
-                    pdf.add_page()
             
             # Use fpdf2's built-in table context if available, otherwise manual
             try:
@@ -676,6 +680,35 @@ def handle_download_full_report_pdf(filename):
                     ]
                 else:
                     chunks = [data_columns] if data_columns else [[]]
+
+                resolved_mode = str(
+                    placement_mode if placement_mode is not None else ("always" if new_page else "flow")
+                ).strip().lower()
+                if resolved_mode not in {"always", "auto", "flow"}:
+                    resolved_mode = "always"
+
+                def _estimate_table_block_height_mm() -> float:
+                    title_height = 13.0 if title else 0.0
+                    chunk_title_height = 6.0 if len(chunks) > 1 else 0.0
+                    inter_chunk_gap = 2.0
+                    header_height = float(line_h)
+                    data_height = float(max(0, row_count)) * float(line_h)
+                    total = title_height
+                    for chunk_idx in range(len(chunks)):
+                        total += chunk_title_height + header_height + data_height
+                        if chunk_idx < len(chunks) - 1:
+                            total += inter_chunk_gap
+                    total += 4.0
+                    return total
+
+                estimated_block_height = _estimate_table_block_height_mm()
+                if resolved_mode == "always":
+                    pdf.add_page()
+                elif resolved_mode == "auto":
+                    if _remaining_page_space() < estimated_block_height:
+                        pdf.add_page()
+                elif _remaining_page_space() < 34.0:
+                    pdf.add_page()
 
                 # Print Title at top of fresh page
                 if title:
@@ -865,8 +898,8 @@ def handle_download_full_report_pdf(filename):
 
         try:
             summary_df, columns_df = get_dataset_overview_tables(df)
-            add_df_table(summary_df, title="Dataset Overview Summary:", new_page=False)
-            add_df_table(columns_df, title="Columns & Types:", new_page=False)
+            add_df_table(summary_df, title="Dataset Overview Summary:", placement_mode="auto")
+            add_df_table(columns_df, title="Columns & Types:", placement_mode="auto")
         except Exception as e:
             app.logger.warning("Dataset overview table rendering failed, fallback to info text: %s", e)
             buf = io.StringIO()
@@ -874,13 +907,13 @@ def handle_download_full_report_pdf(filename):
             add_text_block(buf.getvalue(), courier=True)
         
 
-
+        
         
         # Use new table function for head
-        add_df_table(df.head(), title="First 5 Rows:")
+        add_df_table(df.head(), title="First 5 Rows:", placement_mode="auto")
 
         # Use new table function for describe
-        add_df_table(df.describe(), title="Statistical Description:")
+        add_df_table(df.describe(), title="Statistical Description:", placement_mode="auto")
 
         # Missing Values - also on fresh page like other tables
         try:
@@ -934,31 +967,63 @@ def handle_download_full_report_pdf(filename):
                 if not corr_header_added:
                     add_section_title("3. Correlation Analysis")
                     corr_header_added = True
-            # Use cached heatmaps for performance
-            corr_heatmap_spearman = get_cached_heatmap(filename, df, method='spearman')
-            if corr_heatmap_spearman:
-                ensure_corr_header()
-                # Keep section title + label + image together.
-                _ensure_img_space(115.0)
-                    
-                pdf.set_font(font_family, 'B', 10)
-                pdf.cell(0, 8, "Spearman Correlation:", new_x="LMARGIN", new_y="NEXT")
-                img_data = base64.b64decode(corr_heatmap_spearman)
-                # Keep image within page width
-                pdf.image(io.BytesIO(img_data), w=150, x=30)
-                pdf.ln(5)
 
-            corr_heatmap_pearson = get_cached_heatmap(filename, df, method='pearson')
+            def _estimate_b64_image_height_mm(plot_b64: str, width_mm: float) -> float:
+                default_height = 90.0
+                try:
+                    from PIL import Image
+
+                    raw = base64.b64decode(plot_b64)
+                    with Image.open(io.BytesIO(raw)) as img_obj:
+                        width_px, height_px = img_obj.size
+                    if width_px <= 0:
+                        return default_height
+                    ratio = float(height_px) / float(width_px)
+                    return max(30.0, float(width_mm) * ratio)
+                except Exception:
+                    return default_height
+
+            corr_specs: list[str] = []
+            corr_heatmap_spearman = get_cached_heatmap(
+                filename,
+                df,
+                method='spearman',
+                layout_preset='export',
+            )
+            if corr_heatmap_spearman:
+                corr_specs.append(corr_heatmap_spearman)
+            corr_heatmap_pearson = get_cached_heatmap(
+                filename,
+                df,
+                method='pearson',
+                layout_preset='export',
+            )
             if corr_heatmap_pearson:
+                corr_specs.append(corr_heatmap_pearson)
+
+            if corr_specs:
                 ensure_corr_header()
-                # Keep section title + label + image together.
-                _ensure_img_space(115.0)
-                    
-                pdf.set_font(font_family, 'B', 10)
-                pdf.cell(0, 8, "Pearson Correlation:", new_x="LMARGIN", new_y="NEXT")
-                img_data = base64.b64decode(corr_heatmap_pearson)
-                pdf.image(io.BytesIO(img_data), w=150, x=30)
-                pdf.ln(5)
+                corr_img_width_mm = 150.0
+                corr_gap_mm = 2.0
+
+                if len(corr_specs) >= 2:
+                    required_space_mm = 0.0
+                    for idx, plot_b64 in enumerate(corr_specs[:2]):
+                        required_space_mm += _estimate_b64_image_height_mm(plot_b64, corr_img_width_mm)
+                        if idx < 1:
+                            required_space_mm += corr_gap_mm
+                    if _remaining_page_space() < (required_space_mm + 4.0):
+                        pdf.add_page()
+
+                for idx, plot_b64 in enumerate(corr_specs):
+                    img_height_mm = _estimate_b64_image_height_mm(plot_b64, corr_img_width_mm)
+                    _ensure_img_space(img_height_mm + 1.0)
+                    img_data = base64.b64decode(plot_b64)
+                    pdf.image(io.BytesIO(img_data), w=corr_img_width_mm, x=30)
+                    if idx < len(corr_specs) - 1:
+                        pdf.ln(corr_gap_mm)
+                    else:
+                        pdf.ln(4)
         except Exception as e:
             app.logger.error(f"Error adding correlation heatmaps to PDF: {e}")
 
@@ -1006,19 +1071,53 @@ def handle_download_full_report_pdf(filename):
             *,
             min_space_mm: float = 96.0,
             gap_after_mm: float = 8.0,
+            width_mm: float | None = None,
+            ensure_space: bool = True,
         ) -> bool:
             if not plot_b64:
                 return False
-            _ensure_img_space(min_space_mm)
-            pdf.image(io.BytesIO(base64.b64decode(plot_b64)), w=img_width, x=img_x)
+            if ensure_space:
+                _ensure_img_space(min_space_mm)
+
+            render_width = float(width_mm) if width_mm is not None else float(img_width)
+            if not math.isfinite(render_width) or render_width <= 0:
+                render_width = float(img_width)
+
+            if render_width < float(img_width):
+                render_x = max(float(pdf.l_margin), (float(pdf.w) - render_width) / 2.0)
+            else:
+                render_x = float(img_x)
+
+            pdf.image(io.BytesIO(base64.b64decode(plot_b64)), w=render_width, x=render_x)
             pdf.ln(gap_after_mm)
             return True
+
+        def _resolve_paired_plot_width(
+            remaining_space_mm: float,
+            *,
+            first_plot_ratio: float,
+            second_plot_ratio: float,
+            gap_mm: float,
+            min_width_mm: float = 118.0,
+            max_width_mm: float = 180.0,
+        ) -> float | None:
+            available_space = float(remaining_space_mm) - float(gap_mm)
+            if available_space <= 0:
+                return None
+
+            total_ratio = max(1e-6, float(first_plot_ratio) + float(second_plot_ratio))
+            width = available_space / total_ratio
+            if width < float(min_width_mm):
+                return None
+            return min(float(max_width_mm), width)
         
         for col in df.columns:
             numeric_series = numeric_df_cached[col].dropna() if col in numeric_cols else pd.Series(dtype=float)
             is_numeric = len(numeric_series) >= 3
             series = numeric_series if is_numeric else df[col].astype(str)
             if not is_numeric and series.empty:
+                continue
+            if not is_numeric and _is_active_temporal_axis_column(df, col):
                 continue
             col_forecast_steps = _steps_for_history_rows(len(numeric_series))
 
@@ -1079,8 +1178,6 @@ def handle_download_full_report_pdf(filename):
                         history_tail=None,
                         anomalies_idx=an_idx,
                         anomalies_score=an_score,
-                        legend_y=-0.28,
-                        xlabel_labelpad=4,
                         figsize=get_export_chart_figsize("trend", context="pdf"),
                     )
                     _add_base64_plot(trend_b64)
@@ -1110,8 +1207,6 @@ def handle_download_full_report_pdf(filename):
                             conf_int=ci,
                             history_tail=None,
                             anomalies_idx=an_idx,
-                            legend_y=-0.28,
-                            xlabel_labelpad=4,
                             figsize=get_export_chart_figsize("forecast", context="pdf"),
                         )
                         _add_base64_plot(fc_b64)
@@ -1119,42 +1214,59 @@ def handle_download_full_report_pdf(filename):
                     app.logger.error(f"Error adding forecast plot to PDF for {col}: {e}")
                     pass
 
+            stl_b64: str | None = None
+            if is_numeric and is_ts and len(numeric_series) >= 28:
+                try:
+                    sp = _infer_seasonal_period(numeric_series.index)
+                    if sp and isinstance(sp, int) and sp >= 2:
+                        # Use cached STL plot - may already be computed from web view
+                        stl_b64 = get_cached_stl_plot(filename, col, numeric_series, sp)
+                except Exception as e:
+                    app.logger.debug("STL plot skipped in PDF for '%s': %s", col, e)
+
+            pair_with_stl = bool(stl_b64)
+            paired_plot_width_mm: float | None = None
+            distribution_rendered = False
+
             # 3. DISTRIBUTION chart
             try:
                 fig, ax = plt.subplots(figsize=get_export_chart_figsize("distribution", context="pdf"))
                 if is_numeric:
                     s_num = numeric_series
                     s_arr = np.asarray(s_num.to_numpy(dtype=float), dtype=float)
-                    ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black', linewidth=0.5, label='Distribution')
-                    ax.set_title(f"Distribution: {col}")
-                    ax.set_xlabel(col, fontsize=9, labelpad=1)
-                    ax.set_ylabel("Frequency")
-                    ax.grid(True, alpha=0.3)
-
-                    try:
-                        from matplotlib.ticker import MaxNLocator
-                        ax.yaxis.set_major_locator(MaxNLocator(nbins=7, integer=True, min_n_ticks=4))
-                    except Exception:
-                        pass
-
-                    finite_unique_values = np.unique(s_arr[np.isfinite(s_arr)]) if s_arr.size else np.asarray([], dtype=float)
-                    tick_policy = _resolve_static_tick_policy(
-                        finite_unique_values.tolist(),
-                        chart_type='distribution',
-                    )
-                    tick_values, tick_labels = _sample_numeric_axis_ticks(
+                    axis_spec = build_distribution_axis_spec(
                         s_arr.tolist(),
-                        max_tick_labels=int(tick_policy['max_tick_labels']),
-                        min_spacing_ratio=float(tick_policy['min_spacing_ratio']),
+                        min_bins=max(8, min(12, len(s_arr) // 5)) if len(s_arr) >= 20 else 8,
+                        max_bins=52,
+                        integer_span_threshold=260,
                     )
-                    if tick_values:
-                        ax.set_xticks(tick_values)
-                        ax.set_xticklabels(
-                            tick_labels,
-                            rotation=int(tick_policy['tick_angle']),
-                            ha=str(tick_policy['tick_ha']),
-                            fontsize=float(tick_policy['tick_fontsize']),
-                        )
+                    hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
+                    if not hist_bins:
+                        hist_bins = max(8, min(52, int(len(s_arr) // 10) if len(s_arr) >= 20 else 8))
+                    _hist_counts, hist_edges, _hist_patches = ax.hist(
+                        s_arr,
+                        bins=hist_bins,
+                        color='tab:blue',
+                        alpha=0.7,
+                        edgecolor='black',
+                        linewidth=0.5,
+                        label='Distribution',
+                    )
+                    ax.set_title(f"Distribution: {col}", pad=16)
+                    ax.set_xlabel(col, fontsize=9, labelpad=0)
+                    ax.set_ylabel("Frequency", labelpad=8)
+                    ax.grid(True, alpha=0.3)
+                    _apply_dense_non_overlapping_y_ticks(
+                        ax,
+                        integer=True,
+                        label_fontsize=8.0,
+                        min_ticks=6,
+                        max_ticks=18,
+                    )
+                    if isinstance(axis_spec, dict) and axis_spec:
+                        apply_distribution_axis_spec(ax, axis_spec)
+                    elif len(hist_edges) >= 2:
+                        ax.set_xlim(float(hist_edges[0]), float(hist_edges[-1]))
 
                     _add_static_distribution_overlays(
                         ax,
@@ -1162,10 +1274,11 @@ def handle_download_full_report_pdf(filename):
                         value_formatter=_format_stat_value,
                         legend_fontsize=6,
                         legend_columns=6,
-                        legend_y=-0.18,
+                        legend_y=-0.12,
+                        expand_xlim=False,
                     )
                     _apply_sci_formatter(ax)
-                    fig.subplots_adjust(bottom=0.27, right=0.95, top=0.90)
+                    apply_static_distribution_compact_layout(fig, ax, right=0.95, top=0.90)
                 else:
                     # Categorical bar chart (all categories)
                     all_counts = series.value_counts()
@@ -1176,25 +1289,65 @@ def handle_download_full_report_pdf(filename):
                     fig, ax = built_chart
                 
                 buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+                savefig_kwargs = {"format": "png", "bbox_inches": "tight", "dpi": 150}
+                savefig_kwargs["pad_inches"] = 0.0
+                if not is_numeric:
+                    savefig_kwargs["dpi"] = 120
+                    savefig_kwargs["pad_inches"] = 0.0
+                fig.savefig(buf, **savefig_kwargs)
                 plt.close(fig)
                 buf.seek(0)
-                _ensure_img_space(96.0)
-                pdf.image(buf, w=img_width, x=img_x)
-                pdf.ln(8)
+                distribution_b64 = base64.b64encode(buf.read()).decode('utf-8')
+
+                if pair_with_stl and is_numeric:
+                    dist_figsize = get_export_chart_figsize("distribution", context="pdf")
+                    dist_ratio = max(0.45, float(dist_figsize[1]) / max(1e-6, float(dist_figsize[0])))
+                    # STL generator currently renders with figsize=(10, 7)
+                    stl_ratio = 0.70
+                    pair_gap_mm = 6.0
+
+                    paired_plot_width_mm = _resolve_paired_plot_width(
+                        _remaining_page_space(),
+                        first_plot_ratio=dist_ratio,
+                        second_plot_ratio=stl_ratio,
+                        gap_mm=pair_gap_mm,
+                        min_width_mm=118.0,
+                        max_width_mm=float(img_width),
+                    )
+                    if paired_plot_width_mm is None:
+                        pdf.add_page()
+                        paired_plot_width_mm = _resolve_paired_plot_width(
+                            _remaining_page_space(),
+                            first_plot_ratio=dist_ratio,
+                            second_plot_ratio=stl_ratio,
+                            gap_mm=pair_gap_mm,
+                            min_width_mm=118.0,
+                            max_width_mm=float(img_width),
+                        )
+                    if paired_plot_width_mm is None:
+                        paired_plot_width_mm = 118.0
+
+                    distribution_rendered = _add_base64_plot(
+                        distribution_b64,
+                        min_space_mm=0.0,
+                        gap_after_mm=pair_gap_mm,
+                        width_mm=paired_plot_width_mm,
+                        ensure_space=False,
+                    )
+                else:
+                    distribution_rendered = _add_base64_plot(distribution_b64)
             except Exception as e:
                 app.logger.debug("Distribution chart skipped in PDF for '%s': %s", col, e)
                 
             # 4. STL DECOMPOSITION - last (for timeseries only)
-            if is_numeric and is_ts and len(numeric_series) >= 28:
-                try:
-                    sp = _infer_seasonal_period(numeric_series.index)
-                    if sp and isinstance(sp, int) and sp >= 2:
-                        # Use cached STL plot - may already be computed from web view
-                        stl_b64 = get_cached_stl_plot(filename, col, numeric_series, sp)
-                        _add_base64_plot(stl_b64)
-                except Exception as e:
-                    app.logger.debug("STL plot skipped in PDF for '%s': %s", col, e)
+            if stl_b64:
+                _add_base64_plot(
+                    stl_b64,
+                    min_space_mm=0.0 if (pair_with_stl and distribution_rendered and paired_plot_width_mm is not None) else 96.0,
+                    gap_after_mm=8.0,
+                    width_mm=paired_plot_width_mm if (pair_with_stl and distribution_rendered and paired_plot_width_mm is not None) else None,
+                    ensure_space=not (pair_with_stl and distribution_rendered and paired_plot_width_mm is not None),
+                )
     except Exception as e:
         app.logger.error(f"Error generating PDF: {e}")
         app.logger.error(traceback.format_exc())

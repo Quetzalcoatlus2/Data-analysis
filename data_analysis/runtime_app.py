@@ -297,7 +297,12 @@ def _log_cache_stats_if_needed(context: str):
     except Exception as e:
         app.logger.debug("Cache stats logging skipped: %s", e)
 
-def _build_interactive_cache_key(filename: str, forecast_pct: float, contamination: float) -> tuple[str, float, float]:
+def _build_interactive_cache_key(
+    filename: str,
+    forecast_pct: float,
+    contamination: float,
+    data_range: float = 1.0,
+) -> tuple[str, float, float, float]:
     try:
         pct_key = round(float(forecast_pct), 6)
     except Exception:
@@ -306,7 +311,13 @@ def _build_interactive_cache_key(filename: str, forecast_pct: float, contaminati
         contam_key = round(float(contamination), 6)
     except Exception:
         contam_key = 0.02
-    return (str(filename), pct_key, contam_key)
+    try:
+        data_range_key = round(float(data_range), 6)
+        if not math.isfinite(data_range_key) or data_range_key <= 0:
+            data_range_key = 1.0
+    except Exception:
+        data_range_key = 1.0
+    return (str(filename), pct_key, contam_key, data_range_key)
 
 def _load_name_map():
     global ORIGINAL_NAME_MAP
@@ -513,20 +524,35 @@ def generate_plot(data, title, xlabel, ylabel, anomalies_idx=None, use_webp=Fals
         display_index=display_index,
     )
 
-def generate_correlation_heatmap(df, method='spearman', title='Correlation Heatmap'):
+def generate_correlation_heatmap(
+    df,
+    method='spearman',
+    title='Correlation Heatmap',
+    *,
+    layout_preset: Literal['default', 'export'] = 'default',
+):
     """Generate a correlation heatmap as base64 image."""
-    return analysis_plots.generate_correlation_heatmap(df, method=method, title=title)
+    return analysis_plots.generate_correlation_heatmap(
+        df,
+        method=method,
+        title=title,
+        layout_preset=layout_preset,
+    )
 
-def get_cached_heatmap(filename: str, df: pd.DataFrame, method: str = 'spearman'):
+def get_cached_heatmap(
+    filename: str,
+    df: pd.DataFrame,
+    method: str = 'spearman',
+    *,
+    layout_preset: Literal['default', 'export'] = 'default',
+):
     """Get correlation heatmap from cache or generate and cache it."""
-    cache_key = (filename, method)
-    cached = HEATMAP_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-    img = generate_correlation_heatmap(df, method=method, title=f'{method.capitalize()} Correlation')
-    if img:
-        HEATMAP_CACHE.set(cache_key, img)
-    return img
+    return analysis_plots.get_cached_heatmap(
+        filename,
+        df,
+        method=method,
+        layout_preset=layout_preset,
+    )
 
 def _thin_series(s: pd.Series, max_points: int) -> pd.Series:
     return analysis_forecast._thin_series(s, max_points)
@@ -571,6 +597,7 @@ def generate_forecast_plot(
     stats=None,
     legend_y=None,
     xlabel_labelpad=None,
+    x_tick_angle_override=None,
     figsize=None,
     display_index=None,
 ):
@@ -580,6 +607,7 @@ def generate_forecast_plot(
         conf_int=conf_int, history_tail=history_tail,
         anomalies_idx=anomalies_idx, anomalies_score=anomalies_score,
         stats=stats, legend_y=legend_y, xlabel_labelpad=xlabel_labelpad,
+        x_tick_angle_override=x_tick_angle_override,
         figsize=figsize,
         display_index=display_index,
     )
