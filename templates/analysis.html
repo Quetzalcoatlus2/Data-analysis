@@ -562,7 +562,7 @@
       {% for column, plots in analysis.forecast_plots_by_column.items() %}
       <div class="panel" style="margin-bottom: 24px; border: 2px solid var(--accent); border-radius: 12px;">
         <h4
-          style="background: linear-gradient(to right, var(--accent), transparent); color: var(--text); padding: 10px 16px; margin: -16px -16px 16px -16px; border-radius: 10px 10px 0 0; font-size: 1.1em;">
+          style="background: linear-gradient(to right, color-mix(in oklab, var(--bg) 84%, black 16%), color-mix(in oklab, var(--accent) 86%, white 14%)); color: var(--text); padding: 10px 16px; margin: -16px -16px 16px -16px; border-radius: 10px 10px 0 0; font-size: 1.1em;">
           📊 {{ column }}
         </h4>
         <div class="grid grid-2" style="gap: 12px;">
@@ -590,7 +590,27 @@
         {% endfor %}
       </div>
       {% else %}
-      <div class="muted">No detailed analysis available. Select a forecast horizon above.</div>
+      <div class="muted">No numeric detailed analysis available for this dataset.</div>
+      {% endif %}
+
+      {% if analysis.detailed_category_plots %}
+      <div class="panel" style="margin-top: 18px; border: 2px solid var(--border); border-radius: 12px;">
+        <h4
+          style="background: linear-gradient(to right, color-mix(in oklab, var(--bg) 84%, black 16%), color-mix(in oklab, var(--accent) 86%, white 14%)); color: var(--text); padding: 10px 16px; margin: -16px -16px 16px -16px; border-radius: 10px 10px 0 0; font-size: 1.1em;">
+          🏷️ Categorical columns
+        </h4>
+        <div class="grid" style="gap: 12px; grid-template-columns: 1fr;">
+          {% for p in analysis.detailed_category_plots %}
+          <figure class="panel" style="margin:0; padding:10px; background: var(--bg);">
+            <figcaption style="margin-bottom:6px; font-size:0.85em; font-weight:500; color: var(--muted);">
+              🏷️ {{ p.column or p.title }}
+            </figcaption>
+            <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}"
+              style="width:100%; height:auto; border-radius: 6px;" />
+          </figure>
+          {% endfor %}
+        </div>
+      </div>
       {% endif %}
     </section>
 
@@ -1038,6 +1058,10 @@
         const minCompactValue = Number.isFinite(options.minCompactValue)
           ? Number(options.minCompactValue)
           : 1e6;
+        const allowFiveDigitEconomyK = options.allowFiveDigitEconomyK === true;
+        const fiveDigitEconomyTrailingZerosMin = Number.isFinite(options.fiveDigitEconomyTrailingZerosMin)
+          ? Math.max(1, Math.floor(Number(options.fiveDigitEconomyTrailingZerosMin)))
+          : 2;
         const magnitude = Math.abs(numeric);
         const forcedDecimals = Number.isFinite(options.decimals) ? Number(options.decimals) : null;
 
@@ -1048,10 +1072,26 @@
         const suffixes = [
           { value: 1e12, suffix: 'T' },
           { value: 1e9, suffix: 'B' },
-          { value: 1e6, suffix: 'M' }
+          { value: 1e6, suffix: 'M' },
+          { value: 1e3, suffix: 'k' }
         ];
 
         for (const suffixInfo of suffixes) {
+          if (suffixInfo.value === 1e3 && magnitude < 1e5) {
+            if (!allowFiveDigitEconomyK || magnitude < 1e4) {
+              continue;
+            }
+            const nearestInt = Math.round(numeric);
+            if (Math.abs(numeric - nearestInt) > 1e-9) {
+              continue;
+            }
+            const trailingZerosMatch = String(Math.abs(nearestInt)).match(/0+$/);
+            const trailingZeros = trailingZerosMatch ? trailingZerosMatch[0].length : 0;
+            if (trailingZeros < fiveDigitEconomyTrailingZerosMin) {
+              continue;
+            }
+          }
+
           if (magnitude >= Math.max(minCompactValue, suffixInfo.value)) {
             const scaled = numeric / suffixInfo.value;
             const decimals = forcedDecimals === null
@@ -1237,24 +1277,73 @@
         return nextLayout;
       }
 
+      function getInteractiveContainerWidth(container, options = {}) {
+        const safeFallbackMin = Number.isFinite(options.fallbackMin) ? Number(options.fallbackMin) : 320;
+        const safeFallbackMax = Number.isFinite(options.fallbackMax) ? Number(options.fallbackMax) : 860;
+        const safeFallbackRatio = Number.isFinite(options.fallbackRatio) ? Number(options.fallbackRatio) : 0.42;
+        const includeParentWidth = !!options.includeParentWidth;
+
+        const measuredWidths = [];
+        if (container) {
+          measuredWidths.push(Number(container.clientWidth) || 0);
+          measuredWidths.push(Number(container.offsetWidth) || 0);
+          withSuppress(() => {
+            measuredWidths.push(Number(container.getBoundingClientRect().width) || 0);
+          });
+          if (includeParentWidth && container.parentElement) {
+            measuredWidths.push(Number(container.parentElement.clientWidth) || 0);
+          }
+        }
+        const measured = measuredWidths.filter((value) => Number.isFinite(value) && value > 0);
+        const measuredMax = measured.length ? Math.max(...measured) : 0;
+        if (measuredMax >= 160) {
+          return measuredMax;
+        }
+
+        const viewportWidth = Math.max(
+          0,
+          Number(document.documentElement && document.documentElement.clientWidth) || 0,
+          Number(window.innerWidth) || 0,
+        );
+        if (viewportWidth > 0) {
+          return Math.max(safeFallbackMin, Math.min(safeFallbackMax, viewportWidth * safeFallbackRatio));
+        }
+        return Math.max(260, safeFallbackMin);
+      }
+
+      function withSuppress(fn) {
+        try {
+          fn();
+        } catch (e) {
+          // no-op
+        }
+      }
+
       function finalizeInteractiveDistributionLayout(layout, traces, values, distName, distContainer, options = {}) {
         const nextLayout = Object.assign({}, layout || {});
+        const distWidth = getInteractiveContainerWidth(distContainer, {
+          fallbackRatio: 0.42,
+          fallbackMin: 360,
+          fallbackMax: 860,
+          includeParentWidth: false,
+        });
         const hasExplicitTicks = nextLayout.xaxis && nextLayout.xaxis.tickmode === 'array' && Array.isArray(nextLayout.xaxis.tickvals) && nextLayout.xaxis.tickvals.length > 0;
-        const tickConfig = hasExplicitTicks ? {
+        const rawTickConfig = hasExplicitTicks ? {
             tickmode: 'array',
             tickvals: nextLayout.xaxis.tickvals,
             ticktext: nextLayout.xaxis.ticktext,
             tickfontSize: (nextLayout.xaxis.tickfont && nextLayout.xaxis.tickfont.size) ? nextLayout.xaxis.tickfont.size : undefined
-        } : getDistributionTickConfig(values, distContainer ? distContainer.clientWidth : 0, {
-          maxTicks: 14,
-          pxPerTick: 56,
+        } : getDistributionTickConfig(values, distWidth, {
+          maxTicks: 88,
+          pxPerTick: 20,
           minTicks: 6,
           binEdges: Array.isArray(options.binEdges) ? options.binEdges : null,
           minSpacingRatio: Number.isFinite(options.minSpacingRatio) ? Number(options.minSpacingRatio) : 0.14,
         });
+        const tickConfig = thinDistributionTickConfig(rawTickConfig, distWidth);
         const axisTickConfig = Object.assign({}, tickConfig || {});
         const tickFontSize = Number.isFinite(axisTickConfig.tickfontSize)
-          ? Math.max(9, Math.min(axisTickConfig.tickfontSize, 10.5))
+          ? Math.max(7.4, Math.min(axisTickConfig.tickfontSize, 10.5))
           : 9.2;
         delete axisTickConfig.tickfontSize;
 
@@ -1271,8 +1360,18 @@
         }
         nextLayout.xaxis = enableCompactAxisTicks(nextLayout.xaxis, {
           maxAbsValue: getFiniteMaxAbs(values),
-          minCompactValue: 1e6,
+          minCompactValue: 1e15,
         });
+        if (Array.isArray(nextLayout.xaxis.tickvals) && Array.isArray(nextLayout.xaxis.ticktext)) {
+          nextLayout.xaxis.ticktext = nextLayout.xaxis.tickvals.map((tickVal, idx) => {
+            const numeric = Number(tickVal);
+            const existingLabel = String((nextLayout.xaxis.ticktext || [])[idx] ?? '');
+            if (!Number.isFinite(numeric)) {
+              return existingLabel;
+            }
+            return formatDistributionTickValue(numeric);
+          });
+        }
 
         const yTickCount = getInteractiveYAxisTickCount(distContainer, {
           minTicks: 10,
@@ -1290,7 +1389,7 @@
           tickfont: Object.assign({}, (nextLayout.yaxis && nextLayout.yaxis.tickfont) || {}, { size: 9.2 }),
         });
 
-        const legendCfg = getInteractiveLegendConfig(traces, distContainer ? distContainer.clientWidth : 0, {
+        const legendCfg = getInteractiveLegendConfig(traces, distWidth, {
           fontSize: 8.2,
           minFontSize: 7.8,
           y: -0.188,
@@ -1317,7 +1416,19 @@
       }
 
       function formatDistributionTickValue(value) {
-        return formatCompactNumber(value);
+        return formatCompactNumber(value, {
+          minCompactValue: 1e3,
+          allowFiveDigitEconomyK: true,
+          fiveDigitEconomyTrailingZerosMin: 2,
+        });
+      }
+
+      function isFiveDigitDistributionLabel(label) {
+        const normalized = String(label || '').trim();
+        if (!normalized) {
+          return false;
+        }
+        return /^-?\d{5}$/.test(normalized) || /^-?\d{2}\.\dk$/i.test(normalized);
       }
 
       function isDistributionIntegerLike(value) {
@@ -1483,21 +1594,32 @@
           return null;
         }
 
-        const pxPerTick = Number.isFinite(options.pxPerTick) ? options.pxPerTick : 62;
-        const maxTicks = Number.isFinite(options.maxTicks) ? options.maxTicks : 28;
-        const hardMaxTicks = 24;
-        const minTicks = Number.isFinite(options.minTicks) ? options.minTicks : 5;
+        const pxPerTick = Number.isFinite(options.pxPerTick) ? options.pxPerTick : 20;
+        const maxTicks = Number.isFinite(options.maxTicks) ? options.maxTicks : 88;
+        const minTicks = Number.isFinite(options.minTicks) ? options.minTicks : 6;
         // Estimate label width: for large values, labels like "123.456M" are ~8+ chars
-        const testLabel = formatCompactNumber(Math.max(Math.abs(minVal), Math.abs(maxVal)));
+        const testLabel = formatDistributionTickValue(Math.max(Math.abs(minVal), Math.abs(maxVal)));
         const estLabelLen = Math.max(4, String(testLabel).length);
-        const pxPerChar = 7;
-        const effectivePxPerTick = Math.max(pxPerTick, estLabelLen * pxPerChar + 12);
+        const hasWideFiveDigitLabels = isFiveDigitDistributionLabel(testLabel);
+        const pxPerChar = hasWideFiveDigitLabels ? 6.2 : 5.4;
+        const hardMaxTicks = estLabelLen >= 12
+          ? 28
+          : (estLabelLen >= 10
+            ? 34
+            : (estLabelLen >= 8
+              ? 42
+              : (estLabelLen >= 6 ? 52 : 64)));
+        const fiveDigitClamp = hasWideFiveDigitLabels ? Math.min(hardMaxTicks, 38) : hardMaxTicks;
+        const effectivePxPerTick = Math.max(
+          pxPerTick,
+          estLabelLen * pxPerChar + (hasWideFiveDigitLabels ? 16 : 10),
+        );
         const allowedTicks = Math.max(
           minTicks,
           Math.min(
             maxTicks,
-            hardMaxTicks,
-            Math.floor(Math.max(260, Number(containerWidth) || 0) / Math.max(20, effectivePxPerTick)),
+            fiveDigitClamp,
+            Math.floor(Math.max(260, Number(containerWidth) || 0) / Math.max(14, effectivePxPerTick)),
           ),
         );
 
@@ -1505,7 +1627,13 @@
           maxTicks: allowedTicks,
           minSpacingRatio: Number.isFinite(options.minSpacingRatio) ? Number(options.minSpacingRatio) : 0.14,
         });
-        if (sampledFromBins && Array.isArray(sampledFromBins.tickvals) && sampledFromBins.tickvals.length) {
+        const binTicksAreIntegerLike = !!(
+          sampledFromBins
+          && Array.isArray(sampledFromBins.tickvals)
+          && sampledFromBins.tickvals.length
+          && sampledFromBins.tickvals.every((value) => isDistributionIntegerLike(value))
+        );
+        if (binTicksAreIntegerLike) {
           return {
             tickmode: 'array',
             tickvals: sampledFromBins.tickvals,
@@ -1532,8 +1660,130 @@
           tickvals: tickvals,
           ticktext: ticktext,
           tickangle: 0,
-          tickfontSize: 9.2,
+          tickfontSize: estLabelLen >= 8 ? 8.8 : 9.2,
         };
+      }
+
+      function thinDistributionTickConfig(tickConfig, containerWidth, options = {}) {
+        if (!tickConfig || !Array.isArray(tickConfig.tickvals) || !tickConfig.tickvals.length) {
+          return tickConfig;
+        }
+
+        const tickvalsRaw = tickConfig.tickvals.slice();
+        const numericTickvals = tickvalsRaw.map((value) => Number(value));
+        const allNumericTickvals = numericTickvals.every((value) => Number.isFinite(value));
+        if (!tickvalsRaw.length) {
+          return null;
+        }
+
+        const ticktext = (Array.isArray(tickConfig.ticktext) && tickConfig.ticktext.length === tickvalsRaw.length)
+          ? tickConfig.ticktext.map((value) => String(value))
+          : tickvalsRaw.map((value) => formatDistributionTickValue(value));
+
+        const widthPx = Math.max(260, Number(containerWidth) || 0);
+        const axisSafetyWidthRatio = Number.isFinite(options.axisSafetyWidthRatio)
+          ? Math.max(0.72, Math.min(1.0, Number(options.axisSafetyWidthRatio)))
+          : 0.88;
+        const effectiveWidthPx = widthPx * axisSafetyWidthRatio;
+        const maxLabelLen = ticktext.reduce((acc, label) => Math.max(acc, String(label).length), 0);
+        const hasWideFiveDigitLabels = ticktext.some((label) => isFiveDigitDistributionLabel(label));
+        const defaultFont = Number.isFinite(Number(tickConfig.tickfontSize)) ? Number(tickConfig.tickfontSize) : 9.2;
+        const adjustedFont = maxLabelLen >= 12
+          ? 8.0
+          : (maxLabelLen >= 10
+            ? 8.4
+            : (maxLabelLen >= 8 ? 8.9 : defaultFont));
+
+        const minGapPx = Number.isFinite(options.minGapPx)
+          ? Math.max(4, Number(options.minGapPx))
+          : (hasWideFiveDigitLabels ? 7.5 : 6.0);
+
+        const labelWidths = ticktext.map((label) => {
+          const measured = measureLegendTextWidthPx(label, adjustedFont);
+          return Math.max(12, Number.isFinite(measured) ? measured : String(label).length * adjustedFont * 0.58);
+        });
+
+        const sampleEvenTickIndexes = (targetCount) => {
+          const safeTarget = Math.max(2, Math.min(tickvalsRaw.length, Math.floor(targetCount)));
+          if (safeTarget >= tickvalsRaw.length) {
+            return tickvalsRaw.map((_value, idx) => idx);
+          }
+          const sampled = new Set();
+          for (let i = 0; i < safeTarget; i += 1) {
+            const idx = Math.round((i * (tickvalsRaw.length - 1)) / Math.max(1, safeTarget - 1));
+            sampled.add(idx);
+          }
+          sampled.add(0);
+          sampled.add(tickvalsRaw.length - 1);
+          return Array.from(sampled).sort((a, b) => a - b);
+        };
+
+        const hasTickLabelCollision = (indexes) => {
+          if (!Array.isArray(indexes) || indexes.length <= 1) {
+            return false;
+          }
+
+          const positions = [];
+          if (allNumericTickvals) {
+            const minVal = Math.min(...numericTickvals);
+            const maxVal = Math.max(...numericTickvals);
+            const span = maxVal - minVal;
+            if (Number.isFinite(span) && span > 1e-12) {
+              for (const idx of indexes) {
+                const ratio = (numericTickvals[idx] - minVal) / span;
+                positions.push(ratio * effectiveWidthPx);
+              }
+            } else {
+              for (let i = 0; i < indexes.length; i += 1) {
+                const ratio = i / Math.max(1, indexes.length - 1);
+                positions.push(ratio * effectiveWidthPx);
+              }
+            }
+          } else {
+            for (let i = 0; i < indexes.length; i += 1) {
+              const ratio = i / Math.max(1, indexes.length - 1);
+              positions.push(ratio * effectiveWidthPx);
+            }
+          }
+
+          for (let i = 1; i < indexes.length; i += 1) {
+            const prevIdx = indexes[i - 1];
+            const currIdx = indexes[i];
+            const required = (labelWidths[prevIdx] * 0.5) + (labelWidths[currIdx] * 0.5) + minGapPx;
+            if ((positions[i] - positions[i - 1]) < required) {
+              return true;
+            }
+          }
+          return false;
+        };
+
+        let low = 2;
+        let high = Math.max(2, tickvalsRaw.length);
+        let bestIndexes = sampleEvenTickIndexes(2);
+
+        while (low <= high) {
+          const mid = Math.floor((low + high) / 2);
+          const candidate = sampleEvenTickIndexes(mid);
+          if (hasTickLabelCollision(candidate)) {
+            high = mid - 1;
+          } else {
+            bestIndexes = candidate;
+            low = mid + 1;
+          }
+        }
+
+        if (hasTickLabelCollision(bestIndexes) && bestIndexes.length > 2) {
+          bestIndexes = sampleEvenTickIndexes(2);
+        }
+
+        const nextTickvals = bestIndexes.map((idx) => tickvalsRaw[idx]);
+        const nextTicktext = bestIndexes.map((idx) => ticktext[idx]);
+
+        return Object.assign({}, tickConfig, {
+          tickvals: nextTickvals,
+          ticktext: nextTicktext,
+          tickfontSize: adjustedFont,
+        });
       }
 
       function normalizeAxisTitle(axis, fallbackText, standoffPx) {
@@ -1602,6 +1852,188 @@
       function formatStat(v, decimals) {
         return formatCompactNumber(v, { decimals: decimals });
       }
+
+      function getInteractiveStatPalette() {
+        if (isDarkMode()) {
+          return {
+            avgColor: '#fbbf24',
+            medColor: '#d8b4fe',
+            minColor: '#fde047',
+            maxColor: '#6ee7b7',
+            stdColor: '#94a3b8',
+          };
+        }
+
+        return {
+          avgColor: '#a16207',
+          medColor: '#6b21a8',
+          minColor: '#b45309',
+          maxColor: '#047857',
+          stdColor: '#64748b',
+        };
+      }
+
+      function getInteractiveDistributionStyling(themeVars) {
+        const t = themeVars || getThemeVars();
+        const statPalette = getInteractiveStatPalette();
+        const tagBg = t.panel || t.bg || '#ffffff';
+        if (isDarkMode()) {
+          return {
+            histogramBarColor: 'rgba(88, 143, 224, 0.58)',
+            histogramBarLineColor: 'rgba(15, 23, 42, 0.78)',
+            minColor: statPalette.minColor,
+            maxColor: statPalette.maxColor,
+            // Match forecast palette for text/border and keep pill interior on theme background.
+            minTextColor: statPalette.minColor,
+            maxTextColor: statPalette.maxColor,
+            minTagBg: tagBg,
+            maxTagBg: tagBg,
+            minTagBorder: statPalette.minColor,
+            maxTagBorder: statPalette.maxColor,
+          };
+        }
+
+        // Light mode: choose darker extrema colors + lighter bars for contrast
+        // on both plot background and bars.
+        return {
+          histogramBarColor: '#a8c7fb',
+          histogramBarLineColor: 'rgba(15, 23, 42, 0.35)',
+          minColor: statPalette.minColor,
+          maxColor: statPalette.maxColor,
+          minTextColor: statPalette.minColor,
+          maxTextColor: statPalette.maxColor,
+          minTagBg: tagBg,
+          maxTagBg: tagBg,
+          minTagBorder: statPalette.minColor,
+          maxTagBorder: statPalette.maxColor,
+        };
+      }
+
+      function buildDistributionLineTagAnnotation(value, text, color, axisMin, axisMax, options = {}) {
+        const safeMin = Number.isFinite(Number(axisMin)) ? Number(axisMin) : Number(value);
+        const safeMax = Number.isFinite(Number(axisMax)) ? Number(axisMax) : Number(value);
+        const span = Math.max(1e-9, safeMax - safeMin);
+        const edgeInsetRatio = Number.isFinite(Number(options.edgeInsetRatio))
+          ? Math.max(0, Number(options.edgeInsetRatio))
+          : 0.012;
+        const edgeInset = Math.min(span * 0.20, span * edgeInsetRatio);
+        const boundedMin = (safeMax - safeMin) > (2 * edgeInset) ? (safeMin + edgeInset) : safeMin;
+        const boundedMax = (safeMax - safeMin) > (2 * edgeInset) ? (safeMax - edgeInset) : safeMax;
+        const rawForcedX = Number(options.forceX);
+        const rawX = Number.isFinite(rawForcedX) ? rawForcedX : Number(value);
+        const clampedX = Number.isFinite(rawX)
+          ? Math.min(boundedMax, Math.max(boundedMin, rawX))
+          : boundedMin;
+        const normalized = (clampedX - safeMin) / span;
+        const nearLeftEdge = normalized <= 0.06;
+        const nearRightEdge = normalized >= 0.94;
+
+        let xanchor = typeof options.xanchor === 'string' ? options.xanchor : 'center';
+        let xshift = Number.isFinite(options.xshift) ? Number(options.xshift) : 0;
+        const hasExplicitAnchor = typeof options.xanchor === 'string';
+        if (!hasExplicitAnchor) {
+          if (nearLeftEdge) {
+            xanchor = 'left';
+            xshift = 5;
+          } else if (nearRightEdge) {
+            xanchor = 'right';
+            xshift = -5;
+          } else if (normalized < 0.50) {
+            xanchor = 'left';
+            xshift = 2;
+          } else {
+            xanchor = 'right';
+            xshift = -2;
+          }
+        } else if (!Number.isFinite(options.xshift)) {
+          if (xanchor === 'left') {
+            xshift = 3;
+          } else if (xanchor === 'right') {
+            xshift = -3;
+          }
+        }
+
+        const boldText = options.boldText !== false;
+        const renderedText = boldText ? `<b>${String(text || '')}</b>` : String(text || '');
+
+        return {
+          x: clampedX,
+          y: Number.isFinite(options.y) ? Number(options.y) : 0.992,
+          xref: 'x',
+          yref: 'paper',
+          text: renderedText,
+          showarrow: false,
+          xanchor,
+          xshift,
+          yanchor: 'bottom',
+          font: {
+            size: Number.isFinite(options.fontSize) ? Number(options.fontSize) : 9.0,
+            color: color,
+          },
+          cliponaxis: false,
+          name: options.name || '',
+        };
+      }
+
+      function buildDistributionExtremaAnnotation(value, text, color, axisMin, axisMax, options = {}) {
+        const safeMin = Number.isFinite(Number(axisMin)) ? Number(axisMin) : Number(value);
+        const safeMax = Number.isFinite(Number(axisMax)) ? Number(axisMax) : Number(value);
+        const span = Math.max(1e-9, safeMax - safeMin);
+        const edgeInsetRatio = Number.isFinite(Number(options.edgeInsetRatio))
+          ? Math.max(0, Number(options.edgeInsetRatio))
+          : 0.010;
+        const edgeInset = Math.min(span * 0.18, span * edgeInsetRatio);
+        const boundedMin = (safeMax - safeMin) > (2 * edgeInset) ? (safeMin + edgeInset) : safeMin;
+        const boundedMax = (safeMax - safeMin) > (2 * edgeInset) ? (safeMax - edgeInset) : safeMax;
+        const rawX = Number(value);
+        const clampedX = Number.isFinite(rawX)
+          ? Math.min(boundedMax, Math.max(boundedMin, rawX))
+          : boundedMin;
+        const normalized = (clampedX - safeMin) / span;
+
+        let xanchor = 'center';
+        let xshift = 0;
+        if (normalized <= 0.10) {
+          xanchor = 'left';
+          xshift = 5;
+        } else if (normalized >= 0.90) {
+          xanchor = 'right';
+          xshift = -5;
+        } else if (normalized < 0.50) {
+          xanchor = 'left';
+          xshift = 3;
+        } else {
+          xanchor = 'right';
+          xshift = -3;
+        }
+
+        const boldText = options.boldText !== false;
+        const renderedText = boldText ? `<b>${String(text || '')}</b>` : String(text || '');
+
+        return {
+          x: clampedX,
+          y: Number.isFinite(options.y) ? Number(options.y) : 0.084,
+          xref: 'x',
+          yref: 'paper',
+          text: renderedText,
+          showarrow: false,
+          xanchor,
+          xshift,
+          yanchor: 'bottom',
+          font: {
+            size: Number.isFinite(options.fontSize) ? Number(options.fontSize) : 9.0,
+            color: options.textColor || color,
+          },
+          bgcolor: options.bgcolor || 'rgba(255, 255, 255, 0.92)',
+          bordercolor: options.bordercolor || color,
+          borderwidth: Number.isFinite(options.borderWidth) ? Number(options.borderWidth) : 0.8,
+          borderpad: Number.isFinite(options.borderPad) ? Number(options.borderPad) : 1.2,
+          opacity: Number.isFinite(options.opacity) ? Number(options.opacity) : 0.98,
+          cliponaxis: false,
+          name: options.name || '',
+        };
+      }
+
       // Helper function to get the selected data range percentage
       function getDataRangePct() {
         const el = document.getElementById('dataRangePick');
@@ -2143,15 +2575,12 @@
           if (chartXMin === null) chartXMin = 0;
           if (chartXMax === null) chartXMax = 1;
 
-          // Use theme-aware colors for visibility in both modes
-          const avgColor = isDarkMode() ? '#ffc107' : '#d68910';  // Amber (brighter in dark, darker in light)
-          const medColor = isDarkMode() ? '#ce93d8' : '#8e44ad';  // Purple (brighter in dark, darker in light)
-          const minColor = isDarkMode() ? '#fcd34d' : '#d97706';  // Adapting yellow/orange
-          const maxColor = isDarkMode() ? '#4ade80' : '#16a085';  // Adapting green
-          const edgeColor = '#0b1220';  // Always dark border for triangle markers
-          const stdColor = isDarkMode() ? '#94a3b8' : '#5d6d7e';  // Gray - adjusted for both modes
-          const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
-          const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
+          const statPalette = getInteractiveStatPalette();
+          const avgColor = statPalette.avgColor;
+          const medColor = statPalette.medColor;
+          const minColor = statPalette.minColor;
+          const maxColor = statPalette.maxColor;
+          const stdColor = statPalette.stdColor;
 
           // Add Avg/Med as visible traces (no shapes - traces are toggleable via legend)
           traces.push({
@@ -2203,13 +2632,18 @@
               name: formatLegendStatLabel('Min', filteredMin),
               x: [xVals[minIdx]],
               y: [filteredMin],
-              marker: { color: minColor, size: 7, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
+              marker: {
+                color: minColor,
+                size: 8,
+                symbol: 'triangle-down',
+              },
               text: [formatStat(filteredMin)],
               textposition: 'bottom right',
-              textfont: { size: 9, color: minColor },
+              textfont: { size: 9.0, color: minColor },
               hoverinfo: 'name+y',
               showlegend: true,
-              meta: 'stat-marker'  // Tag so autoscale can skip it
+              meta: 'stat-marker',  // Tag so autoscale can skip it
+              cliponaxis: false,
             });
 
             // Add Max marker trace (using filtered max value)
@@ -2219,13 +2653,18 @@
               name: formatLegendStatLabel('Max', filteredMax),
               x: [xVals[maxIdx]],
               y: [filteredMax],
-              marker: { color: maxColor, size: 7, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
+              marker: {
+                color: maxColor,
+                size: 8,
+                symbol: 'triangle-up',
+              },
               text: [formatStat(filteredMax)],
               textposition: 'top right',
-              textfont: { size: 9, color: maxColor },
+              textfont: { size: 9.0, color: maxColor },
               hoverinfo: 'name+y',
               showlegend: true,
-              meta: 'stat-marker'  // Tag so autoscale can skip it
+              meta: 'stat-marker',  // Tag so autoscale can skip it
+              cliponaxis: false,
             });
 
             // Keep Std as the last legend element for forecast chart,
@@ -2246,15 +2685,17 @@
           // Add annotations next to their lines by shifting only on the x axis.
           layout.annotations = layout.annotations || [];
           const annotationX = 1.002;
+          const avgText = formatLegendStatLabel('Avg', s.mean, { decimals: 1 });
+          const medText = formatLegendStatLabel('Med', s.median, { decimals: 1 });
           if (s.mean <= s.median) {
             layout.annotations.push(
-              { x: annotationX, y: s.mean, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'top', name: 'avg-annot' },
-              { x: annotationX, y: s.median, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' }
+              { x: annotationX, y: s.mean, xref: 'paper', yref: 'y', text: avgText, showarrow: false, font: { size: 9.0, color: avgColor }, xanchor: 'left', yanchor: 'top', name: 'avg-annot' },
+              { x: annotationX, y: s.median, xref: 'paper', yref: 'y', text: medText, showarrow: false, font: { size: 9.0, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' }
             );
           } else {
             layout.annotations.push(
-              { x: annotationX, y: s.median, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 9, color: medColor }, xanchor: 'left', yanchor: 'top', name: 'med-annot' },
-              { x: annotationX, y: s.mean, xref: 'paper', yref: 'y', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 9, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' }
+              { x: annotationX, y: s.median, xref: 'paper', yref: 'y', text: medText, showarrow: false, font: { size: 9.0, color: medColor }, xanchor: 'left', yanchor: 'top', name: 'med-annot' },
+              { x: annotationX, y: s.mean, xref: 'paper', yref: 'y', text: avgText, showarrow: false, font: { size: 9.0, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' }
             );
           }
 
@@ -2314,6 +2755,63 @@
         // Attach legend toggle handler to save visibility and autoscale
         const chartEl = document.getElementById('chart');
         // Note: colKey is already defined at the start of this function
+
+        if (chartEl) {
+          chartEl._originalViewState = {
+            xRange: Array.isArray(layout.xaxis && layout.xaxis.range) ? layout.xaxis.range.slice() : null,
+            yRange: Array.isArray(layout.yaxis && layout.yaxis.range) ? layout.yaxis.range.slice() : null,
+          };
+          chartEl._restoringOriginalView = false;
+          chartEl._restoreOriginalChartView = function () {
+            if (!chartEl || chartEl._restoringOriginalView) {
+              return;
+            }
+            const originalView = chartEl._originalViewState || {};
+            const relayoutUpdate = {};
+
+            if (Array.isArray(originalView.xRange) && originalView.xRange.length === 2) {
+              relayoutUpdate['xaxis.range'] = originalView.xRange.slice();
+              relayoutUpdate['xaxis.autorange'] = false;
+            } else {
+              relayoutUpdate['xaxis.autorange'] = true;
+            }
+            if (Array.isArray(originalView.yRange) && originalView.yRange.length === 2) {
+              relayoutUpdate['yaxis.range'] = originalView.yRange.slice();
+              relayoutUpdate['yaxis.autorange'] = false;
+            } else {
+              relayoutUpdate['yaxis.autorange'] = true;
+            }
+
+            chartEl._restoringOriginalView = true;
+            Plotly.relayout(chartEl, relayoutUpdate).catch(() => {
+              // no-op
+            }).finally(() => {
+              chartEl._restoringOriginalView = false;
+              relabelPlotlyCompactSISuffixes(chartEl);
+            });
+          };
+        }
+
+        if (chartEl && chartEl._autoscaleRestoreBindingSet) {
+          chartEl.removeAllListeners('plotly_doubleclick');
+          chartEl.removeAllListeners('plotly_relayout');
+        }
+        if (chartEl) {
+          chartEl._autoscaleRestoreBindingSet = true;
+          chartEl.on('plotly_doubleclick', function () {
+            chartEl._restoreOriginalChartView();
+            return false;
+          });
+          chartEl.on('plotly_relayout', function (evt) {
+            if (!evt || chartEl._restoringOriginalView) {
+              return;
+            }
+            const wantsResetToAuto = evt['xaxis.autorange'] === true || evt['yaxis.autorange'] === true;
+            if (wantsResetToAuto) {
+              chartEl._restoreOriginalChartView();
+            }
+          });
+        }
 
         // Remove old handlers and attach new ones
         if (chartEl._bindingsSet) {
@@ -2430,6 +2928,12 @@
         if (dist && Array.isArray(dist.values)) {
           const t = getThemeVars();
           const distEl = document.getElementById('dist');
+          const distWidth = getInteractiveContainerWidth(distEl, {
+            fallbackRatio: 0.42,
+            fallbackMin: 360,
+            fallbackMax: 860,
+            includeParentWidth: false,
+          });
           const distHeight = distEl ? (distEl.clientHeight || 400) : 400;
           const serverAxisSpec = (dist && typeof dist.axis_spec === 'object' && dist.axis_spec) ? dist.axis_spec : null;
 
@@ -2461,7 +2965,7 @@
             title: { text: dist.name + ' Distribution', font: { size: 14 }, x: 0.02 },
             height: Math.max(400, distHeight),
             paper_bgcolor: t.panel, plot_bgcolor: t.panel, font: { color: t.text },
-            margin: { l: 35, r: 12, t: 40, b: 78 },
+            margin: { l: 35, r: 12, t: 64, b: 78 },
             bargap: 0.1,
             showlegend: true,
             legend: {
@@ -2474,12 +2978,12 @@
               bgcolor: 'rgba(0,0,0,0)',
               tracegroupgap: 4
             },
-            xaxis: normalizeAxisTitle({ automargin: true, showticklabels: true }, dist.name, 14),
+            xaxis: normalizeAxisTitle({ automargin: true, showticklabels: true, hoverformat: '.4~f' }, dist.name, 14),
             yaxis: { automargin: true, nticks: 12, tickfont: { size: 9.2 } },
-            hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
+            hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent, namelength: -1 }
           };
 
-          const distTickConfig = (serverAxisSpec && Array.isArray(serverAxisSpec.tickvals) && serverAxisSpec.tickvals.length)
+          const serverDistTickConfig = (serverAxisSpec && Array.isArray(serverAxisSpec.tickvals) && serverAxisSpec.tickvals.length)
             ? {
                 tickmode: 'array',
                 tickvals: serverAxisSpec.tickvals.map((v) => Number(v)).filter((v) => Number.isFinite(v)),
@@ -2487,15 +2991,31 @@
                 tickangle: Number.isFinite(Number(serverAxisSpec.tick_angle)) ? Number(serverAxisSpec.tick_angle) : 0,
                 tickfontSize: Number.isFinite(Number(serverAxisSpec.tick_fontsize)) ? Number(serverAxisSpec.tick_fontsize) : 9.2,
               }
-            : getDistributionTickConfig(distValues, distEl ? distEl.clientWidth : 0, {
-                maxTicks: 24,
-                pxPerTick: 44,
-                minTicks: 6,
-                binEdges: distHistogramBins ? distHistogramBins.edges : null,
-                minSpacingRatio: 0.14,
-              });
+            : null;
+
+          const clientDistTickConfig = getDistributionTickConfig(distValues, distWidth, {
+            maxTicks: 88,
+            pxPerTick: 20,
+            minTicks: 6,
+            binEdges: distHistogramBins ? distHistogramBins.edges : null,
+            minSpacingRatio: 0.14,
+          });
+
+          let rawDistTickConfig = serverDistTickConfig || clientDistTickConfig;
+          if (
+            serverDistTickConfig
+            && clientDistTickConfig
+            && Array.isArray(clientDistTickConfig.tickvals)
+            && Array.isArray(serverDistTickConfig.tickvals)
+            && clientDistTickConfig.tickvals.length > serverDistTickConfig.tickvals.length
+          ) {
+            rawDistTickConfig = clientDistTickConfig;
+          }
+          const distTickConfig = thinDistributionTickConfig(rawDistTickConfig, distWidth);
           const distAxisTickConfig = Object.assign({}, distTickConfig || {});
-          const distTickFontSize = Number.isFinite(distAxisTickConfig.tickfontSize) ? distAxisTickConfig.tickfontSize : 9.2;
+          const distTickFontSize = Number.isFinite(distAxisTickConfig.tickfontSize)
+            ? Math.max(8.8, Number(distAxisTickConfig.tickfontSize))
+            : 9.2;
           delete distAxisTickConfig.tickfontSize;
           distLayout.xaxis = Object.assign({}, distLayout.xaxis || {}, distAxisTickConfig);
           distLayout.xaxis.tickangle = distTickConfig && Number.isFinite(distTickConfig.tickangle)
@@ -2506,8 +3026,24 @@
             distLayout.xaxis.range = [distHistogramBins.start, distHistogramBins.end];
             distLayout.xaxis.autorange = false;
           }
-          distLayout.xaxis = enableCompactAxisTicks(distLayout.xaxis, { maxAbsValue: getFiniteMaxAbs(distValues) });
+          distLayout.xaxis = enableCompactAxisTicks(distLayout.xaxis, {
+            maxAbsValue: getFiniteMaxAbs(distValues),
+            minCompactValue: 1e15,
+          });
           distLayout.yaxis = enableCompactAxisTicks(distLayout.yaxis, { maxAbsValue: distValues.length });
+          if (Array.isArray(distLayout.xaxis.tickvals) && Array.isArray(distLayout.xaxis.ticktext)) {
+            distLayout.xaxis.ticktext = distLayout.xaxis.tickvals.map((tickVal, idx) => {
+              const numeric = Number(tickVal);
+              const existingLabel = String((distLayout.xaxis.ticktext || [])[idx] ?? '');
+              if (!Number.isFinite(numeric)) {
+                return existingLabel;
+              }
+              return formatDistributionTickValue(numeric);
+            });
+          }
+
+          const distributionStyling = getInteractiveDistributionStyling(t);
+          const distTraceName = 'Distribution';
 
           const distAbsMax = distValues.reduce((acc, v) => {
             const n = Number(v);
@@ -2535,10 +3071,17 @@
             : null;
           const distTraces = [{
             type: 'histogram',
-            name: 'Distribution',
+            name: distTraceName,
             x: distValues,
             ...(distHistogramXbins ? { xbins: distHistogramXbins } : {}),
-            marker: { color: t.accent, line: { color: t.text, width: 0.5 } },
+            hovertemplate: '<b>' + (dist.name || '') + '</b><br>%{x}<br>Count: %{y}<extra></extra>',
+            marker: {
+              color: distributionStyling.histogramBarColor,
+              line: {
+                color: distributionStyling.histogramBarLineColor || t.text,
+                width: 0.45,
+              },
+            },
             showlegend: true
           }];
 
@@ -2546,11 +3089,9 @@
           if (item.stats) {
             const s = item.stats;
 
-            // Use theme-aware colors for visibility in both modes
-            const avgColor = isDarkMode() ? '#ffc107' : '#d68910';  // Amber
-            const medColor = isDarkMode() ? '#ce93d8' : '#8e44ad';  // Purple
-            const stdBgColor = isDarkMode() ? 'rgba(50, 50, 50, 0.85)' : 'rgba(245, 222, 179, 0.85)';
-            const stdTextColor = isDarkMode() ? '#ffcc80' : '#6d4c00';
+            const statPalette = getInteractiveStatPalette();
+            const avgColor = statPalette.avgColor;
+            const medColor = statPalette.medColor;
 
             // Add vertical line shapes for Avg and Median (use yref: 'paper' to span chart area only)
             distLayout.shapes = [
@@ -2560,7 +3101,9 @@
 
             // Add Avg/Med as line traces for legend control (visible styling for legend symbols)
             // Use a very short line segment at the top to not interfere with histogram
-            const markerLaneY = 0.012;
+            const markerLaneYMin = 0.012;
+            const markerLaneYMax = 0.0075;
+            const markerTagLaneY = markerLaneYMin + 0.0015;
             distTraces.push({
               type: 'scatter',
               mode: 'lines',
@@ -2593,23 +3136,29 @@
             distLayout.yaxis2 = {
               overlaying: 'y',
               visible: false,
-              range: [0, 1]
+              range: [0, 1],
+              autorange: false,
+              fixedrange: true,
+              showgrid: false,
+              zeroline: false,
             };
 
             // Add Min/Max as scatter trace markers at bottom
-            const minColor = isDarkMode() ? '#fcd34d' : '#d97706';  // Adapting yellow/orange
-            const maxColor = isDarkMode() ? '#4ade80' : '#16a085';  // Adapting green
-            const edgeColor = '#0b1220';  // Always dark border for triangle markers
-            const stdColor = isDarkMode() ? '#94a3b8' : '#5d6d7e';  // Gray - adjusted for both modes
-
+            const minColor = distributionStyling.minColor;
+            const maxColor = distributionStyling.maxColor;
+            const stdColor = statPalette.stdColor;
             distTraces.push({
               type: 'scatter',
               mode: 'markers',
               name: formatLegendStatLabel('Min', s.min),
               x: [s.min],
-              y: [markerLaneY],
+              y: [markerLaneYMin],
               yaxis: 'y2',
-              marker: { color: minColor, size: 12, symbol: 'triangle-down', line: { color: edgeColor, width: 1.5 } },
+              marker: {
+                color: minColor,
+                size: 12,
+                symbol: 'triangle-down',
+              },
               hovertemplate: `Min ${formatStat(s.min)}<extra></extra>`,
               cliponaxis: false,
               showlegend: true
@@ -2620,9 +3169,13 @@
               mode: 'markers',
               name: formatLegendStatLabel('Max', s.max),
               x: [s.max],
-              y: [markerLaneY],
+              y: [markerLaneYMax],
               yaxis: 'y2',
-              marker: { color: maxColor, size: 12, symbol: 'triangle-up', line: { color: edgeColor, width: 1.5 } },
+              marker: {
+                color: maxColor,
+                size: 12,
+                symbol: 'triangle-up',
+              },
               hovertemplate: `Max ${formatStat(s.max)}<extra></extra>`,
               cliponaxis: false,
               showlegend: true
@@ -2633,47 +3186,138 @@
               mode: 'markers',
               name: formatLegendStatLabel('Std', s.std),
               x: [s.mean],
-              y: [markerLaneY],
+              y: [markerLaneYMin],
               yaxis: 'y2',
               marker: { size: 8, color: stdColor, symbol: 'square', opacity: 0 },
               hoverinfo: 'skip',
               showlegend: true
             });
 
-            // Add Avg/Med annotations - position based on which value is left vs right
-            // Calculate x-offset for spacing (approx 2% of range)
-            var xRange = s.max - s.min;
-            var xOffset = Math.max(1e-9, xRange * 0.010);  // keep text tags close to their guide lines
-            var minMaxAreClose = Math.abs(s.max - s.min) <= Math.max(1e-9, xRange * 0.05);
+            const distXMin = distHistogramBins ? distHistogramBins.start : s.min;
+            const distXMax = distHistogramBins ? distHistogramBins.end : s.max;
 
-            // Clamp avg/med annotation x positions so they don't exit the chart
-            var distXMin = distHistogramBins ? distHistogramBins.start : s.min;
-            var distXMax = distHistogramBins ? distHistogramBins.end : s.max;
-            var clampX = function(val) { return Math.max(distXMin, Math.min(distXMax, val)); };
+            const distSpan = Math.max(1e-9, Math.abs(Number(distXMax) - Number(distXMin)));
+            const leftLineX = Math.min(Number(s.mean), Number(s.median));
+            const rightLineX = Math.max(Number(s.mean), Number(s.median));
+            const sideOffset = Math.max(distSpan * 0.008, 1e-9);
+            const minTagGap = Math.max(distSpan * 0.020, sideOffset * 2.4);
+            const edgeInset = distSpan * 0.014;
+            const boundedMin = Number(distXMin) + edgeInset;
+            const boundedMax = Number(distXMax) - edgeInset;
+            const hasInnerRange = boundedMax > boundedMin;
+            const leftBoundary = hasInnerRange ? boundedMin : Number(distXMin);
+            const rightBoundary = hasInnerRange ? boundedMax : Number(distXMax);
+            let candidateLeftTagX = leftLineX - sideOffset;
+            let candidateRightTagX = rightLineX + sideOffset;
 
-            // Min/Max annotations: use paper-relative Y so they stay stable during zoom/autoscale
-            // Add text-shadow-like effect using a slightly darker/lighter font for legibility on bars
-            var minTextShadow = isDarkMode() ? '1px 1px 2px rgba(0,0,0,0.9)' : '0 0 3px rgba(255,255,255,0.95), 0 0 5px rgba(255,255,255,0.8)';
-            var maxTextShadow = minTextShadow;
-            if (s.mean <= s.median) {
-              // Mean is on the left, Median is on the right
-              distLayout.annotations = [
-                { x: clampX(s.mean - xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'right', yanchor: 'bottom', name: 'avg-annot' },
-                { x: clampX(s.median + xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'left', yanchor: 'bottom', name: 'med-annot' },
-                { x: s.min, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot' },
-                { x: s.max, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot' }
-              ];
-            } else {
-              // Median is on the left, Mean is on the right
-              distLayout.annotations = [
-                { x: clampX(s.median - xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Med', s.median, { decimals: 1 }), showarrow: false, font: { size: 10, color: medColor }, xanchor: 'right', yanchor: 'bottom', name: 'med-annot' },
-                { x: clampX(s.mean + xOffset), y: 0.965, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Avg', s.mean, { decimals: 1 }), showarrow: false, font: { size: 10, color: avgColor }, xanchor: 'left', yanchor: 'bottom', name: 'avg-annot' },
-                { x: s.min, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Min', s.min), showarrow: false, font: { size: 8, color: minColor }, xanchor: 'left', xshift: 1, yanchor: 'bottom', name: 'min-annot' },
-                { x: s.max, y: 0.035, xref: 'x', yref: 'paper', text: formatLegendStatLabel('Max', s.max), showarrow: false, font: { size: 8, color: maxColor }, xanchor: 'right', xshift: -1, yanchor: 'bottom', name: 'max-annot' }
-              ];
+            if ((candidateRightTagX - candidateLeftTagX) < minTagGap) {
+              const center = (candidateLeftTagX + candidateRightTagX) * 0.5;
+              candidateLeftTagX = center - (minTagGap * 0.5);
+              candidateRightTagX = center + (minTagGap * 0.5);
             }
 
-            distLayout.margin.t = 42;
+            candidateLeftTagX = Math.max(leftBoundary, Math.min(rightBoundary, candidateLeftTagX));
+            candidateRightTagX = Math.max(leftBoundary, Math.min(rightBoundary, candidateRightTagX));
+
+            if ((candidateRightTagX - candidateLeftTagX) < minTagGap) {
+              const neededGap = minTagGap - (candidateRightTagX - candidateLeftTagX);
+              const growRight = Math.min(rightBoundary - candidateRightTagX, neededGap);
+              candidateRightTagX += growRight;
+              candidateLeftTagX = Math.max(leftBoundary, candidateLeftTagX - (neededGap - growRight));
+            }
+
+            if ((candidateRightTagX - candidateLeftTagX) < (minTagGap * 0.66)) {
+              candidateLeftTagX = leftBoundary;
+              candidateRightTagX = rightBoundary;
+            }
+
+            const leftTagX = candidateLeftTagX;
+            const rightTagX = candidateRightTagX;
+            const avgOnLeft = Number(s.mean) <= Number(s.median);
+            const avgTagX = avgOnLeft ? leftTagX : rightTagX;
+            const medTagX = avgOnLeft ? rightTagX : leftTagX;
+            const avgTagAnchor = avgOnLeft ? 'right' : 'left';
+            const medTagAnchor = avgOnLeft ? 'left' : 'right';
+            const statTagLaneY = 1.006;
+            const avgLabel = formatLegendStatLabel('Avg', s.mean, { decimals: 1 });
+            const medLabel = formatLegendStatLabel('Med', s.median, { decimals: 1 });
+
+            distLayout.annotations = [
+              buildDistributionLineTagAnnotation(
+                s.mean,
+                avgLabel,
+                avgColor,
+                distXMin,
+                distXMax,
+                {
+                  y: statTagLaneY,
+                  name: 'avg-line-annot',
+                  fontSize: 9.0,
+                  forceX: avgTagX,
+                  xanchor: avgTagAnchor,
+                  xshift: avgTagAnchor === 'right' ? -2 : 2,
+                  edgeInsetRatio: 0.014,
+                  boldText: false,
+                }
+              ),
+              buildDistributionLineTagAnnotation(
+                s.median,
+                medLabel,
+                medColor,
+                distXMin,
+                distXMax,
+                {
+                  y: statTagLaneY,
+                  name: 'med-line-annot',
+                  fontSize: 9.0,
+                  forceX: medTagX,
+                  xanchor: medTagAnchor,
+                  xshift: medTagAnchor === 'right' ? -2 : 2,
+                  edgeInsetRatio: 0.014,
+                  boldText: false,
+                }
+              ),
+              buildDistributionExtremaAnnotation(
+                s.min,
+                formatStat(s.min),
+                minColor,
+                distXMin,
+                distXMax,
+                {
+                  y: markerTagLaneY,
+                  name: 'min-annot',
+                  fontSize: 9.0,
+                  textColor: distributionStyling.minTextColor,
+                  bgcolor: distributionStyling.minTagBg,
+                  bordercolor: distributionStyling.minTagBorder,
+                  borderWidth: 1.1,
+                  borderPad: 1.0,
+                  opacity: 0.98,
+                  edgeInsetRatio: 0.010,
+                  boldText: false,
+                },
+              ),
+              buildDistributionExtremaAnnotation(
+                s.max,
+                formatStat(s.max),
+                maxColor,
+                distXMin,
+                distXMax,
+                {
+                  y: markerTagLaneY,
+                  name: 'max-annot',
+                  fontSize: 9.0,
+                  textColor: distributionStyling.maxTextColor,
+                  bgcolor: distributionStyling.maxTagBg,
+                  bordercolor: distributionStyling.maxTagBorder,
+                  borderWidth: 1.1,
+                  borderPad: 1.0,
+                  opacity: 0.98,
+                  edgeInsetRatio: 0.010,
+                  boldText: false,
+                },
+              ),
+            ];
           }
 
           const distLegendEntries = getLegendEntryCount(distTraces);
@@ -2724,9 +3368,114 @@
             toImageButtonOptions: { format: 'png', filename: 'distribution_' + (dist.name || 'data').replace(/[^a-zA-Z0-9_-]/g, '_'), scale: 2 }
           }).then(() => {
             relabelPlotlyCompactSISuffixes(distEl);
+
+            if (distEl) {
+              distEl._originalDistViewState = {
+                xRange: Array.isArray(distLayout.xaxis && distLayout.xaxis.range) ? distLayout.xaxis.range.slice() : null,
+                yRange: Array.isArray(distLayout.yaxis && distLayout.yaxis.range) ? distLayout.yaxis.range.slice() : null,
+              };
+              distEl._restoreOriginalDistributionView = function () {
+                if (!distEl || distEl._syncingDistMarkerAxis) {
+                  return;
+                }
+                const originalView = distEl._originalDistViewState || {};
+                const relayoutUpdate = {
+                  'yaxis2.range': [0, 1],
+                  'yaxis2.autorange': false,
+                  'yaxis2.fixedrange': true,
+                };
+
+                if (Array.isArray(originalView.xRange) && originalView.xRange.length === 2) {
+                  relayoutUpdate['xaxis.range'] = originalView.xRange.slice();
+                  relayoutUpdate['xaxis.autorange'] = false;
+                } else {
+                  relayoutUpdate['xaxis.autorange'] = true;
+                }
+                if (Array.isArray(originalView.yRange) && originalView.yRange.length === 2) {
+                  relayoutUpdate['yaxis.range'] = originalView.yRange.slice();
+                  relayoutUpdate['yaxis.autorange'] = false;
+                } else {
+                  relayoutUpdate['yaxis.autorange'] = true;
+                }
+
+                distEl._syncingDistMarkerAxis = true;
+                Plotly.relayout(distEl, relayoutUpdate).catch(() => {
+                  // no-op
+                }).finally(() => {
+                  distEl._syncingDistMarkerAxis = false;
+                  relabelPlotlyCompactSISuffixes(distEl);
+                });
+              };
+            }
+
+            if (distEl && distEl._distMarkerAxisBindingSet) {
+              distEl.removeAllListeners('plotly_relayout');
+            }
+            if (distEl) {
+              distEl._distMarkerAxisBindingSet = true;
+              distEl._syncingDistMarkerAxis = false;
+              distEl.on('plotly_relayout', function (evt) {
+                if (!distEl || distEl._syncingDistMarkerAxis) {
+                  return;
+                }
+
+                const wantsResetToAuto = evt && (
+                  evt['xaxis.autorange'] === true
+                  || evt['yaxis.autorange'] === true
+                );
+                if (wantsResetToAuto) {
+                  distEl._restoreOriginalDistributionView();
+                  return;
+                }
+
+                const relayoutKeys = Object.keys(evt || {});
+                const touchedY2 = relayoutKeys.some((key) => String(key).indexOf('yaxis2') === 0);
+                const y2 = distEl.layout && distEl.layout.yaxis2;
+                const hasPinnedRange = !!(
+                  y2
+                  && Array.isArray(y2.range)
+                  && Math.abs(Number(y2.range[0])) < 1e-9
+                  && Math.abs(Number(y2.range[1]) - 1) < 1e-9
+                  && y2.autorange === false
+                );
+
+                if (!touchedY2 && hasPinnedRange) {
+                  return;
+                }
+
+                distEl._syncingDistMarkerAxis = true;
+                Plotly.relayout(distEl, {
+                  'yaxis2.range': [0, 1],
+                  'yaxis2.autorange': false,
+                  'yaxis2.fixedrange': true,
+                }).catch(() => {
+                  // no-op
+                }).finally(() => {
+                  distEl._syncingDistMarkerAxis = false;
+                });
+              });
+            }
+
+            if (distEl && distEl._distAutoscaleRestoreBindingSet) {
+              distEl.removeAllListeners('plotly_doubleclick');
+            }
+            if (distEl) {
+              distEl._distAutoscaleRestoreBindingSet = true;
+              distEl.on('plotly_doubleclick', function () {
+                distEl._restoreOriginalDistributionView();
+                return false;
+              });
+            }
           });
 
-          // Add legend click handler to toggle shapes and annotations for Avg/Med (reuse distEl from above)
+          if (distEl && distEl._distLegendBindingSet) {
+            distEl.removeAllListeners('plotly_legendclick');
+          }
+          if (distEl) {
+            distEl._distLegendBindingSet = true;
+          }
+
+          // Add legend click handler to toggle Avg/Med lines and Min/Max text tags.
           distEl.on('plotly_legendclick', function (evt) {
             const d = distEl.data[evt.curveNumber];
             const meta = d.meta || '';
@@ -2748,20 +3497,16 @@
               const annotations = [...(distEl.layout.annotations || [])];
 
               if (isAvg) {
-                // Toggle avg shape (index 0)
                 if (shapes[0]) shapes[0].visible = !isHiding;
-                // Toggle avg annotation
                 annotations.forEach(a => {
-                  if (a.name === 'avg-annot' || (a.text && String(a.text).includes('Avg'))) {
+                  if (a.name === 'avg-line-annot') {
                     a.visible = !isHiding;
                   }
                 });
               } else if (isMed) {
-                // Toggle med shape (index 1)
                 if (shapes[1]) shapes[1].visible = !isHiding;
-                // Toggle med annotation
                 annotations.forEach(a => {
-                  if (a.name === 'med-annot' || (a.text && String(a.text).includes('Med'))) {
+                  if (a.name === 'med-line-annot') {
                     a.visible = !isHiding;
                   }
                 });
@@ -2922,7 +3667,7 @@
               },
               xaxis: enableCompactAxisTicks(normalizeAxisTitle({ automargin: true }, column, 10), { maxAbsValue: getFiniteMaxAbs(vals) }),
               yaxis: enableCompactAxisTicks({ automargin: true }, { maxAbsValue: vals.length }),
-              hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent }
+              hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent, namelength: -1 }
             };
             setFooterAxisTitleAnnotation(fallbackDistLayout, 'xaxis', column, {
               name: 'fallback-dist-xaxis-title',
@@ -2942,9 +3687,10 @@
                 }
               : null;
 
+            const fallbackDistName = 'Distribution';
             const fallbackDistTraces = [{
               type: 'histogram',
-              name: 'Distribution',
+              name: fallbackDistName,
               x: vals,
               ...(fallbackDistHistogramXbins ? { xbins: fallbackDistHistogramXbins } : {}),
               marker: { color: t.accent },
@@ -3189,7 +3935,8 @@
                       [0.5, t.accent],
                       [1, t.accent2]
                     ],
-                    zmin: -1, zmax: 1
+                    zmin: -1, zmax: 1,
+                    hovertemplate: '%{x}<br>%{y}<br>Correlation: %{z:.3f}<extra></extra>'
                   }];
                   const spearmanLayout = {
                     title: { text: 'Spearman correlation', x: 0.02, y: 0.98 },
@@ -3199,6 +3946,7 @@
                     paper_bgcolor: t.panel,
                     plot_bgcolor: t.panel,
                     font: { color: t.text },
+                    hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent, namelength: -1 },
                     margin: { l: 80, r: 10, t: 80, b: 40 }
                   };
                   Plotly.newPlot('corr', spearmanData, spearmanLayout, { responsive: true });
@@ -3223,7 +3971,8 @@
                       [0.5, t.accent],
                       [1, t.accent2]
                     ],
-                    zmin: -1, zmax: 1
+                    zmin: -1, zmax: 1,
+                    hovertemplate: '%{x}<br>%{y}<br>Correlation: %{z:.3f}<extra></extra>'
                   }];
                   const pearLayout = {
                     title: { text: 'Pearson correlation', x: 0.02, y: 0.98 },
@@ -3233,6 +3982,7 @@
                     paper_bgcolor: t.panel,
                     plot_bgcolor: t.panel,
                     font: { color: t.text },
+                    hoverlabel: { bgcolor: t.panel, font: { color: t.text }, bordercolor: t.accent, namelength: -1 },
                     margin: { l: 80, r: 10, t: 80, b: 40 }
                   };
                   Plotly.newPlot('pearson', pearData, pearLayout, { responsive: true });
@@ -3394,7 +4144,7 @@
                     ? xValues
                     : (Array.isArray(layout.xaxis && layout.xaxis.ticktext) ? layout.xaxis.ticktext : xValues);
                   var footerConfig = getCategoryChartFooterConfig(data.traces, displayLabels, chartEl.clientWidth || chartEl.offsetWidth || 900);
-                  layout.margin = Object.assign({ l: 56, r: 20, t: 24, b: 96 }, layout.margin || {});
+                  layout.margin = Object.assign({ l: 58, r: 22, t: 26, b: 96 }, layout.margin || {});
                   layout.margin.b = footerConfig.bottomMargin;
                   layout.height = footerConfig.height;
                   chartEl.style.height = layout.height + 'px';
@@ -3420,7 +4170,7 @@
                     }
                     layout.xaxis.tickangle = footerConfig.tickAngle;
                     layout.xaxis.tickfont = Object.assign({}, layout.xaxis.tickfont || {}, { color: textColor, size: footerConfig.tickFontSize });
-                    layout.xaxis.range = [-0.5, Math.max(-0.5, xValues.length - 0.5)];
+                    layout.xaxis.range = [-0.5, Math.max(-0.5, xValues.length - 0.5 + 0.16)];
                     layout.xaxis.autorange = false;
                     layout.xaxis.title = Object.assign({}, layout.xaxis.title || {}, {
                       font: Object.assign({}, (layout.xaxis.title && layout.xaxis.title.font) || {}, { color: textColor })

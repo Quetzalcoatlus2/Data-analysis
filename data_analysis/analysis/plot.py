@@ -66,19 +66,38 @@ def _format_stat_value(v: float) -> str:
             return _strip_numeric_trailing_zeros(raw) + "M"
         if mag >= 1e3:
             raw = f"{value / 1e3:.2f}"
-            return _strip_numeric_trailing_zeros(raw) + "K"
+            return _strip_numeric_trailing_zeros(raw) + "k"
         return _format_precise_axis_value(value)
     except Exception:
         return str(v)
 
 
-def _apply_sci_formatter(ax) -> None:
-    """Apply compact M/B/T axis formatter when values exceed one million.
+def _apply_sci_formatter(
+    ax,
+    *,
+    y_threshold: float = 1e6,
+    x_threshold: float = 1e6,
+) -> None:
+    """Apply compact k/M/B/T axis formatter when values exceed thresholds.
 
     Inspects both x-axis and y-axis limits and applies the formatter to
     each axis independently when needed.
     """
     _fmt = mticker.FuncFormatter(lambda val, _pos: _format_stat_value(float(val)))
+
+    try:
+        y_limit = float(y_threshold)
+        if not math.isfinite(y_limit) or y_limit <= 0:
+            raise ValueError
+    except Exception:
+        y_limit = 1e6
+
+    try:
+        x_limit = float(x_threshold)
+        if not math.isfinite(x_limit) or x_limit <= 0:
+            raise ValueError
+    except Exception:
+        x_limit = 1e6
 
     def _has_explicit_tick_labels(axis) -> bool:
         try:
@@ -93,7 +112,7 @@ def _apply_sci_formatter(ax) -> None:
         if isinstance(y_formatter, mticker.FixedFormatter) or _has_explicit_tick_labels(ax.yaxis):
             raise RuntimeError("skip-fixed-y-formatter")
         ymin, ymax = ax.get_ylim()
-        if max(abs(ymin), abs(ymax)) >= 1e6:
+        if max(abs(ymin), abs(ymax)) >= y_limit:
             ax.yaxis.set_major_formatter(_fmt)
     except Exception:
         pass
@@ -102,7 +121,7 @@ def _apply_sci_formatter(ax) -> None:
         if isinstance(x_formatter, mticker.FixedFormatter) or _has_explicit_tick_labels(ax.xaxis):
             raise RuntimeError("skip-fixed-x-formatter")
         xmin, xmax = ax.get_xlim()
-        if max(abs(xmin), abs(xmax)) >= 1e6:
+        if max(abs(xmin), abs(xmax)) >= x_limit:
             ax.xaxis.set_major_formatter(_fmt)
     except Exception:
         pass
@@ -384,14 +403,14 @@ def _sample_histogram_bin_ticks(
     if not tick_values:
         return [], []
 
+    compact_labels = [_format_axis_tick_value(v) for v in tick_values]
+    if len(set(compact_labels)) == len(compact_labels):
+        return tick_values, compact_labels
+
     if all(_is_integer_like(v) for v in tick_values):
         integer_labels = [str(int(round(v))) for v in tick_values]
         if len(set(integer_labels)) == len(integer_labels):
             return tick_values, integer_labels
-
-    compact_labels = [_format_axis_tick_value(v) for v in tick_values]
-    if len(set(compact_labels)) == len(compact_labels):
-        return tick_values, compact_labels
 
     step_candidates = np.diff(edges)
     finite_steps = step_candidates[np.isfinite(step_candidates) & (step_candidates > 0)]
@@ -486,6 +505,7 @@ def _resolve_static_tick_policy(
     labels: Sequence[object] | pd.Index,
     *,
     chart_type: Literal["trend", "forecast", "distribution"] = "forecast",
+    spacing_profile: Literal["default", "detailed"] = "default",
 ) -> dict[str, float | int | str]:
     """Return shared static x-tick policy for Detailed Analysis, ZIP and PDF outputs."""
     clean_labels = [_stringify_axis_label(label) for label in list(labels) if str(label or "").strip()]
@@ -510,6 +530,19 @@ def _resolve_static_tick_policy(
         elif max_label_length > 14 and label_count > 26:
             max_tick_labels = max(12, max_tick_labels - 2)
         min_spacing_ratio = 0.14 if label_count <= 26 else 0.20 if (label_count > 30 or max_label_length > 10) else 0.16
+
+        # Detailed Analysis: show more x ticks while preserving readability.
+        if spacing_profile == "detailed" and label_count > 20:
+            max_tick_labels = min(28, max_tick_labels + 4)
+            if max_label_length >= 10:
+                max_tick_labels = min(max_tick_labels, 14)
+                min_spacing_ratio = max(min_spacing_ratio, 0.24)
+            elif max_label_length >= 8:
+                max_tick_labels = min(max_tick_labels, 16)
+                min_spacing_ratio = max(min_spacing_ratio, 0.21)
+            else:
+                max_tick_labels = min(max_tick_labels, 18)
+                min_spacing_ratio = max(min_spacing_ratio, 0.18)
     else:
         target_tick_labels = min(25, label_count)
         can_fit_horizontal = target_tick_labels * (max_label_length + 1) <= 75
@@ -525,6 +558,9 @@ def _resolve_static_tick_policy(
 
     dense_cutoff = 8 if chart_type == "distribution" else 10
     tick_fontsize = _tick_fontsize_for_labels(clean_labels, dense_cutoff=dense_cutoff)
+    if chart_type == "distribution":
+        tick_fontsize = min(10.0, tick_fontsize * 1.15)
+    
     if max_label_length > 46:
         tick_fontsize = min(tick_fontsize, 4.8)
     elif max_label_length > 36:
@@ -549,6 +585,7 @@ def build_distribution_axis_spec(
     min_bins: int = 8,
     max_bins: int = 52,
     integer_span_threshold: int = 260,
+    spacing_profile: Literal["default", "detailed"] = "default",
 ) -> dict[str, Any]:
     """Return a canonical distribution axis/bin spec shared across views/exports."""
     finite = pd.to_numeric(pd.Series(values), errors='coerce').dropna().astype(float)
@@ -565,7 +602,24 @@ def build_distribution_axis_spec(
     if isinstance(hist_bins, np.ndarray):
         hist_edges = hist_bins.astype(float, copy=False)
     else:
-        hist_edges = np.histogram_bin_edges(values_arr, bins=int(hist_bins)).astype(float)
+        target_bins = max(1, int(hist_bins))
+        min_val, max_val = float(np.min(values_arr)), float(np.max(values_arr))
+        if min_val >= max_val:
+            hist_edges = np.array([min_val - 0.5, min_val + 0.5])
+        else:
+            rough_step = (max_val - min_val) / target_bins
+            exponent = int(math.floor(math.log10(rough_step))) if rough_step > 0 else 0
+            base = 10.0 ** exponent
+            best_step = base * 1.0
+            min_diff = float('inf')
+            for cand in [a * base for a in (1.0, 2.0, 2.5, 4.0, 5.0, 10.0)]:
+                if abs(cand - rough_step) < min_diff:
+                    min_diff = abs(cand - rough_step)
+                    best_step = cand
+            start = math.floor(min_val / best_step) * best_step
+            end = math.ceil(max_val / best_step) * best_step
+            n_bins = max(1, int(round((end - start) / best_step)))
+            hist_edges = np.array([start + i * best_step for i in range(n_bins + 1)])
 
     hist_edges = hist_edges[np.isfinite(hist_edges)]
     hist_edges = np.unique(np.sort(hist_edges))
@@ -576,6 +630,7 @@ def build_distribution_axis_spec(
     tick_policy = _resolve_static_tick_policy(
         finite_unique_values.tolist(),
         chart_type='distribution',
+        spacing_profile=spacing_profile,
     )
     tick_values, tick_labels = _sample_histogram_bin_ticks(
         hist_edges,
@@ -639,8 +694,8 @@ def apply_static_distribution_compact_layout(
     fig: Any,
     ax: Any,
     *,
-    right: float = 0.95,
-    top: float = 0.90,
+    right: float = 0.947,
+    top: float = 0.898,
 ) -> None:
     """Compact distribution footer spacing while preserving no-overlap guardrails."""
     with contextlib.suppress(Exception):
@@ -909,7 +964,7 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     long_label_scale = min(1.0, max_label_length / 42.0)
     label_density_scale = min(1.0, visible_tick_count / 180.0)
     max_legend_label_length = max((len(label) for label in legend_labels), default=0)
-    legend_fontsize = 9 if max_legend_label_length > 26 else 10
+    legend_fontsize = 15 if max_legend_label_length > 26 else 16
     legend_columns = len(legend_labels)
     legend_rows = 1
     can_fit_horizontal = visible_tick_count * (max_label_length + 1) <= 120
@@ -926,13 +981,20 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     else:
         tick_angle = -32
         tick_ha = 'left'
-    # Keep x-tick font readable while avoiding overlap on dense category sets.
-    tick_fontsize = 6.0 if visible_tick_count > 100 else 7.0 if visible_tick_count > 60 else 8.0
+    # Increase typography while preserving dense x-axis readability around ~200 categories.
+    if visible_tick_count >= 180:
+        tick_fontsize = 6.0
+    elif visible_tick_count > 120:
+        tick_fontsize = 8.8
+    elif visible_tick_count > 60:
+        tick_fontsize = 10.8
+    else:
+        tick_fontsize = 12.2
     # Keep export width in a narrow band so PDF/ZIP renders do not visually shrink
     # bar heights or footer/title fonts when many categories are present.
     fig_width = min(18.8, max(16.0, 16.0 + (category_count / 70.0)))
     plot_area_height = 12.2
-    top_padding_inches = 0.95
+    top_padding_inches = 1.0
     tick_to_xlabel_gap_inches = 0.04 if tick_angle == 0 else 0.06
     tick_footer_inches = (
         0.26
@@ -974,7 +1036,8 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     # Keep dense-category bar spacing visually consistent in rasterized exports.
     # We target a minimum gap in *pixels* (not data units) so very dense charts
     # avoid occasional conjoined-looking neighbors from subpixel rounding.
-    axes_width_fraction = max(1e-6, 0.88 - 0.125)
+    axes_right_fraction = 0.92
+    axes_width_fraction = max(1e-6, axes_right_fraction - 0.125)
     estimated_axes_px = max(320.0, fig_width * 120.0 * axes_width_fraction)
     slot_px = estimated_axes_px / max(1.0, float(category_count))
     target_gap_px = 2.0 if category_count >= 100 else 1.5
@@ -1007,21 +1070,22 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
                     bar_container,
                     labels=[str(v) for v in y_values],
                     padding=2,
-                    fontsize=8,
+                    fontsize=14,
                 )
 
-    ax.set_title(f"Categories: {col} ({total_unique} unique values)", fontsize=13, pad=16)
-    ax.set_xlabel(col, fontsize=13, labelpad=0)
-    ax.set_ylabel("Count", fontsize=11, labelpad=8)
+    ax.set_title(f"Categories: {col} ({total_unique} unique values)", fontsize=20, pad=17)
+    ax.set_xlabel(col, fontsize=19, labelpad=0)
+    ax.set_ylabel("Count", fontsize=17, labelpad=9)
     ax.grid(True, alpha=0.3, axis='y')
     ax.margins(x=0.01)
     ax.set_ylim(0, max(max_count * 1.06, 1.0))
-    ax.set_xlim(-0.5, category_count - 0.5)
+    right_empty_space_slots = 0.16
+    ax.set_xlim(-0.5, category_count - 0.5 + right_empty_space_slots)
 
     _apply_dense_non_overlapping_y_ticks(
         ax,
         integer=True,
-        label_fontsize=9.0,
+        label_fontsize=15.0,
         min_ticks=6,
         max_ticks=22,
     )
@@ -1030,12 +1094,9 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
     ax.xaxis.set_major_formatter(mticker.FixedFormatter(tick_labels))
     x_tick_pad = 2.0 if tick_angle == 0 else 0.0
     ax.tick_params(axis='x', pad=x_tick_pad, labelsize=tick_fontsize, direction='out')
-    if tick_angle != 0:
-        with contextlib.suppress(Exception):
-            # Keep only a minimal outward offset for rotated labels: enough to
-            # preserve anchor readability while avoiding the larger historical
-            # chart-to-label gap.
-            ax.spines['bottom'].set_position(('outward', 6.0))
+    with contextlib.suppress(Exception):
+        # Keep axis baseline anchored to bars for all category density profiles.
+        ax.spines['bottom'].set_position(('outward', 0.0))
     for tick_label in ax.get_xticklabels():
         tick_label.set_rotation(tick_angle)
         tick_label.set_horizontalalignment(tick_ha)
@@ -1043,8 +1104,10 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
             tick_label.set_rotation_mode('anchor')
             tick_label.set_verticalalignment('top')
 
-    ax.axhline(y=avg_count, color='#f39c12', linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_stat_value(avg_count)}')
-    ax.axhline(y=med_count, color='#9b59b6', linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {_format_stat_value(med_count)}')
+    avg_color = '#a16207'
+    med_color = '#6b21a8'
+    ax.axhline(y=avg_count, color=avg_color, linestyle=':', linewidth=2, alpha=0.8, label=f'Avg: {_format_stat_value(avg_count)}')
+    ax.axhline(y=med_count, color=med_color, linestyle='-.', linewidth=1.5, alpha=0.8, label=f'Med: {_format_stat_value(med_count)}')
 
     ylim = ax.get_ylim()
     y_range = ylim[1] - ylim[0]
@@ -1082,9 +1145,9 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
         transform=ax.get_yaxis_transform(),
         va=avg_va,
         ha='left',
-        fontsize=8,
-        color='#f39c12',
-        fontweight='bold',
+        fontsize=14,
+        color=avg_color,
+        fontweight='semibold',
         clip_on=False,
     )
     ax.text(
@@ -1094,9 +1157,9 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
         transform=ax.get_yaxis_transform(),
         va=med_va,
         ha='left',
-        fontsize=8,
-        color='#9b59b6',
-        fontweight='bold',
+        fontsize=14,
+        color=med_color,
+        fontweight='semibold',
         clip_on=False,
     )
 
@@ -1129,7 +1192,7 @@ def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, 
         handletextpad=0.16,
         borderaxespad=0.0,
     )
-    fig.subplots_adjust(bottom=bottom_fraction, right=0.88, top=axes_top_fraction)
+    fig.subplots_adjust(bottom=bottom_fraction, right=axes_right_fraction, top=axes_top_fraction)
     ax.xaxis.set_label_coords(0.5, xlabel_y_axes)
     return fig, ax
 
@@ -1143,6 +1206,10 @@ def _add_static_distribution_overlays(
     legend_columns: int = 6,
     legend_y: float = -0.12,
     expand_xlim: bool = True,
+    right_pad_ratio: float = 0.0,
+    left_pad_ratio: float = 0.0,
+    top_lane: float = 1.008,
+    line_tag_offset_ratio: float = 0.006,
 ) -> dict[str, float]:
     """Add consistent stat overlays to a static histogram axis.
 
@@ -1161,9 +1228,12 @@ def _add_static_distribution_overlays(
     stats_median = float(finite.median())
     stats_std = float(finite.std())
 
+    avg_color = '#a16207'
+    med_color = '#6b21a8'
+
     ax.axvline(
         x=stats_mean,
-        color='#f39c12',
+        color=avg_color,
         linestyle=':',
         linewidth=2,
         alpha=0.8,
@@ -1171,7 +1241,7 @@ def _add_static_distribution_overlays(
     )
     ax.axvline(
         x=stats_median,
-        color='#9b59b6',
+        color=med_color,
         linestyle='-.',
         linewidth=1.5,
         alpha=0.7,
@@ -1184,10 +1254,21 @@ def _add_static_distribution_overlays(
         ax.set_xlim(xlim[0] - x_range * 0.03, xlim[1] + x_range * 0.03)
         xlim = ax.get_xlim()
         x_range = max(float(xlim[1] - xlim[0]), 1e-9)
+    else:
+        safe_left_ratio = max(0.0, float(left_pad_ratio))
+        safe_right_ratio = max(0.0, float(right_pad_ratio))
+        if safe_left_ratio > 0 or safe_right_ratio > 0:
+            ax.set_xlim(
+                xlim[0] - (x_range * safe_left_ratio),
+                xlim[1] + (x_range * safe_right_ratio),
+            )
+        xlim = ax.get_xlim()
+        x_range = max(float(xlim[1] - xlim[0]), 1e-9)
 
     xaxis_transform = blended_transform_factory(ax.transData, ax.transAxes)
-    top_lane = 0.978
-    x_offset = x_range * 0.012
+    top_lane = max(1.001, float(top_lane))
+    safe_line_offset_ratio = max(0.0, float(line_tag_offset_ratio))
+    x_offset = max(1e-9, x_range * safe_line_offset_ratio)
 
     if stats_mean <= stats_median:
         ax.text(
@@ -1195,11 +1276,11 @@ def _add_static_distribution_overlays(
             top_lane,
             f'Avg: {formatter(stats_mean)}',
             transform=xaxis_transform,
-            va='top',
+            va='bottom',
             ha='right',
-            fontsize=7,
-            color='#f39c12',
-            fontweight='bold',
+            fontsize=7.2,
+            color=avg_color,
+            fontweight='semibold',
             clip_on=False,
         )
         ax.text(
@@ -1207,11 +1288,11 @@ def _add_static_distribution_overlays(
             top_lane,
             f'Med: {formatter(stats_median)}',
             transform=xaxis_transform,
-            va='top',
+            va='bottom',
             ha='left',
-            fontsize=7,
-            color='#9b59b6',
-            fontweight='bold',
+            fontsize=7.2,
+            color=med_color,
+            fontweight='semibold',
             clip_on=False,
         )
     else:
@@ -1220,11 +1301,11 @@ def _add_static_distribution_overlays(
             top_lane,
             f'Med: {formatter(stats_median)}',
             transform=xaxis_transform,
-            va='top',
+            va='bottom',
             ha='right',
-            fontsize=7,
-            color='#9b59b6',
-            fontweight='bold',
+            fontsize=7.2,
+            color=med_color,
+            fontweight='semibold',
             clip_on=False,
         )
         ax.text(
@@ -1232,25 +1313,25 @@ def _add_static_distribution_overlays(
             top_lane,
             f'Avg: {formatter(stats_mean)}',
             transform=xaxis_transform,
-            va='top',
+            va='bottom',
             ha='left',
-            fontsize=7,
-            color='#f39c12',
-            fontweight='bold',
+            fontsize=7.2,
+            color=avg_color,
+            fontweight='semibold',
             clip_on=False,
         )
 
     # Min/Max: sit on x-axis (marker_lane_y=0.008), text at 0.04 above
     marker_lane_y = 0.008
     # Colors legible on both blue histogram bars and white background
-    min_color = '#b45309'  # Dark amber - high contrast on blue and white
-    max_color = '#15803d'  # Dark green - high contrast on blue and white
+    min_color = '#d97706'  # vivid amber - high contrast on blue and white
+    max_color = '#16a34a'  # vivid green - high contrast on blue and white
     edge_color = '#0b1220'
-    min_xytext = (2, 5)
-    max_xytext = (-2, 5)
+    min_xytext = (2, 6)
+    max_xytext = (-2, 6)
     if abs(stats_max - stats_min) <= x_range * 0.04:
-        min_xytext = (2, 5)
-        max_xytext = (-2, 12)
+        min_xytext = (2, 6)
+        max_xytext = (-4, 6)
 
     ax.scatter(
         [stats_min],
@@ -1286,9 +1367,16 @@ def _add_static_distribution_overlays(
         xytext=min_xytext,
         ha='left',
         va='bottom',
-        fontsize=6,
-        color=min_color,
-        fontweight='bold',
+        fontsize=6.4,
+        color='#7c2d12',
+        fontweight='semibold',
+        bbox={
+            'boxstyle': 'round,pad=0.18',
+            'facecolor': '#fff7ed',
+            'edgecolor': min_color,
+            'linewidth': 0.6,
+            'alpha': 0.96,
+        },
         annotation_clip=False,
     )
     ax.annotate(
@@ -1299,9 +1387,16 @@ def _add_static_distribution_overlays(
         xytext=max_xytext,
         ha='right',
         va='bottom',
-        fontsize=6,
-        color=max_color,
-        fontweight='bold',
+        fontsize=6.4,
+        color='#14532d',
+        fontweight='semibold',
+        bbox={
+            'boxstyle': 'round,pad=0.18',
+            'facecolor': '#f0fdf4',
+            'edgecolor': max_color,
+            'linewidth': 0.6,
+            'alpha': 0.96,
+        },
         annotation_clip=False,
     )
 
@@ -1521,9 +1616,9 @@ def generate_plot(
             except Exception:
                 pass
     
-    ax.set_title(title, fontsize=10, pad=16)
+    ax.set_title(title, fontsize=10, pad=17)
     ax.set_xlabel(xlabel, fontsize=9, labelpad=2)
-    ax.set_ylabel(ylabel, fontsize=9, labelpad=8)
+    ax.set_ylabel(ylabel, fontsize=9, labelpad=9)
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
     ax.tick_params(axis='x', labelsize=8)
@@ -1544,8 +1639,10 @@ def generate_plot(
         stats_std = float(data.std())
         
         # Draw horizontal lines for Avg and Median
-        ax.axhline(y=stats_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.8, label=f'Avg: {_format_stat_value(stats_mean)}')
-        ax.axhline(y=stats_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.7, label=f'Median: {_format_stat_value(stats_median)}')
+        avg_color = '#a16207'
+        med_color = '#6b21a8'
+        ax.axhline(y=stats_mean, color=avg_color, linestyle=':', linewidth=1.5, alpha=0.8, label=f'Avg: {_format_stat_value(stats_mean)}')
+        ax.axhline(y=stats_median, color=med_color, linestyle='-.', linewidth=1.2, alpha=0.7, label=f'Median: {_format_stat_value(stats_median)}')
         
         # Add value tags - position based on which line is higher
         xlim = ax.get_xlim()
@@ -1554,16 +1651,16 @@ def generate_plot(
         # Position tags so they don't overlap: higher line's tag above it, lower line's tag below it
         if stats_mean >= stats_median:
             # Avg is above Med - Avg tag above its line, Med tag below its line
-            ax.text(xlim[1], stats_mean + y_offset, f' Avg: {_format_stat_value(stats_mean)}', va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
-            ax.text(xlim[1], stats_median - y_offset, f' Med: {_format_stat_value(stats_median)}', va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
+            ax.text(xlim[1], stats_mean + y_offset, f' Avg: {_format_stat_value(stats_mean)}', va='bottom', ha='left', fontsize=7, color=avg_color, fontweight='bold')
+            ax.text(xlim[1], stats_median - y_offset, f' Med: {_format_stat_value(stats_median)}', va='top', ha='left', fontsize=7, color=med_color, fontweight='bold')
         else:
             # Med is above Avg - Med tag above its line, Avg tag below its line
-            ax.text(xlim[1], stats_median + y_offset, f' Med: {_format_stat_value(stats_median)}', va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold')
-            ax.text(xlim[1], stats_mean - y_offset, f' Avg: {_format_stat_value(stats_mean)}', va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold')
+            ax.text(xlim[1], stats_median + y_offset, f' Med: {_format_stat_value(stats_median)}', va='bottom', ha='left', fontsize=7, color=med_color, fontweight='bold')
+            ax.text(xlim[1], stats_mean - y_offset, f' Avg: {_format_stat_value(stats_mean)}', va='top', ha='left', fontsize=7, color=avg_color, fontweight='bold')
         
         # Mark the actual Min and Max points on the data with value annotations
-        min_color = '#b45309'  # Dark amber - high contrast on blue and white
-        max_color = '#15803d'  # Dark green - high contrast on blue and white
+        min_color = '#d97706'  # vivid amber - high contrast on blue and white
+        max_color = '#16a34a'  # vivid green - high contrast on blue and white
         edge_color = '#0b1220'
 
         def _annotate_extreme(x_val, y_val, label_text, color, side):
@@ -1571,20 +1668,25 @@ def generate_plot(
             if side == 'left':
                 x_offset_pts = -5
                 horizontal_align = 'right'
+                # Keep Min label just below the x-axis lane without drifting too low.
+                y_offset_pts = -1
+                vertical_align = 'top'
             else:
                 x_offset_pts = 5
                 horizontal_align = 'left'
+                y_offset_pts = 0
+                vertical_align = 'center'
 
             ax.annotate(
                 label_text,
                 (x_val, y_val),
                 textcoords='offset points',
-                xytext=(x_offset_pts, 0),
+                xytext=(x_offset_pts, y_offset_pts),
                 ha=horizontal_align,
-                va='center',
+                va=vertical_align,
                 fontsize=7,
                 color=color,
-                fontweight='bold',
+                fontweight='semibold',
                 annotation_clip=False,
                 clip_on=False,
                 zorder=12
@@ -1593,8 +1695,8 @@ def generate_plot(
         if is_datetime:
             min_idx = data.idxmin()
             max_idx = data.idxmax()
-            ax.scatter([min_idx], [stats_min], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}')
-            ax.scatter([max_idx], [stats_max], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}')
+            ax.scatter([min_idx], [stats_min], color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}', clip_on=False)
+            ax.scatter([max_idx], [stats_max], color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}', clip_on=False)
             _annotate_extreme(min_idx, stats_min, f'{_format_stat_value(stats_min)}', min_color, 'left')
             _annotate_extreme(max_idx, stats_max, f'{_format_stat_value(stats_max)}', max_color, 'right')
         else:
@@ -1605,8 +1707,8 @@ def generate_plot(
             max_pos = int(np.nanargmax(y_values))
             min_pos_arr = np.asarray([min_pos], dtype=np.int64)
             max_pos_arr = np.asarray([max_pos], dtype=np.int64)
-            ax.scatter(min_pos_arr, np.asarray([stats_min], dtype=float), color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}')
-            ax.scatter(max_pos_arr, np.asarray([stats_max], dtype=float), color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}')
+            ax.scatter(min_pos_arr, np.asarray([stats_min], dtype=float), color=min_color, s=30, zorder=10, marker='v', edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(stats_min)}', clip_on=False)
+            ax.scatter(max_pos_arr, np.asarray([stats_max], dtype=float), color=max_color, s=30, zorder=10, marker='^', edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(stats_max)}', clip_on=False)
             _annotate_extreme(min_pos, stats_min, f'{_format_stat_value(stats_min)}', min_color, 'left')
             _annotate_extreme(max_pos, stats_max, f'{_format_stat_value(stats_max)}', max_color, 'right')
         
@@ -1617,7 +1719,7 @@ def generate_plot(
         ax.legend(fontsize=7, loc='upper center', bbox_to_anchor=(0.5, -0.16), ncol=6, frameon=False, columnspacing=0.6, handletextpad=0.3)
 
         with contextlib.suppress(Exception):
-            fig.subplots_adjust(bottom=0.25, right=0.98, top=0.90)
+            fig.subplots_adjust(bottom=0.25, right=0.972, top=0.895)
 
         # Std appears in legend only
     except Exception as e:
@@ -1634,11 +1736,11 @@ def generate_plot(
             min_ticks=6,
             max_ticks=20,
         )
-        _apply_sci_formatter(ax)
-        fig.savefig(buf, format=fmt, bbox_inches='tight', pad_inches=0.0)
+        _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
+        fig.savefig(buf, format=fmt, bbox_inches='tight', pad_inches=0.02)
     except Exception as e:
         app.logger.debug("generate_plot save as %s failed; falling back to png: %s", fmt, e)
-        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.0)
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.02)
     buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
@@ -1764,9 +1866,13 @@ def generate_forecast_plot(
                 except Exception:
                     pass
 
-            if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
-                pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
-                ax.set_ylim(y_min - pad, y_max + pad)
+            if np.isfinite(y_min) and np.isfinite(y_max):
+                if y_max > y_min:
+                    pad_top = 0.05 * (y_max - y_min)
+                    ax.set_ylim(y_min, y_max + pad_top)
+                else:
+                    flat_pad = max(1e-6, abs(y_min) * 0.05, 1.0)
+                    ax.set_ylim(y_min - (flat_pad * 0.02), y_max + flat_pad)
         except Exception as e:
             app.logger.debug("generate_forecast_plot numeric y-limits skipped for '%s': %s", title, e)
             
@@ -1864,26 +1970,51 @@ def generate_forecast_plot(
                 except Exception:
                     pass
 
-            if np.isfinite(y_min) and np.isfinite(y_max) and y_max > y_min:
-                pad = 0.05 * (y_max - y_min) if y_max > y_min else 1.0
-                ax.set_ylim(y_min - pad, y_max + pad)
+            if np.isfinite(y_min) and np.isfinite(y_max):
+                if y_max > y_min:
+                    pad_top = 0.05 * (y_max - y_min)
+                    ax.set_ylim(y_min, y_max + pad_top)
+                else:
+                    flat_pad = max(1e-6, abs(y_min) * 0.05, 1.0)
+                    ax.set_ylim(y_min - (flat_pad * 0.02), y_max + flat_pad)
         except Exception as e:
             app.logger.debug("generate_forecast_plot datetime y-limits skipped for '%s': %s", title, e)
 
-    ax.set_title(title, pad=16)
+    ax.set_title(title, pad=17)
     # Use a sensible x-axis label depending on index type
     try:
         label_pad = 2 if xlabel_labelpad is None else xlabel_labelpad
+        display_axis_name = ''
+        if display_index is not None:
+            with contextlib.suppress(Exception):
+                display_idx = display_index if isinstance(display_index, pd.Index) else pd.Index(list(display_index))
+                display_axis_name = str(display_idx.name or '').strip()
+                if display_axis_name.lower() in {'index', 'unnamed: 0', 'unnamed'}:
+                    display_axis_name = ''
+
+        raw_xlabel = str(xlabel or '').strip()
+        raw_xlabel_lower = raw_xlabel.lower()
+        generic_labels = {'', 'timestamp', 'time', 'date', 'index'}
+
         if has_reliable_index:
-            resolved_xlabel = xlabel or 'Timestamp'
+            if raw_xlabel_lower not in generic_labels:
+                resolved_xlabel = raw_xlabel
+            elif display_axis_name:
+                resolved_xlabel = display_axis_name
+            else:
+                resolved_xlabel = 'Timestamp'
         else:
-            raw_xlabel = str(xlabel or '').strip().lower()
-            resolved_xlabel = 'Index' if raw_xlabel in {'', 'timestamp', 'time', 'date'} else str(xlabel)
+            if raw_xlabel_lower not in generic_labels:
+                resolved_xlabel = raw_xlabel
+            elif display_axis_name:
+                resolved_xlabel = display_axis_name
+            else:
+                resolved_xlabel = 'Index'
         ax.set_xlabel(resolved_xlabel, labelpad=label_pad)
     except Exception:
         label_pad = 2 if xlabel_labelpad is None else xlabel_labelpad
         ax.set_xlabel(xlabel, labelpad=label_pad)
-    ax.set_ylabel(ylabel, labelpad=8)
+    ax.set_ylabel(ylabel, labelpad=9)
     _apply_dense_non_overlapping_y_ticks(
         ax,
         integer=False,
@@ -1943,23 +2074,26 @@ def generate_forecast_plot(
             raise ValueError("Non-finite stats")
         
         # Draw horizontal lines for Avg and Median
-        ax.axhline(y=hist_mean, color='#f39c12', linestyle=':', linewidth=1.5, alpha=0.7, label=f'Avg: {_format_stat_value(hist_mean)}')
-        ax.axhline(y=hist_median, color='#9b59b6', linestyle='-.', linewidth=1.2, alpha=0.6, label=f'Median: {_format_stat_value(hist_median)}')
+        avg_color = '#a16207'
+        med_color = '#6b21a8'
+        ax.axhline(y=hist_mean, color=avg_color, linestyle=':', linewidth=1.5, alpha=0.7, label=f'Avg: {_format_stat_value(hist_mean)}')
+        ax.axhline(y=hist_median, color=med_color, linestyle='-.', linewidth=1.2, alpha=0.6, label=f'Median: {_format_stat_value(hist_median)}')
         
         # Put Avg/Med labels next to their horizontal lines (line-relative placement).
         ylim = ax.get_ylim()
         y_offset = (ylim[1] - ylim[0]) * 0.004
         yaxis_transform = blended_transform_factory(ax.transAxes, ax.transData)
+        stats_lane_x = 1.004
         if hist_mean >= hist_median:
-            ax.text(1.01, hist_mean + y_offset, f'Avg: {_format_stat_value(hist_mean)}', transform=yaxis_transform,
-                va='bottom', ha='left', fontsize=7, color='#f39c12', fontweight='bold', clip_on=False)
-            ax.text(1.01, hist_median - y_offset, f'Med: {_format_stat_value(hist_median)}', transform=yaxis_transform,
-                va='top', ha='left', fontsize=7, color='#9b59b6', fontweight='bold', clip_on=False)
+            ax.text(stats_lane_x, hist_mean + y_offset, f'Avg: {_format_stat_value(hist_mean)}', transform=yaxis_transform,
+                va='bottom', ha='left', fontsize=7, color=avg_color, fontweight='bold', clip_on=False)
+            ax.text(stats_lane_x, hist_median - y_offset, f'Med: {_format_stat_value(hist_median)}', transform=yaxis_transform,
+                va='top', ha='left', fontsize=7, color=med_color, fontweight='bold', clip_on=False)
         else:
-            ax.text(1.01, hist_mean - y_offset, f'Avg: {_format_stat_value(hist_mean)}', transform=yaxis_transform,
-                va='top', ha='left', fontsize=7, color='#f39c12', fontweight='bold', clip_on=False)
-            ax.text(1.01, hist_median + y_offset, f'Med: {_format_stat_value(hist_median)}', transform=yaxis_transform,
-                va='bottom', ha='left', fontsize=7, color='#9b59b6', fontweight='bold', clip_on=False)
+            ax.text(stats_lane_x, hist_mean - y_offset, f'Avg: {_format_stat_value(hist_mean)}', transform=yaxis_transform,
+                va='top', ha='left', fontsize=7, color=avg_color, fontweight='bold', clip_on=False)
+            ax.text(stats_lane_x, hist_median + y_offset, f'Med: {_format_stat_value(hist_median)}', transform=yaxis_transform,
+                va='bottom', ha='left', fontsize=7, color=med_color, fontweight='bold', clip_on=False)
         
         # Add Min/Max markers - find positions in visible data closest to the global min/max
         # Use FULL HISTORY stats (hist_min, hist_max) for consistency with distribution
@@ -1978,37 +2112,61 @@ def generate_forecast_plot(
             if side == 'left':
                 x_offset_pts = -5
                 horizontal_align = 'right'
+                y_offset_pts = -1
+                vertical_align = 'top'
             else:
                 x_offset_pts = 5
                 horizontal_align = 'left'
+                y_offset_pts = 0
+                vertical_align = 'center'
 
             ax.annotate(
                 label_text,
                 (x_val, y_val),
                 textcoords='offset points',
-                xytext=(x_offset_pts, 0),
+                xytext=(x_offset_pts, y_offset_pts),
                 ha=horizontal_align,
-                va='center',
+                va=vertical_align,
                 fontsize=7,
                 color=color,
-                fontweight='bold',
+                fontweight='semibold',
                 annotation_clip=False,
                 clip_on=False,
                 zorder=12
             )
 
         # Use global min/max values (from full history) for markers and annotations
-        min_color = '#b45309'  # Dark amber - high contrast on blue and white
-        max_color = '#15803d'  # Dark green - high contrast on blue and white
+        min_color = '#d97706'  # vivid amber - high contrast on blue and white
+        max_color = '#16a34a'  # vivid green - high contrast on blue and white
         edge_color = '#0b1220'
         # Plot Min marker
-        ax.scatter([tail_min_pos], [hist_min], color=min_color, s=30, zorder=10, marker='v', 
-               edgecolors=edge_color, linewidths=1.5, label=f'Min: {_format_stat_value(hist_min)}')
+        ax.scatter(
+            [tail_min_pos],
+            [hist_min],
+            color=min_color,
+            s=30,
+            zorder=10,
+            marker='v',
+            edgecolors=edge_color,
+            linewidths=1.5,
+            label=f'Min: {_format_stat_value(hist_min)}',
+            clip_on=False,
+        )
         _annotate_extreme(tail_min_pos, hist_min, f'{_format_stat_value(hist_min)}', min_color, 'left')
         
         # Plot Max marker
-        ax.scatter([tail_max_pos], [hist_max], color=max_color, s=30, zorder=10, marker='^', 
-               edgecolors=edge_color, linewidths=1.5, label=f'Max: {_format_stat_value(hist_max)}')
+        ax.scatter(
+            [tail_max_pos],
+            [hist_max],
+            color=max_color,
+            s=30,
+            zorder=10,
+            marker='^',
+            edgecolors=edge_color,
+            linewidths=1.5,
+            label=f'Max: {_format_stat_value(hist_max)}',
+            clip_on=False,
+        )
         _annotate_extreme(tail_max_pos, hist_max, f'{_format_stat_value(hist_max)}', max_color, 'right')
         
         # Std legend entry
@@ -2016,7 +2174,7 @@ def generate_forecast_plot(
 
         # Reserve space for the right-side Avg/Med label lane.
         with contextlib.suppress(Exception):
-            fig.subplots_adjust(right=0.82)
+            fig.subplots_adjust(right=0.93)
 
         # Keep x-axis title close to the legend lane while preserving readability.
         axis_title_y = -0.10
@@ -2038,7 +2196,7 @@ def generate_forecast_plot(
                 bottom_margin = 0.28
             else:
                 bottom_margin = 0.245
-            fig.subplots_adjust(bottom=bottom_margin, right=0.82, top=0.92)
+            fig.subplots_adjust(bottom=bottom_margin, right=0.93, top=0.915)
         
         # Std appears in legend only
     except Exception as e:
@@ -2052,8 +2210,8 @@ def generate_forecast_plot(
         min_ticks=6,
         max_ticks=20,
     )
-    _apply_sci_formatter(ax)
-    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.0)
+    _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
+    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.02)
     buf.seek(0)
     img = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
@@ -2177,7 +2335,15 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
     traces = [bar_trace, avg_trace, med_trace]
 
     layout = {
-        "title": {"text": chart_title, "x": 0.5, "xanchor": "center", "font": {"color": "#e0e0e0"}},
+        "title": {
+            "text": chart_title,
+            "x": 0.5,
+            "xanchor": "center",
+            "y": 0.99,
+            "yanchor": "top",
+            "pad": {"t": 6},
+            "font": {"color": "#e0e0e0"},
+        },
         "xaxis": {
             "title": {"text": col, "standoff": title_standoff, "font": {"color": "#c0c0c0", "size": 17}},
             "type": "category",
@@ -2192,7 +2358,7 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
             "automargin": True,
         },
         "yaxis": {
-            "title": "Count",
+            "title": {"text": "Count", "standoff": 12},
             "showgrid": True,
             "gridcolor": "rgba(128,128,128,0.3)",
             "tickfont": {"color": "#b0b0b0"},
@@ -2212,7 +2378,7 @@ def _build_category_plotly_chart(s_cat: pd.Series, col: str) -> dict[str, object
             "tracegroupgap": 6,
             "bgcolor": "rgba(0,0,0,0)"
         },
-        "margin": {"l": 60, "r": 28, "t": 40, "b": bottom_margin},
+        "margin": {"l": 62, "r": 30, "t": 42, "b": bottom_margin},
         "height": chart_height,
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor": "rgba(0,0,0,0)",
@@ -2358,7 +2524,7 @@ def generate_correlation_heatmap(
         corr_x_tick_ha = 'center' if corr_x_tick_angle == 0 else 'left'
         
         # Create heatmap
-        fig_height = max(7.8, figsize_dim * 0.78) if export_layout else max(6.2, figsize_dim * 0.66)
+        fig_height = max(7.6, figsize_dim * 0.74) if export_layout else max(6.0, figsize_dim * 0.62)
         fig, ax = plt.subplots(figsize=(figsize_dim, fig_height))
         if sns is not None:
             sns.heatmap(
