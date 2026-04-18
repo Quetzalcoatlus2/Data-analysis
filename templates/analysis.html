@@ -3015,12 +3015,12 @@
 
           const serverDistTickConfig = (serverAxisSpec && Array.isArray(serverAxisSpec.tickvals) && serverAxisSpec.tickvals.length)
             ? {
-                tickmode: 'array',
-                tickvals: serverAxisSpec.tickvals.map((v) => Number(v)).filter((v) => Number.isFinite(v)),
-                ticktext: Array.isArray(serverAxisSpec.ticktext) ? serverAxisSpec.ticktext.map((v) => String(v)) : [],
-                tickangle: Number.isFinite(Number(serverAxisSpec.tick_angle)) ? Number(serverAxisSpec.tick_angle) : 0,
-                tickfontSize: Number.isFinite(Number(serverAxisSpec.tick_fontsize)) ? Number(serverAxisSpec.tick_fontsize) : 9.2,
-              }
+              tickmode: 'array',
+              tickvals: serverAxisSpec.tickvals.map((v) => Number(v)).filter((v) => Number.isFinite(v)),
+              ticktext: Array.isArray(serverAxisSpec.ticktext) ? serverAxisSpec.ticktext.map((v) => String(v)) : [],
+              tickangle: Number.isFinite(Number(serverAxisSpec.tick_angle)) ? Number(serverAxisSpec.tick_angle) : 0,
+              tickfontSize: Number.isFinite(Number(serverAxisSpec.tick_fontsize)) ? Number(serverAxisSpec.tick_fontsize) : 9.2,
+            }
             : null;
 
           const clientDistTickConfig = getDistributionTickConfig(distValues, distWidth, {
@@ -3094,10 +3094,10 @@
             && Number.isFinite(distHistogramBins.size)
             && distHistogramBins.size > 0)
             ? {
-                start: distHistogramBins.start,
-                end: distHistogramBins.end,
-                size: distHistogramBins.size,
-              }
+              start: distHistogramBins.start,
+              end: distHistogramBins.end,
+              size: distHistogramBins.size,
+            }
             : null;
           const distTraces = [{
             type: 'histogram',
@@ -3237,40 +3237,68 @@
             const hasInnerRange = boundedMax > boundedMin;
             const leftBoundary = hasInnerRange ? boundedMin : Number(distXMin);
             const rightBoundary = hasInnerRange ? boundedMax : Number(distXMax);
+
             let candidateLeftTagX = leftLineX - sideOffset;
             let candidateRightTagX = rightLineX + sideOffset;
 
-            if ((candidateRightTagX - candidateLeftTagX) < minTagGap) {
-              const center = (candidateLeftTagX + candidateRightTagX) * 0.5;
-              candidateLeftTagX = center - (minTagGap * 0.5);
-              candidateRightTagX = center + (minTagGap * 0.5);
+            let leftTagAnchor = 'right';
+            let rightTagAnchor = 'left';
+
+            const avgOnLeft = Number(s.mean) <= Number(s.median);
+            const avgLabel = formatLegendStatLabel('Avg', s.mean, { decimals: 1 });
+            const medLabel = formatLegendStatLabel('Med', s.median, { decimals: 1 });
+
+            const leftLabel = avgOnLeft ? avgLabel : medLabel;
+            const rightLabel = avgOnLeft ? medLabel : avgLabel;
+
+            const leftIsLong = leftLabel.length > 10;
+            const rightIsLong = rightLabel.length > 10;
+
+            const leftFlipThresh = leftIsLong ? 0.18 : 0.00;
+            const rightFlipThresh = rightIsLong ? 0.18 : 0.00;
+
+            const shouldFlipLeftAnchor = leftLineX < (leftBoundary + distSpan * leftFlipThresh);
+            const shouldFlipRightAnchor = rightLineX > (rightBoundary - distSpan * rightFlipThresh);
+
+            if (shouldFlipLeftAnchor) {
+              leftTagAnchor = 'left';
+              candidateLeftTagX = leftLineX + sideOffset;
+            }
+            if (shouldFlipRightAnchor) {
+              rightTagAnchor = 'right';
+              candidateRightTagX = rightLineX - sideOffset;
             }
 
+            // Tags should stay at their natural position relative to their lines,
+            // EXCEPT when overridden by forcePaperX for extreme edges.
             candidateLeftTagX = Math.max(leftBoundary, Math.min(rightBoundary, candidateLeftTagX));
             candidateRightTagX = Math.max(leftBoundary, Math.min(rightBoundary, candidateRightTagX));
 
-            if ((candidateRightTagX - candidateLeftTagX) < minTagGap) {
-              const neededGap = minTagGap - (candidateRightTagX - candidateLeftTagX);
-              const growRight = Math.min(rightBoundary - candidateRightTagX, neededGap);
-              candidateRightTagX += growRight;
-              candidateLeftTagX = Math.max(leftBoundary, candidateLeftTagX - (neededGap - growRight));
-            }
-
-            if ((candidateRightTagX - candidateLeftTagX) < (minTagGap * 0.66)) {
-              candidateLeftTagX = leftBoundary;
-              candidateRightTagX = rightBoundary;
-            }
-
             const leftTagX = candidateLeftTagX;
             const rightTagX = candidateRightTagX;
-            const avgOnLeft = Number(s.mean) <= Number(s.median);
+            const statTagLaneY = 1.006;
+
+            const avgTagAnchor = avgOnLeft ? leftTagAnchor : rightTagAnchor;
+            const medTagAnchor = avgOnLeft ? rightTagAnchor : leftTagAnchor;
+            const avgTagY = statTagLaneY;
+            const medTagY = statTagLaneY;
             const avgTagX = avgOnLeft ? leftTagX : rightTagX;
             const medTagX = avgOnLeft ? rightTagX : leftTagX;
-            const avgTagAnchor = avgOnLeft ? 'right' : 'left';
-            const medTagAnchor = avgOnLeft ? 'left' : 'right';
-            const statTagLaneY = 1.006;
-            const avgLabel = formatLegendStatLabel('Avg', s.mean, { decimals: 1 });
-            const medLabel = formatLegendStatLabel('Med', s.median, { decimals: 1 });
+
+            // Pass forcePaperX if extreme (only when really close to the edge)
+            const isExtremeLeft = leftLineX < (leftBoundary + distSpan * 0.04);
+            const isExtremeRight = rightLineX > (rightBoundary - distSpan * 0.04);
+
+            let avgForcePaperX = null;
+            let medForcePaperX = null;
+            if (isExtremeLeft) {
+              if (avgOnLeft) avgForcePaperX = 0;
+              else medForcePaperX = 0;
+            }
+            if (isExtremeRight) {
+              if (!avgOnLeft) avgForcePaperX = 1;
+              else medForcePaperX = 1;
+            }
 
             distLayout.annotations = [
               buildDistributionLineTagAnnotation(
@@ -3280,7 +3308,8 @@
                 distXMin,
                 distXMax,
                 {
-                  y: statTagLaneY,
+                  y: avgTagY,
+                  forcePaperX: avgForcePaperX,
                   name: 'avg-line-annot',
                   fontSize: 9.0,
                   forceX: avgTagX,
@@ -3297,7 +3326,8 @@
                 distXMin,
                 distXMax,
                 {
-                  y: statTagLaneY,
+                  y: medTagY,
+                  forcePaperX: medForcePaperX,
                   name: 'med-line-annot',
                   fontSize: 9.0,
                   forceX: medTagX,
@@ -3711,10 +3741,10 @@
               && Number.isFinite(fallbackDistBins.size)
               && fallbackDistBins.size > 0)
               ? {
-                  start: fallbackDistBins.start,
-                  end: fallbackDistBins.end,
-                  size: fallbackDistBins.size,
-                }
+                start: fallbackDistBins.start,
+                end: fallbackDistBins.end,
+                size: fallbackDistBins.size,
+              }
               : null;
 
             const fallbackDistName = 'Distribution';
