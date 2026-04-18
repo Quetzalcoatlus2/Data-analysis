@@ -1935,19 +1935,39 @@
           ? Math.min(boundedMax, Math.max(boundedMin, rawX))
           : boundedMin;
         const normalized = (clampedX - safeMin) / span;
-        const nearLeftEdge = normalized <= 0.06;
-        const nearRightEdge = normalized >= 0.94;
+        const textLen = String(text || '').length;
+        const longLabel = textLen > 10;
+
+        // Use wider edge zones so long labels get pushed inward early enough
+        const leftEdgeThresh = longLabel ? 0.16 : 0.10;
+        const rightEdgeThresh = longLabel ? 0.84 : 0.90;
+        const nearLeftEdge = normalized <= leftEdgeThresh;
+        const nearRightEdge = normalized >= rightEdgeThresh;
 
         let xanchor = typeof options.xanchor === 'string' ? options.xanchor : 'center';
         let xshift = Number.isFinite(options.xshift) ? Number(options.xshift) : 0;
         const hasExplicitAnchor = typeof options.xanchor === 'string';
-        if (!hasExplicitAnchor) {
+
+        let xref = 'x';
+        let finalX = clampedX;
+
+        if (options.forcePaperX !== undefined && options.forcePaperX !== null) {
+          xref = 'paper';
+          finalX = options.forcePaperX;
+          // Shift by the margin size (l: 35px, r: 12px) so it aligns exactly with the container bounds
+          xshift = finalX === 0 ? -35 : (finalX === 1 ? 0 : 0);
+          xanchor = finalX === 0 ? 'left' : 'right';
+        } else if (options.forceX !== undefined) {
+          finalX = options.forceX;
+        }
+
+        if (!hasExplicitAnchor && xref !== 'paper') {
           if (nearLeftEdge) {
             xanchor = 'left';
-            xshift = 5;
+            xshift = longLabel ? 12 : 8;
           } else if (nearRightEdge) {
             xanchor = 'right';
-            xshift = -5;
+            xshift = longLabel ? -12 : -8;
           } else if (normalized < 0.50) {
             xanchor = 'left';
             xshift = 2;
@@ -1955,11 +1975,11 @@
             xanchor = 'right';
             xshift = -2;
           }
-        } else if (!Number.isFinite(options.xshift)) {
+        } else if (xref !== 'paper' && !Number.isFinite(options.xshift)) {
           if (xanchor === 'left') {
-            xshift = 3;
+            xshift = longLabel ? 8 : 4;
           } else if (xanchor === 'right') {
-            xshift = -3;
+            xshift = longLabel ? -8 : -4;
           }
         }
 
@@ -1967,9 +1987,9 @@
         const renderedText = boldText ? `<b>${String(text || '')}</b>` : String(text || '');
 
         return {
-          x: clampedX,
+          x: finalX,
           y: Number.isFinite(options.y) ? Number(options.y) : 0.992,
-          xref: 'x',
+          xref: xref,
           yref: 'paper',
           text: renderedText,
           showarrow: false,
@@ -2959,16 +2979,16 @@
             && Array.isArray(serverAxisSpec.bin_edges)
             && serverAxisSpec.bin_edges.length >= 2)
             ? {
-                start: Number(serverAxisSpec.bin_start),
-                end: Number(serverAxisSpec.bin_end),
-                size: Number(serverAxisSpec.bin_size),
-                edges: serverAxisSpec.bin_edges.map((v) => Number(v)).filter((v) => Number.isFinite(v)),
-              }
+              start: Number(serverAxisSpec.bin_start),
+              end: Number(serverAxisSpec.bin_end),
+              size: Number(serverAxisSpec.bin_size),
+              edges: serverAxisSpec.bin_edges.map((v) => Number(v)).filter((v) => Number.isFinite(v)),
+            }
             : resolveDistributionHistogramBins(distValues, {
-                minBins: 8,
-                maxBins: 52,
-                integerSpanThreshold: 260,
-              });
+              minBins: 8,
+              maxBins: 52,
+              integerSpanThreshold: 260,
+            });
 
           // Build distribution layout with stats annotation
           let distLayout = {
