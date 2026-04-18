@@ -419,8 +419,7 @@
     <section class="panel" style="width:100%; max-width:100%; min-width:0; box-sizing:border-box; padding-top:4px;">
       {% set forecast_visible_rows = analysis.controls.data_range_rows if analysis.controls.data_range_rows and
       analysis.controls.data_range_rows > 0 else analysis.controls.total_rows %}
-      <div class="row forecast-header-row"
-        style="margin:0 0 2px 0; align-items:center; min-width:0; max-width:100%;">
+      <div class="row forecast-header-row" style="margin:0 0 2px 0; align-items:center; min-width:0; max-width:100%;">
         <div class="forecast-header-title" style="min-width:250px;">
           <h3 style="margin:0 0 2px 0;">Detailed Analysis by Column</h3>
           <div class="muted" style="margin:0; line-height:1.28;">Forecasts with 95% CI, trend analysis, and anomaly
@@ -431,8 +430,10 @@
             <label for="dataRangeForecast">Data Range</label>
             {% set forecast_data_range = analysis.controls.get('data_range', 1.0) %}
             <select id="dataRangeForecast" title="Limit detailed analysis to latest X% of rows (reloads page)">
-              {% for val,label in [(1.00,'All data (100%)'),(0.50,'Latest 50%'),(0.30,'Latest 30%'),(0.15,'Latest 15%'),(0.10,'Latest 10%'),(0.05,'Latest 5%'),(0.03,'Latest 3%'),(0.01,'Latest 1%')] %}
-              <option value="{{ '%.2f'|format(val) }}" {% if (forecast_data_range|float)==val %}selected{% endif %}>{{ label }}</option>
+              {% for val,label in [(1.00,'All data (100%)'),(0.50,'Latest 50%'),(0.30,'Latest 30%'),(0.15,'Latest
+              15%'),(0.10,'Latest 10%'),(0.05,'Latest 5%'),(0.03,'Latest 3%'),(0.01,'Latest 1%')] %}
+              <option value="{{ '%.2f'|format(val) }}" {% if (forecast_data_range|float)==val %}selected{% endif %}>{{
+                label }}</option>
               {% endfor %}
             </select>
             <span id="dataRangeForecastHint" class="muted">Showing all rows.</span>
@@ -440,18 +441,21 @@
           <div class="forecast-control-group forecast-control-group--forecast">
             <label for="forecastPctSelectTop">Forecast horizon</label>
             <select id="forecastPctSelectTop" title="Set forecast length as percent of original rows (reloads page)">
-              {% for val,label in [(0.00,'0% (no forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+              {% for val,label in [(0.00,'0% (no
+              forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
               <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
-            <span id="forecastPctForecastHint" class="muted">{{ analysis.controls.effective_steps }}/{{ analysis.controls.total_rows }} rows</span>
+            <span id="forecastPctForecastHint" class="muted">{{ analysis.controls.effective_steps }}/{{
+              analysis.controls.total_rows }} rows</span>
           </div>
           <div class="forecast-control-group forecast-control-group--contamination forecast-control-group--trailing">
             <label for="contaminationForecast">Anomaly contamination</label>
             <input id="contaminationForecast" type="number" step="0.001" min="0.001" max="0.2"
               value="{{ '%.3f'|format(contam|float) }}"
               title="Expected outlier fraction used by IsolationForest detector (reloads page)" />
-            <span id="contaminationForecastHint" class="muted">{{ '%.0f'|format((forecast_visible_rows * (contam|float))) }}/{{ forecast_visible_rows }} rows</span>
+            <span id="contaminationForecastHint" class="muted">{{ '%.0f'|format((forecast_visible_rows *
+              (contam|float))) }}/{{ forecast_visible_rows }} rows</span>
           </div>
         </div>
       </div>
@@ -569,7 +573,9 @@
           {% for p in plots %}
           <figure class="panel" style="margin:0; padding:10px; background: var(--bg);">
             <figcaption style="margin-bottom:6px; font-size:0.85em; font-weight:500; color: var(--muted);">
-              {% if p.get('type') == 'trend' %}📉 Trend{% elif p.get('type') == 'forecast' %}📈 Forecast{% elif p.get('type') == 'distribution' %}📊 Distribution{% elif p.get('type') == 'stl' %}🔄 STL Decomposition{% else %}{{ p.title }}{% endif %}
+              {% if p.get('type') == 'trend' %}📉 Trend{% elif p.get('type') == 'forecast' %}📈 Forecast{% elif
+              p.get('type') == 'distribution' %}📊 Distribution{% elif p.get('type') == 'stl' %}🔄 STL Decomposition{%
+              else %}{{ p.title }}{% endif %}
             </figcaption>
             <img class="plot" src="data:image/png;base64,{{ p.img }}" alt="{{ p.title }}"
               style="width:100%; height:auto; border-radius: 6px;" />
@@ -644,17 +650,21 @@
             </select>
             <span id="dataRangeInteractiveHint" class="muted interactive-control-hint">Showing all rows.</span>
           </div>
-          <div class="interactive-control-group interactive-control-group--forecast interactive-control-group--hint-left">
+          <div
+            class="interactive-control-group interactive-control-group--forecast interactive-control-group--hint-left">
             <label for="forecastPctSelect">Forecast horizon</label>
             <select id="forecastPctSelect"
               title="Set forecast length as percent of original rows (affects forecast view & AI summary)">
-              {% for val,label in [(0.00,'0% (no forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
+              {% for val,label in [(0.00,'0% (no
+              forecast)'),(0.03,'3%'),(0.05,'5%'),(0.10,'10%'),(0.15,'15%'),(0.20,'20%')] %}
               <option value="{{ '%.2f'|format(val) }}" {% if (pct|float)==val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
-            <span id="forecastPctInteractiveHint" class="muted interactive-control-hint">{{ analysis.controls.effective_steps }}/{{ analysis.controls.total_rows }} rows</span>
+            <span id="forecastPctInteractiveHint" class="muted interactive-control-hint">{{
+              analysis.controls.effective_steps }}/{{ analysis.controls.total_rows }} rows</span>
           </div>
-          <div class="interactive-control-group interactive-control-group--contamination interactive-control-group--hint-left interactive-control-group--trailing">
+          <div
+            class="interactive-control-group interactive-control-group--contamination interactive-control-group--hint-left interactive-control-group--trailing">
             <label for="contaminationInteractive">Anomaly contamination</label>
             <input id="contaminationInteractive" type="number" step="0.001" min="0.001" max="0.2"
               value="{{ '%.3f'|format(contam|float) }}"
@@ -1225,7 +1235,7 @@
         const canFitHorizontal = tickLabels.length * (maxTickLength + 1) <= 120;
         nextLayout.xaxis.tickangle = canFitHorizontal ? 0 : (maxTickLength < 12 ? -15 : -25);
         if (nextLayout.xaxis.title) {
-            nextLayout.xaxis.title.standoff = 8;
+          nextLayout.xaxis.title.standoff = 8;
         }
         const maxAllowedHorizontalTicks = Math.max(5, Math.floor((document.getElementById('chart') ? document.getElementById('chart').clientWidth : 800) / (maxTickLength * 7 + 24)));
         nextLayout.xaxis.nticks = canFitHorizontal ? Math.min(40, maxAllowedHorizontalTicks) : Math.min(60, tickLabels.length);
@@ -1329,10 +1339,10 @@
         });
         const hasExplicitTicks = nextLayout.xaxis && nextLayout.xaxis.tickmode === 'array' && Array.isArray(nextLayout.xaxis.tickvals) && nextLayout.xaxis.tickvals.length > 0;
         const rawTickConfig = hasExplicitTicks ? {
-            tickmode: 'array',
-            tickvals: nextLayout.xaxis.tickvals,
-            ticktext: nextLayout.xaxis.ticktext,
-            tickfontSize: (nextLayout.xaxis.tickfont && nextLayout.xaxis.tickfont.size) ? nextLayout.xaxis.tickfont.size : undefined
+          tickmode: 'array',
+          tickvals: nextLayout.xaxis.tickvals,
+          ticktext: nextLayout.xaxis.ticktext,
+          tickfontSize: (nextLayout.xaxis.tickfont && nextLayout.xaxis.tickfont.size) ? nextLayout.xaxis.tickfont.size : undefined
         } : getDistributionTickConfig(values, distWidth, {
           maxTicks: 88,
           pxPerTick: 20,
