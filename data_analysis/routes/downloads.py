@@ -312,10 +312,10 @@ def handle_download_static_plots_zip(filename):
                 _hist_counts, hist_edges, _hist_patches = ax.hist(
                     s_arr,
                     bins=hist_bins,
-                    color='tab:blue',
-                    alpha=0.7,
-                    edgecolor='black',
-                    linewidth=0.5,
+                    color='#5d84d8',
+                    alpha=0.74,
+                    edgecolor='#1f2937',
+                    linewidth=0.45,
                     label=col,
                 )
                 ax.set_title(f"Distribution: {col}", fontsize=10, pad=16)
@@ -344,16 +344,19 @@ def handle_download_static_plots_zip(filename):
                         legend_columns=6,
                         legend_y=-0.12,
                         expand_xlim=False,
+                        right_pad_ratio=0.015,
+                        top_lane=1.005,
+                        line_tag_offset_ratio=0.006,
                     )
-                    apply_static_distribution_compact_layout(fig, ax, right=0.95, top=0.90)
+                    apply_static_distribution_compact_layout(fig, ax)
                     
                     # Apply compact K/M/B/T axis labels for large values.
-                    _apply_sci_formatter(ax)
+                    _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
                 except Exception as stats_err:
                     app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
                 
                 buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150, pad_inches=0.0)
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150, pad_inches=0.02)
                 plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
@@ -426,7 +429,7 @@ def handle_download_static_plots_zip(filename):
                 fig, _ax = built_chart
                 
                 buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=120, pad_inches=0.0)
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=120, pad_inches=0.02)
                 plt.close(fig)
                 buf.seek(0)
                 zf.writestr(f"{secure_filename(str(col))}_categories.png", buf.read())
@@ -573,7 +576,7 @@ def handle_download_full_report_html(filename):
                 max_ticks=18,
             )
             buf = io.BytesIO()
-            fig.savefig(buf, format='png', bbox_inches='tight')
+            fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.02)
             buf.seek(0)
             dist_img = base64.b64encode(buf.read()).decode('utf-8')
             plt.close(fig)

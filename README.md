@@ -57,7 +57,6 @@ All screenshots below were captured from the current app using datasets in `data
 | Detailed Analysis (AMOLED) | ![Weather Detailed AMOLED](screenshots/weather_detailed_amoled.png) |
 | Correlation (AMOLED) | ![Weather Correlation AMOLED](screenshots/weather_correlation_amoled.png) |
 | Categories (AMOLED) | ![Weather Categories AMOLED](screenshots/weather_categories_amoled.png) |
-| Export controls in-page (AMOLED) | ![Weather Exports AMOLED](screenshots/weather_exports_header_amoled.png) |
 
 > ✅ Categories behavior update: the active temporal-axis column is now filtered out of category charts to avoid self-count temporal noise.
 
@@ -159,7 +158,7 @@ Planned evolution areas include:
 1. Create and activate a virtual environment.
 2. Install dependencies from `requirements.txt`.
 3. Create `.env` (already gitignored) and add secrets if AI features are needed.
-4. Run the app with `python app.py`.
+4. Run the app with `.venv\Scripts\python app.py` (Windows) or `python app.py` (if activated).
 5. Open `http://127.0.0.1:5000`.
 
 Sample datasets are available under `datasets/`.
@@ -168,9 +167,9 @@ Sample datasets are available under `datasets/`.
 
 ## 💻 Development checks
 
-- Lint: `python -m ruff check .`
-- Type check: `python -m mypy app.py check_models.py`
-- Tests: `python -m pytest -q tests`
+- Lint: `.venv\Scripts\python -m ruff check .`
+- Type check: `.venv\Scripts\python -m mypy app.py check_models.py`
+- Tests: `.venv\Scripts\python -m pytest -q tests`
 
 VS Code tasks for these checks are already configured.
 

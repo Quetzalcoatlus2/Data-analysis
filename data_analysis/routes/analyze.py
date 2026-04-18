@@ -11,6 +11,7 @@ from data_analysis.analysis.plot import (
     _apply_dense_non_overlapping_y_ticks,
     _apply_sci_formatter,
     _build_non_timeseries_tick_labels,
+    _build_static_category_chart,
     _resolve_plot_display_axis,
     apply_distribution_axis_spec,
     apply_static_distribution_compact_layout,
@@ -18,6 +19,23 @@ from data_analysis.analysis.plot import (
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
+from data_analysis.runtime_app import (
+    _anomaly_positions_for_index,
+    _build_category_plotly_chart,
+    _cap_anomalies_for_display,
+    _cleanup_uploads_if_configured,
+    _compute_basic_stats,
+    _ensure_plot_dicts,
+    _get_arg_float,
+    _get_arg_int,
+    _get_clean_ai_summary_from_cache,
+    _infer_seasonal_period,
+    _is_offline_html,
+    _is_reliable_timeseries_index,
+    _log_cache_stats_if_needed,
+    _safe_delete,
+    _sanitize_error_message,
+)
 
 _LOCAL_SYMBOLS = {
     "_LOCAL_SYMBOLS",
@@ -47,6 +65,18 @@ def _extract_model_and_strip_comments(html: str | None) -> tuple[str | None, str
 def _clean_model_name(model_name: str | None) -> str:
     model_str = str(model_name) if model_name else 'gemini-3-flash-preview'
     return model_str[7:] if model_str.startswith('models/') else model_str
+
+
+def _as_optional_str(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _safe_number(value: Any) -> float | None:
+    try:
+        out = float(value)
+        return out if math.isfinite(out) else None
+    except Exception:
+        return None
 
 
 def handle_analyze_file(filename):
@@ -111,6 +141,7 @@ def handle_analyze_file(filename):
 
     analysis = {}
     forecast_plots = []
+    detailed_category_plots = []
     anomalies_found = {}
     is_timeseries = _is_reliable_timeseries_index(df.index)
     used_cols = []
@@ -348,8 +379,8 @@ def handle_analyze_file(filename):
         
         summary_fallback_model = AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
         answer_fallback_model = CURRENT_MODEL_NAME or AI_STATUS.get('model') or DEFAULT_AI_MODEL or 'gemini-3-flash-preview'
-        ai_summary_model, ai_summary_clean = _extract_model_and_strip_comments(ai_summary)
-        ai_answer_model, ai_answer_clean = _extract_model_and_strip_comments(ai_answer)
+        ai_summary_model, ai_summary_clean = _extract_model_and_strip_comments(_as_optional_str(ai_summary))
+        ai_answer_model, ai_answer_clean = _extract_model_and_strip_comments(_as_optional_str(ai_answer))
 
         analysis['ai_summary'] = ai_summary_clean
         analysis['ai_answer'] = ai_answer_clean
@@ -442,8 +473,45 @@ def handle_analyze_file(filename):
                         app.logger.info("Forecast start col=%s steps=%s rows=%s pct=%s", column, steps, len(series), pct)
 
                     title_fc = f"Forecast for {column} (with anomalies)"
+                    title_trend = f"Trend for {column}"
                     fc_mean_thin = None
                     conf_df_thin = None
+                    s_hist = series
+
+                    # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
+                    fc_stats = _compute_basic_stats(series)
+
+                    xlab, display_index = _resolve_plot_display_axis(
+                        series,
+                        source_df=df,
+                        fallback_label='Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index',
+                    )
+
+                    # Trend chart first (history + anomalies, no forecast horizon).
+                    try:
+                        img_trend = generate_forecast_plot(
+                            s_hist,
+                            None,
+                            title_trend,
+                            xlab,
+                            column,
+                            conf_int=None,
+                            history_tail=None,
+                            anomalies_idx=an_idx,
+                            anomalies_score=an_score,
+                            stats=fc_stats,
+                            display_index=display_index,
+                        )
+                        forecast_plots.append(
+                            {
+                                "img": img_trend,
+                                "title": title_trend,
+                                "column": column,
+                                "type": "trend",
+                            }
+                        )
+                    except Exception as trend_err:
+                        app.logger.warning("Could not render trend image for %s: %s", column, trend_err)
 
                     if has_future_forecast:
                         # Unified pipeline - use cached helper for cross-view performance
@@ -456,15 +524,6 @@ def handle_analyze_file(filename):
                     else:
                         title_fc = f"Forecast for {column} (history only)"
 
-                    s_hist = series
-                    # Calculate stats (min, max, mean, median, std) for consistency with distribution chart
-                    fc_stats = _compute_basic_stats(series)
-
-                    xlab, display_index = _resolve_plot_display_axis(
-                        series,
-                        source_df=df,
-                        fallback_label='Timestamp' if _is_reliable_timeseries_index(series.index) else 'Index',
-                    )
                     try:
                         # Pass anomaly indices to the forecast plot generation
                         img_fc = generate_forecast_plot(
@@ -529,6 +588,7 @@ def handle_analyze_file(filename):
                         min_bins=max(8, min(12, len(series_arr) // 5)) if len(series_arr) >= 20 else 8,
                         max_bins=52,
                         integer_span_threshold=260,
+                        spacing_profile='detailed',
                     )
                     hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
                     if not hist_bins:
@@ -536,10 +596,10 @@ def handle_analyze_file(filename):
                     _hist_counts, hist_edges, _hist_patches = ax.hist(
                         series_arr,
                         bins=hist_bins,
-                        color='tab:blue',
-                        alpha=0.7,
-                        edgecolor='black',
-                        linewidth=0.5,
+                        color='#5d84d8',
+                        alpha=0.74,
+                        edgecolor='#1f2937',
+                        linewidth=0.45,
                         label=column,
                     )
                     ax.set_title(f"Distribution: {column}", fontsize=10, pad=16)
@@ -565,19 +625,25 @@ def handle_analyze_file(filename):
                         legend_columns=6,
                         legend_y=-0.12,
                         expand_xlim=False,
+                        right_pad_ratio=0.015,
+                        top_lane=1.006,
+                        line_tag_offset_ratio=0.006,
                     )
-                    _apply_sci_formatter(ax)
-                    apply_static_distribution_compact_layout(fig, ax, right=0.95, top=0.90)
+                    _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
+                    apply_static_distribution_compact_layout(fig, ax)
                     
                     
                     buf = io.BytesIO()
-                    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.0, dpi=150)
+                    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.02, dpi=150)
                     plt.close(fig)
                     buf.seek(0)
                     dist_img = base64.b64encode(buf.read()).decode('utf-8')
                     forecast_plots.append({"img": dist_img, "title": f"Distribution: {column}", "column": column, "type": "distribution"})
                 except Exception as dist_e:
                     app.logger.warning("Distribution plot failed for %s: %s", column, dist_e)
+
+            n_hist = 0
+            n_fc_total = 0
 
             if build_interactive:
                 # Always provide full series to interactive view.
@@ -880,11 +946,59 @@ def handle_analyze_file(filename):
                             anomalies_idx=an_idx_fb,
                             display_index=fallback_display_index,
                         ),
-                        "title": title_fc
+                        "title": title_fc,
+                        "column": column,
+                        "type": "forecast",
                     })
                     break
     except Exception as e:
         app.logger.warning("Fallback static forecast failed: %s", e)
+
+    # Detailed Analysis: include static category charts (same family as PDF/ZIP exports).
+    if build_forecast:
+        numeric_non_na_counts: dict[Any, int] = {}
+        if numeric_df_cached is not None and not numeric_df_cached.empty:
+            numeric_non_na_counts = {c: int(numeric_df_cached[c].notna().sum()) for c in numeric_df_cached.columns}
+
+        for col in df.columns:
+            try:
+                # Skip numeric columns rendered in the main numeric detailed block.
+                if numeric_non_na_counts.get(col, 0) >= 3:
+                    continue
+                if _is_active_temporal_axis_column_df(
+                    df,
+                    col,
+                    is_reliable_timeseries_index=_is_reliable_timeseries_index,
+                ):
+                    continue
+
+                s_cat = df[col].dropna().astype(str)
+                if len(s_cat) < 3:
+                    continue
+
+                all_counts = s_cat.value_counts()
+                if len(all_counts) < 2:
+                    continue
+
+                built_chart = _build_static_category_chart(all_counts, col)
+                if built_chart is None:
+                    continue
+                fig, _ax = built_chart
+
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight', dpi=120, pad_inches=0.02)
+                plt.close(fig)
+                buf.seek(0)
+                detailed_category_plots.append(
+                    {
+                        "img": base64.b64encode(buf.read()).decode('utf-8'),
+                        "title": f"Categories: {col}",
+                        "column": col,
+                        "type": "category",
+                    }
+                )
+            except Exception as cat_err:
+                app.logger.debug("Detailed category chart skipped for %s: %s", col, cat_err)
 
     # Use cached DataFrame info to avoid recomputation on view switches
     cached_info = get_cached_df_info(filename, df)
@@ -943,7 +1057,7 @@ def handle_analyze_file(filename):
 
     # Organize forecast_plots by column for grouped display
     forecast_plots_by_column = {}
-    type_order = {'forecast': 0, 'distribution': 1, 'stl': 2}
+    type_order = {'trend': 0, 'forecast': 1, 'distribution': 2, 'stl': 3}
     for fp in forecast_plots:
         if isinstance(fp, dict):
             col = fp.get('column', 'Other')
@@ -963,6 +1077,7 @@ def handle_analyze_file(filename):
         'plots': [],
         'forecast_plots': _ensure_plot_dicts(forecast_plots) if build_forecast else [],
         'forecast_plots_by_column': forecast_plots_by_column if build_forecast else {},
+        'detailed_category_plots': detailed_category_plots if build_forecast else [],
         'anomalies': anomalies_found,
         'ai_summary': ai_summary,
         'user_question': user_question,
@@ -1008,8 +1123,8 @@ def handle_analyze_file(filename):
     ai_summary = analysis.get('ai_summary', '')
     ai_answer = analysis.get('ai_answer', '')
 
-    ai_summary_model, ai_summary = _extract_model_and_strip_comments(ai_summary)
-    ai_answer_model, ai_answer = _extract_model_and_strip_comments(ai_answer)
+    ai_summary_model, ai_summary = _extract_model_and_strip_comments(_as_optional_str(ai_summary))
+    ai_answer_model, ai_answer = _extract_model_and_strip_comments(_as_optional_str(ai_answer))
     analysis['ai_summary'] = ai_summary
     analysis['ai_answer'] = ai_answer
     

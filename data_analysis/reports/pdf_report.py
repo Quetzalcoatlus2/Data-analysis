@@ -18,6 +18,7 @@ from data_analysis.analysis.plot import (
     _apply_sci_formatter,
     _build_static_category_chart,
     _format_stat_value,
+    _resolve_plot_display_axis,
     apply_distribution_axis_spec,
     apply_static_distribution_compact_layout,
     build_distribution_axis_spec,
@@ -1061,7 +1062,6 @@ def handle_download_full_report_pdf(filename):
         is_ts = _is_reliable_timeseries_index(df.index)
         numeric_df_cached = get_cached_numeric_df(filename, df)
         numeric_cols = {col for col in numeric_df_cached.columns}
-        x_axis_label = 'Timestamp' if is_ts else 'Index'
         first_col = True
         img_width = 180
         img_x = 15
@@ -1121,6 +1121,24 @@ def handle_download_full_report_pdf(filename):
                 continue
             col_forecast_steps = _steps_for_history_rows(len(numeric_series))
 
+            resolved_x_axis_label = 'Timestamp' if is_ts else 'Index'
+            resolved_display_index = numeric_series.index if is_numeric else None
+            if is_numeric:
+                fallback_axis_label = (
+                    'Timestamp'
+                    if _is_reliable_timeseries_index(numeric_series.index)
+                    else 'Index'
+                )
+                resolved_x_axis_label, resolved_display_index = _resolve_plot_display_axis(
+                    numeric_series,
+                    source_df=df,
+                    fallback_label=fallback_axis_label,
+                )
+                if not resolved_x_axis_label:
+                    resolved_x_axis_label = fallback_axis_label
+                if resolved_display_index is None:
+                    resolved_display_index = numeric_series.index
+
             # Force new page for EACH column to ensure clean layout
             # We don't use add_section_title here because we want a specific format
             # FIX: Only add page if it's NOT the first column (title page covers it)
@@ -1172,13 +1190,14 @@ def handle_download_full_report_pdf(filename):
                         numeric_series,
                         None,  # No forecast
                         trend_title,
-                        x_axis_label,
+                        resolved_x_axis_label,
                         col,
                         conf_int=None,
                         history_tail=None,
                         anomalies_idx=an_idx,
                         anomalies_score=an_score,
                         figsize=get_export_chart_figsize("trend", context="pdf"),
+                        display_index=resolved_display_index,
                     )
                     _add_base64_plot(trend_b64)
                 except Exception as e:
@@ -1202,12 +1221,13 @@ def handle_download_full_report_pdf(filename):
                             numeric_series,
                             fc_mean,
                             fc_title,
-                            x_axis_label,
+                            resolved_x_axis_label,
                             col,
                             conf_int=ci,
                             history_tail=None,
                             anomalies_idx=an_idx,
                             figsize=get_export_chart_figsize("forecast", context="pdf"),
+                            display_index=resolved_display_index,
                         )
                         _add_base64_plot(fc_b64)
                 except Exception as e:
@@ -1246,10 +1266,10 @@ def handle_download_full_report_pdf(filename):
                     _hist_counts, hist_edges, _hist_patches = ax.hist(
                         s_arr,
                         bins=hist_bins,
-                        color='tab:blue',
-                        alpha=0.7,
-                        edgecolor='black',
-                        linewidth=0.5,
+                        color='#5d84d8',
+                        alpha=0.74,
+                        edgecolor='#1f2937',
+                        linewidth=0.45,
                         label='Distribution',
                     )
                     ax.set_title(f"Distribution: {col}", pad=16)
@@ -1276,9 +1296,12 @@ def handle_download_full_report_pdf(filename):
                         legend_columns=6,
                         legend_y=-0.12,
                         expand_xlim=False,
+                        right_pad_ratio=0.015,
+                        top_lane=1.005,
+                        line_tag_offset_ratio=0.006,
                     )
-                    _apply_sci_formatter(ax)
-                    apply_static_distribution_compact_layout(fig, ax, right=0.95, top=0.90)
+                    _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
+                    apply_static_distribution_compact_layout(fig, ax)
                 else:
                     # Categorical bar chart (all categories)
                     all_counts = series.value_counts()
@@ -1290,10 +1313,10 @@ def handle_download_full_report_pdf(filename):
                 
                 buf = io.BytesIO()
                 savefig_kwargs = {"format": "png", "bbox_inches": "tight", "dpi": 150}
-                savefig_kwargs["pad_inches"] = 0.0
+                savefig_kwargs["pad_inches"] = 0.02
                 if not is_numeric:
                     savefig_kwargs["dpi"] = 120
-                    savefig_kwargs["pad_inches"] = 0.0
+                    savefig_kwargs["pad_inches"] = 0.02
                 fig.savefig(buf, **savefig_kwargs)
                 plt.close(fig)
                 buf.seek(0)

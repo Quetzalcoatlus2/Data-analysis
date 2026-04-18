@@ -559,7 +559,7 @@ def _resolve_static_tick_policy(
     dense_cutoff = 8 if chart_type == "distribution" else 10
     tick_fontsize = _tick_fontsize_for_labels(clean_labels, dense_cutoff=dense_cutoff)
     if chart_type == "distribution":
-        tick_fontsize = min(10.0, tick_fontsize * 1.15)
+        tick_fontsize = min(10.0, tick_fontsize * 1.28)
     
     if max_label_length > 46:
         tick_fontsize = min(tick_fontsize, 4.8)
@@ -1408,7 +1408,7 @@ def _add_static_distribution_overlays(
         bbox_to_anchor=(0.5, legend_anchor),
         ncol=legend_columns,
         frameon=False,
-        columnspacing=0.40,
+        columnspacing=0.80,
         handletextpad=0.20,
         borderaxespad=0.0,
     )
@@ -2524,7 +2524,7 @@ def generate_correlation_heatmap(
         corr_x_tick_ha = 'center' if corr_x_tick_angle == 0 else 'left'
         
         # Create heatmap
-        fig_height = max(7.6, figsize_dim * 0.74) if export_layout else max(6.0, figsize_dim * 0.62)
+        fig_height = max(7.6, figsize_dim * 0.75) if export_layout else max(6.0, figsize_dim * 0.62)
         fig, ax = plt.subplots(figsize=(figsize_dim, fig_height))
         if sns is not None:
             sns.heatmap(

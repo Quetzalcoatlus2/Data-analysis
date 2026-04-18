@@ -1,5 +1,6 @@
 
 import base64
+import contextlib
 import io
 import json
 import os
@@ -114,15 +115,15 @@ def test_generate_plot_returns_base64():
 
 
 def test_format_stat_value_uses_billion_trillion_suffixes():
-    """Numeric labels should use K/M/B/T compact notation with trailing-zero stripping."""
+    """Numeric labels should use k/M/B/T compact notation with trailing-zero stripping."""
     from data_analysis.analysis.plot import _format_stat_value
 
     assert _format_stat_value(123_456_000_000_000.0) == "123.456T"
     assert _format_stat_value(1_200_000_000.0) == "1.2B"
     assert _format_stat_value(1_234_560_000.0) == "1.235B"
-    assert _format_stat_value(12_340.0) == "12.34K"
-    assert _format_stat_value(2016.0) == "2.02K"
-    assert _format_stat_value(2000.0) == "2K"
+    assert _format_stat_value(12_340.0) == "12.34k"
+    assert _format_stat_value(2016.0) == "2.02k"
+    assert _format_stat_value(2000.0) == "2k"
     assert _format_stat_value(1_500_000.0) == "1.5M"
     assert _format_stat_value(8.0) == "8"
     assert _format_stat_value(8.50) == "8.5"
@@ -170,6 +171,95 @@ def test_generate_forecast_plot_accepts_custom_figsize():
 
     assert isinstance(img, str)
     assert len(img) > 0
+
+
+def test_generate_forecast_plot_starts_y_axis_at_data_min(monkeypatch):
+    """Forecast/trend y-axis lower bound should start at the true data minimum."""
+    from matplotlib.figure import Figure
+
+    original_savefig = Figure.savefig
+    captured_ylim: dict[str, float] = {}
+
+    def _savefig_spy(self, *args, **kwargs):
+        if not captured_ylim and self.axes:
+            ymin, ymax = self.axes[0].get_ylim()
+            captured_ylim["ymin"] = float(ymin)
+            captured_ylim["ymax"] = float(ymax)
+        return original_savefig(self, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", _savefig_spy)
+
+    history = pd.Series([120.0, 150.0, 132.0, 141.0], index=pd.RangeIndex(4))
+    forecast = pd.Series([168.0, 176.0, 210.0], index=pd.RangeIndex(4, 7))
+
+    img = generate_forecast_plot(history, forecast, "Forecast", "Index", "Value")
+
+    assert isinstance(img, str)
+    assert len(img) > 0
+    assert captured_ylim
+    assert captured_ylim["ymin"] == pytest.approx(float(history.min()))
+    assert captured_ylim["ymax"] > float(max(history.max(), forecast.max()))
+
+
+def test_download_full_report_pdf_prefers_named_index_for_trend_forecast_xlabel(monkeypatch):
+    """PDF trend/forecast charts should use the resolved index name instead of generic 'Index'."""
+    import data_analysis.reports.pdf_report as pdf_report_mod
+
+    filename = "9" * 40 + ".csv"
+    idx = pd.date_range("2024-01-01", periods=8, freq="D", name="record_date")
+    df = pd.DataFrame({"value": np.linspace(10.0, 17.0, 8)}, index=idx)
+    df["record_date"] = idx
+
+    tiny_png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII="
+    )
+    captured_calls: list[dict[str, object]] = []
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "describe_for_ai", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    with contextlib.suppress(Exception):
+        app_module.REPORT_CACHE.clear()
+
+    def fake_get_cached_column_forecast(_filename, _column, series, steps):
+        n_steps = int(steps)
+        fc_idx = pd.date_range(series.index[-1], periods=n_steps + 1, freq="D", name="record_date")[1:]
+        base = float(series.iloc[-1]) if len(series) else 0.0
+        fc = pd.Series(np.full(n_steps, base, dtype=float), index=fc_idx)
+        ci = pd.DataFrame({"lower": fc - 0.1, "upper": fc + 0.1}, index=fc_idx)
+        return fc, ci
+
+    monkeypatch.setattr(app_module, "get_cached_column_forecast", fake_get_cached_column_forecast)
+
+    def fake_generate_forecast_plot(history, forecast_series, title, xlabel, ylabel, *args, **kwargs):
+        display_index = kwargs.get("display_index")
+        captured_calls.append(
+            {
+                "title": str(title),
+                "xlabel": str(xlabel),
+                "ylabel": str(ylabel),
+                "display_index_name": getattr(display_index, "name", None),
+                "has_forecast": forecast_series is not None,
+            }
+        )
+        return base64.b64encode(tiny_png).decode("utf-8")
+
+    monkeypatch.setattr(app_module, "generate_forecast_plot", fake_generate_forecast_plot)
+    monkeypatch.setattr(pdf_report_mod, "generate_forecast_plot", fake_generate_forecast_plot)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0.2")
+
+    assert response.status_code == 200
+    assert response.headers.get("Content-Type") == "application/pdf"
+    trend_calls = [call for call in captured_calls if str(call["title"]).startswith("Trend:")]
+    forecast_calls = [call for call in captured_calls if str(call["title"]).startswith("Forecast:")]
+    assert trend_calls
+    assert forecast_calls
+    assert all(call["xlabel"] == "record_date" for call in trend_calls + forecast_calls)
+    assert all(call["display_index_name"] == "record_date" for call in trend_calls + forecast_calls)
 
 
 def test_build_static_category_chart_uses_milder_dense_tick_angle():
@@ -227,7 +317,8 @@ def test_build_static_category_chart_rotated_ticks_match_bar_centers():
             assert bottom_spine is not None
             pos_kind, pos_value = bottom_spine.get_position()
             assert pos_kind == "outward"
-            assert float(pos_value) >= 6.0
+            # Keep the baseline close to bars to avoid visual gap in export charts.
+            assert 0.0 <= float(pos_value) <= 1.5
     finally:
         plt.close(fig)
 
@@ -694,7 +785,7 @@ def test_generate_forecast_plot_uses_dense_non_overlapping_y_ticks(monkeypatch):
 
 
 def test_static_distribution_overlays_use_high_contrast_min_marker():
-    """Static distribution overlays should use a dark amber min marker for high contrast."""
+    """Static distribution overlays should use a dark amber/brown min marker for high contrast."""
     import matplotlib.pyplot as plt
     from matplotlib.colors import to_hex
 
@@ -709,7 +800,201 @@ def test_static_distribution_overlays_use_high_contrast_min_marker():
             coll for coll in ax.collections
             if str(coll.get_label()).startswith("Min:")
         )
-        assert to_hex(min_collection.get_facecolor()[0], keep_alpha=False).lower() == "#b45309"
+        assert to_hex(min_collection.get_facecolor()[0], keep_alpha=False).lower() == "#d97706"
+    finally:
+        plt.close(fig)
+
+
+def test_static_distribution_overlays_raise_avg_med_labels_above_chart_lane():
+    """Distribution Avg/Med labels should sit just above the chart area in static exports."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _add_static_distribution_overlays
+
+    values = np.asarray([12.0, 14.0, 17.0, 22.0, 31.0, 45.0], dtype=float)
+    fig, ax = plt.subplots()
+    try:
+        ax.hist(values, bins=6)
+        _add_static_distribution_overlays(
+            ax,
+            values,
+            expand_xlim=False,
+            right_pad_ratio=0.015,
+        )
+        labels = [text for text in ax.texts if str(text.get_text()).startswith(("Avg:", "Med:"))]
+        assert len(labels) >= 2
+        assert all(float(text.get_position()[1]) > 1.0 for text in labels)
+    finally:
+        plt.close(fig)
+
+
+def test_static_distribution_overlays_add_tiny_right_breathing_space_only():
+    """Right padding helper should add a tiny right margin without expanding left margin."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _add_static_distribution_overlays
+
+    values = np.asarray([2.0, 5.0, 7.0, 9.0, 13.0], dtype=float)
+    fig, ax = plt.subplots()
+    try:
+        ax.hist(values, bins=5)
+        before_xlim = tuple(float(v) for v in ax.get_xlim())
+        _add_static_distribution_overlays(
+            ax,
+            values,
+            expand_xlim=False,
+            right_pad_ratio=0.015,
+        )
+        after_xlim = tuple(float(v) for v in ax.get_xlim())
+        assert after_xlim[1] > before_xlim[1]
+        assert after_xlim[0] == pytest.approx(before_xlim[0])
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_adds_tiny_right_empty_space():
+    """Static category charts should keep a small empty space to the right of the last bar."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series([20, 18, 14, 11], index=["A", "B", "C", "D"])
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        left, right = ax.get_xlim()
+        assert left == pytest.approx(-0.5)
+        assert right > (len(counts) - 0.5)
+        assert right <= (len(counts) - 0.30 + 1e-9)
+    finally:
+        plt.close(fig)
+
+
+def test_apply_sci_formatter_can_use_k_threshold_for_y_axis():
+    """Shared formatter helper should emit k suffix on y-axis when threshold is 1e3."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _apply_sci_formatter
+
+    fig, ax = plt.subplots()
+    try:
+        ax.plot([0, 1, 2], [950.0, 1500.0, 2300.0])
+        _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
+        formatter = ax.yaxis.get_major_formatter()
+        assert formatter(2000.0, 0) == "2k"
+    finally:
+        plt.close(fig)
+
+
+def test_generate_forecast_plot_minmax_markers_disable_axis_clipping(monkeypatch):
+    """Trend/forecast min/max markers should disable axis clipping so symbols are not cut."""
+    captured: list[dict[str, object]] = []
+    original_scatter = Axes.scatter
+
+    def _scatter_spy(self, x, y, *args, **kwargs):
+        label = str(kwargs.get("label") or "")
+        if label.startswith(("Min:", "Max:")):
+            captured.append({"label": label, "clip_on": kwargs.get("clip_on")})
+        return original_scatter(self, x, y, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "scatter", _scatter_spy)
+
+    history = pd.Series([1200.0, 1450.0, 1310.0, 1540.0], index=pd.RangeIndex(4))
+    forecast = pd.Series([1560.0, 1600.0], index=pd.RangeIndex(4, 6))
+
+    img = generate_forecast_plot(history, forecast, "Forecast", "Index", "Value")
+    assert isinstance(img, str)
+    assert len(img) > 0
+    assert captured
+    assert all(entry.get("clip_on") is False for entry in captured)
+
+
+def test_generate_forecast_plot_positions_min_label_below_marker(monkeypatch):
+    """Forecast/trend min text tag should be offset below the marker (just under x-axis lane)."""
+    from data_analysis.analysis.plot import _format_stat_value
+
+    captured_annotations: list[dict[str, object]] = []
+    original_annotate = Axes.annotate
+
+    def _annotate_spy(self, text, *args, **kwargs):
+        captured_annotations.append(
+            {
+                "text": str(text),
+                "xytext": kwargs.get("xytext"),
+                "va": kwargs.get("va"),
+            }
+        )
+        return original_annotate(self, text, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "annotate", _annotate_spy)
+
+    history = pd.Series([90.0, 120.0, 70.0, 105.0, 130.0], index=pd.RangeIndex(5))
+    forecast = pd.Series([128.0, 131.0], index=pd.RangeIndex(5, 7))
+
+    img = generate_forecast_plot(history, forecast, "Forecast", "Index", "Value")
+    assert isinstance(img, str)
+    assert len(img) > 0
+
+    min_text = _format_stat_value(float(history.min()))
+    min_entries = [entry for entry in captured_annotations if str(entry.get("text")) == min_text]
+    assert min_entries
+    assert any(
+        isinstance(entry.get("xytext"), tuple)
+        and len(cast(tuple[object, ...], entry.get("xytext"))) == 2
+        and float(cast(tuple[object, ...], entry.get("xytext"))[1]) < 0
+        for entry in min_entries
+    )
+    assert any(str(entry.get("va")) == "top" for entry in min_entries)
+
+
+def test_static_distribution_overlays_minmax_annotations_use_contrast_pills():
+    """Static distribution min/max value annotations should use contrast pill backgrounds."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import (
+        _add_static_distribution_overlays,
+        _format_stat_value,
+    )
+
+    values = np.asarray([3.0, 6.0, 9.0, 15.0, 22.0], dtype=float)
+    fig, ax = plt.subplots()
+    try:
+        ax.hist(values, bins=5)
+        stats = _add_static_distribution_overlays(ax, values)
+        min_label = str(_format_stat_value(float(stats["min"])))
+        max_label = str(_format_stat_value(float(stats["max"])))
+        minmax_texts = [
+            text for text in ax.texts
+            if str(text.get_text()) in {min_label, max_label}
+        ]
+        assert len(minmax_texts) >= 2
+        assert all(text.get_bbox_patch() is not None for text in minmax_texts)
+        assert all(float(text.get_fontsize()) >= 6.0 for text in minmax_texts)
+    finally:
+        plt.close(fig)
+
+
+def test_build_static_category_chart_keeps_dense_x_tick_font_baseline():
+    """Category chart should enlarge typography but keep dense (~200) x-ticks at baseline size."""
+    import matplotlib.pyplot as plt
+
+    from data_analysis.analysis.plot import _build_static_category_chart
+
+    counts = pd.Series(
+        np.arange(1, 201, dtype=np.int64),
+        index=[f"category_{i}" for i in range(200)],
+    )
+    built = _build_static_category_chart(counts, "category")
+    assert built is not None
+    fig, ax = built
+    try:
+        x_labels = [label for label in ax.get_xticklabels() if str(label.get_text()).strip()]
+        assert x_labels
+        assert float(x_labels[0].get_fontsize()) == pytest.approx(6.0)
+        assert float(ax.title.get_fontsize()) >= 14.0
+        assert float(ax.xaxis.label.get_fontsize()) >= 14.0
+        assert float(ax.yaxis.label.get_fontsize()) >= 12.0
     finally:
         plt.close(fig)
 
@@ -2130,8 +2415,8 @@ def test_static_plots_zip_includes_category_images(monkeypatch):
     assert any(name.endswith("_categories.png") for name in names)
 
 
-def test_static_plots_zip_category_exports_use_zero_pad(monkeypatch):
-    """ZIP category chart saves should use a tight crop with zero pad."""
+def test_static_plots_zip_category_exports_use_tiny_pad(monkeypatch):
+    """ZIP category chart saves should use a tight crop with a tiny pad."""
     from matplotlib.figure import Figure
 
     filename = "c" * 40 + ".csv"
@@ -2154,7 +2439,7 @@ def test_static_plots_zip_category_exports_use_zero_pad(monkeypatch):
 
     assert response.status_code == 200
     assert captured_kwargs
-    assert captured_kwargs[0].get("pad_inches") == 0.0
+    assert captured_kwargs[0].get("pad_inches") == 0.02
 
 
 def test_analyze_categories_skips_active_temporal_axis_column(monkeypatch):
@@ -2342,8 +2627,8 @@ def test_download_full_report_pdf_categories_not_capped_to_top_50(monkeypatch):
     assert max(captured_counts) == 75
 
 
-def test_download_full_report_pdf_category_exports_use_zero_pad(monkeypatch):
-    """PDF category chart exports should use the same tight zero-pad crop as ZIP exports."""
+def test_download_full_report_pdf_category_exports_use_tiny_pad(monkeypatch):
+    """PDF category chart exports should use the same tiny crop pad as ZIP exports."""
     from matplotlib.figure import Figure
 
     filename = "7" * 40 + ".csv"
@@ -2371,7 +2656,7 @@ def test_download_full_report_pdf_category_exports_use_zero_pad(monkeypatch):
 
     assert response.status_code == 200
     assert captured_kwargs
-    assert captured_kwargs[0].get("pad_inches") == 0.0
+    assert captured_kwargs[0].get("pad_inches") == 0.02
 
 
 def test_download_full_report_pdf_skips_active_temporal_axis_category_column(monkeypatch):
@@ -2601,8 +2886,130 @@ def test_interactive_template_uses_denser_yaxis_tick_helper():
     assert "const yTickCount = getInteractiveYAxisTickCount(distContainer" in html
 
 
+def test_interactive_template_distribution_extrema_tags_are_theme_legible():
+    """Distribution min/max annotations should include theme-aware contrast pill styling."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "function buildDistributionExtremaAnnotation(value, text, color, axisMin, axisMax" in html
+    assert "bgcolor: options.bgcolor || 'rgba(255, 255, 255, 0.92)'" in html
+    assert "bordercolor: options.bordercolor || color" in html
+    assert "const markerLaneYMin = 0.012;" in html
+    assert "const markerLaneYMax = 0.0075;" in html
+    assert "const markerTagLaneY = markerLaneYMin + 0.0015;" in html
+    assert "y: [markerLaneYMin]" in html
+    assert "y: [markerLaneYMax]" in html
+    assert "y: markerTagLaneY" in html
+    assert "formatStat(s.min)" in html
+    assert "formatStat(s.max)" in html
+    assert "buildDistributionExtremaAnnotation(\n                s.min,\n                formatStat(s.min)," in html
+    assert "buildDistributionExtremaAnnotation(\n                s.max,\n                formatStat(s.max)," in html
+    assert "buildDistributionExtremaAnnotation(\n                s.min,\n                formatLegendStatLabel('Min', s.min)," not in html
+    assert "buildDistributionExtremaAnnotation(\n                s.max,\n                formatLegendStatLabel('Max', s.max)," not in html
+    assert "name: 'min-annot'" in html
+    assert "name: 'max-annot'" in html
+
+
+def test_interactive_template_distribution_avg_med_tags_restored_above_chart():
+    """Interactive distribution should render plain-text Avg/Med tags in opposite outside lanes."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "function buildDistributionLineTagAnnotation" in html
+    assert "name: 'avg-line-annot'" in html
+    assert "name: 'med-line-annot'" in html
+    assert "Number.isFinite(options.y) ? Number(options.y) : 0.992" in html
+    assert "const statTagLaneY = 1.006;" in html
+    assert "forceX: avgTagX" in html
+    assert "forceX: medTagX" in html
+    assert "xanchor: avgTagAnchor" in html
+    assert "xanchor: medTagAnchor" in html
+    assert "const minTagGap = Math.max(distSpan * 0.020, sideOffset * 2.4);" in html
+    assert "candidateLeftTagX" in html
+    assert "candidateRightTagX" in html
+    assert "edgeInsetRatio: 0.014" in html
+    assert "boldText: false" in html
+
+
+def test_interactive_template_forecast_and_distribution_tags_drop_hard_bold_wrappers():
+    """Interactive forecast/distribution stat tags should avoid hard <b> wrappers for readability."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "text: [formatStat(filteredMin)]" in html
+    assert "text: [formatStat(filteredMax)]" in html
+    assert "const avgText = formatLegendStatLabel('Avg', s.mean, { decimals: 1 });" in html
+    assert "const medText = formatLegendStatLabel('Med', s.median, { decimals: 1 });" in html
+    assert "`<b>${formatStat(filteredMin)}</b>`" not in html
+    assert "`<b>${formatStat(filteredMax)}</b>`" not in html
+
+
+def test_interactive_template_distribution_tick_density_targets_dense_labels():
+    """Interactive distribution tick config should target denser x-label coverage when width permits."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "maxTicks: 88" in html
+    assert "pxPerTick: 20" in html
+    assert "function formatDistributionTickValue(value)" in html
+    assert "minCompactValue: 1e3," in html
+
+
+def test_interactive_template_distribution_tick_thinner_uses_collision_fit():
+    """Interactive distribution tick thinning should maximize labels while preventing text collisions."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "function thinDistributionTickConfig(tickConfig, containerWidth, options = {})" in html
+    assert "const labelWidths = ticktext.map((label) => {" in html
+    assert "const sampleEvenTickIndexes = (targetCount) => {" in html
+    assert "const hasTickLabelCollision = (indexes) => {" in html
+    assert "while (low <= high)" in html
+
+
+def test_interactive_template_distribution_markers_use_theme_colors_without_strokes():
+    """Interactive distribution/forecast min/max markers should avoid marker stroke outlines."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "markerStroke" not in html
+    assert "line: { width: 1.2, color: statPalette.markerStroke }" not in html
+
+
+def test_interactive_template_distribution_marker_lane_axis_stays_pinned_on_relayout():
+    """Distribution relayout handler should keep y2 fixed so min/max markers do not drift after autoscale."""
+    template_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../templates/analysis.html")
+    )
+    with open(template_path, encoding="utf-8") as f:
+        html = f.read()
+
+    assert "distEl.on('plotly_relayout'" in html
+    assert "'yaxis2.range': [0, 1]" in html
+    assert "'yaxis2.autorange': false" in html
+    assert "'yaxis2.fixedrange': true" in html
+
+
 def test_sample_numeric_axis_ticks_uses_compact_labels_for_large_magnitudes():
-    """Static distribution ticks should use compact K/M/B labels for large ranges."""
+    """Static distribution ticks should use compact k/M/B labels for large ranges."""
     from data_analysis.analysis.plot import _sample_numeric_axis_ticks
 
     source_values = [12_500.0, 18_700.0, 25_100.0, 31_400.0, 379_000.0, 4_420_000.0, 9_700_000.0]
@@ -2616,7 +3023,7 @@ def test_sample_numeric_axis_ticks_uses_compact_labels_for_large_magnitudes():
     assert tick_values[0] <= min(source_values)
     assert tick_values[-1] >= max(source_values)
     assert len(set(tick_labels)) == len(tick_labels)
-    assert any(str(label).endswith(("K", "M", "B", "T")) for label in tick_labels)
+    assert any(str(label).endswith(("k", "M", "B", "T")) for label in tick_labels)
 
 
 def test_sample_numeric_axis_ticks_do_not_skip_small_integer_spans():
