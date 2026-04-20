@@ -29,9 +29,11 @@ A Flask-based data analysis workspace for uploading real datasets, exploring the
 
 ---
 
-## 🖼️ Current UI gallery (captured April 2026)
+## 🖼️ Current UI gallery (captured April 2026, refreshed for latest UI)
 
 All screenshots below were captured from the current app using datasets in `datasets/`:
+
+- capture standard: `1920×1080` viewport at `100%` browser zoom
 
 - `datasets/Project 1 - Weather Dataset.csv`
 - `datasets/Life Expectancy Data.csv`
@@ -59,6 +61,13 @@ All screenshots below were captured from the current app using datasets in `data
 | Categories (AMOLED) | ![Weather Categories AMOLED](screenshots/weather_categories_amoled.png) |
 
 > ✅ Categories behavior update: the active temporal-axis column is now filtered out of category charts to avoid self-count temporal noise.
+
+### Export actions (Weather dataset)
+
+| Action | Screenshot |
+|---|---|
+| Full report (PDF) | ![Weather Export PDF AMOLED](screenshots/weather_export_pdf_amoled.png) |
+| Images ZIP | ![Weather Export Images ZIP AMOLED](screenshots/weather_export_images_zip_amoled.png) |
 
 ### Research Labs pages (Weather dataset)
 
