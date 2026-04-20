@@ -18,14 +18,14 @@ A Flask-based data analysis workspace for uploading real datasets, exploring the
   - full report HTML
   - full report PDF
 - Support **three UI themes**: AMOLED, Light, Dark.
-- Offer a restored **Research Labs hub** with pages for:
-  - Forecast
-  - Anomaly
-  - Quality
-  - Change Points
-  - Conformal
-  - SHAP
-  - Multivariate
+- Offer a fully functional **Research Labs hub** with API-backed pages for:
+  - Forecast (history/forecast diagnostics + backtest + anomaly overlap)
+  - Anomaly (severity-ranked outliers)
+  - Quality (quality score + issue inventory)
+  - Change Points (baseline + optional advanced detector)
+  - Conformal (empirical coverage and interval bands)
+  - SHAP (TreeSHAP when available, surrogate fallback otherwise)
+  - Multivariate (correlation, PCA, VIF, joint anomaly scan)
 
 ---
 
@@ -59,6 +59,13 @@ All screenshots below were captured from the current app using datasets in `data
 | Detailed Analysis (AMOLED) | ![Weather Detailed AMOLED](screenshots/weather_detailed_amoled.png) |
 | Correlation (AMOLED) | ![Weather Correlation AMOLED](screenshots/weather_correlation_amoled.png) |
 | Categories (AMOLED) | ![Weather Categories AMOLED](screenshots/weather_categories_amoled.png) |
+
+### Requested page refresh (latest capture)
+
+| Page | Screenshot |
+|---|---|
+| Analysis Overview — `Project 1 - Weather Dataset.csv` | ![Weather Overview AMOLED](screenshots/weather_overview_amoled.png) |
+| Labs Multivariate — `Project 1 - Weather Dataset.csv` | ![Weather Labs Multivariate AMOLED](screenshots/weather_labs_multivariate_amoled.png) |
 
 > ✅ Categories behavior update: the active temporal-axis column is now filtered out of category charts to avoid self-count temporal noise.
 
@@ -127,13 +134,20 @@ All screenshots below were captured from the current app using datasets in `data
 - Local caching for expensive computations (numeric transforms, anomalies, correlation, heatmaps, forecasts).
 - Downsampling-aware interactive handling for large datasets.
 
+### Research Labs (implemented)
+- New Labs API contract:
+  - `GET /api/labs/<filename>/meta`
+  - `GET /api/labs/<filename>/<lab_key>`
+- Standardized response envelope (`ok`, `lab`, `data`, `warnings`, `cached`, `schema_version`).
+- Labs runtime frontend (`research_labs.js` + `research_labs.css`) shared across all lab pages.
+- Bounded Labs cache using configurable `LAB_CACHE_MAX_ITEMS` / `LAB_CACHE_MAX_MB`.
+
 ---
 
 ## 🚧 Work in progress
 
 The project currently has active ongoing work in these areas:
 
-- **Research labs depth**: lab pages are restored and navigable, with incremental backend depth being expanded across advanced methods.
 - **AI prompt/runtime robustness**: improving long-summary reliability, quota-aware fallbacks, and response quality consistency.
 - **UI/UX iteration**: refining layout density, theme consistency, and per-view ergonomics for large datasets.
 - **Export consistency improvements**: ongoing harmonization between on-page charts and ZIP/PDF outputs.
