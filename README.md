@@ -69,13 +69,6 @@ All screenshots below were captured from the current app using datasets in `data
 
 > ✅ Categories behavior update: the active temporal-axis column is now filtered out of category charts to avoid self-count temporal noise.
 
-### Export actions (Weather dataset)
-
-| Action | Screenshot |
-|---|---|
-| Full report (PDF) | ![Weather Export PDF AMOLED](screenshots/weather_export_pdf_amoled.png) |
-| Images ZIP | ![Weather Export Images ZIP AMOLED](screenshots/weather_export_images_zip_amoled.png) |
-
 ### Research Labs pages (Weather dataset)
 
 | Page | Screenshot |
