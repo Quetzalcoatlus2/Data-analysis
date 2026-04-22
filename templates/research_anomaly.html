@@ -2,7 +2,22 @@
 {% block title %}Anomaly Lab{% endblock %}
 {% block heading %}Anomaly Lab{% endblock %}
 {% block body %}
-<section class="card">
-  <p class="muted">Anomaly diagnostics workspace restored.</p>
+<section class="labs-card labs-shell" data-lab-page="anomaly" data-lab-endpoint="anomaly">
+  <div class="labs-toolbar">
+    <label class="labs-control" data-control="column">
+      Column
+      <select data-lab-control="column"></select>
+    </label>
+    <label class="labs-control" data-control="contamination">
+      Contamination
+      <input data-lab-control="contamination" type="number" min="0.001" max="0.2" step="0.001" value="{{ contamination }}" />
+    </label>
+    <button class="labs-run-btn" type="button" data-lab-action="run">Run Anomaly Lab</button>
+  </div>
+
+  <div class="labs-status" data-lab-status>Loading anomaly diagnostics…</div>
+  <div class="labs-summary-grid" data-lab-summary></div>
+  <div class="labs-chart-grid" data-lab-chart></div>
+  <div class="labs-table-wrap" data-lab-table></div>
 </section>
 {% endblock %}
