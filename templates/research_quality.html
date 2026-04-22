@@ -2,7 +2,14 @@
 {% block title %}Quality Lab{% endblock %}
 {% block heading %}Quality Lab{% endblock %}
 {% block body %}
-<section class="card">
-  <p class="muted">Data quality checks workspace restored.</p>
+<section class="labs-card labs-shell" data-lab-page="quality" data-lab-endpoint="quality">
+  <div class="labs-toolbar">
+    <button class="labs-run-btn" type="button" data-lab-action="run">Run Quality Lab</button>
+  </div>
+
+  <div class="labs-status" data-lab-status>Loading quality diagnostics…</div>
+  <div class="labs-summary-grid" data-lab-summary></div>
+  <div class="labs-chart-grid" data-lab-chart></div>
+  <div class="labs-table-wrap" data-lab-table></div>
 </section>
 {% endblock %}
