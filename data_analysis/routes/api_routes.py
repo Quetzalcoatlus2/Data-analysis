@@ -4,6 +4,8 @@ from data_analysis.reports.pdf_report import handle_download_full_report_pdf
 from data_analysis.routes.api import (
     handle_api_ai_summary,
     handle_api_interactive_data,
+    handle_api_labs_data,
+    handle_api_labs_meta,
     handle_full_history_json,
     handle_health,
 )
@@ -27,6 +29,16 @@ def api_ai_summary(filename):
 @api_bp.route('/api/interactive/<filename>', methods=['GET'])
 def api_interactive_data(filename):
     return handle_api_interactive_data(filename)
+
+
+@api_bp.route('/api/labs/<filename>/meta', methods=['GET'])
+def api_labs_meta(filename):
+    return handle_api_labs_meta(filename)
+
+
+@api_bp.route('/api/labs/<filename>/<lab_key>', methods=['GET'])
+def api_labs_data(filename, lab_key):
+    return handle_api_labs_data(filename, lab_key)
 
 @api_bp.route('/download/<filename>/cleaned.csv', methods=['GET'])
 def download_cleaned_csv(filename):
