@@ -3,11 +3,16 @@ from __future__ import annotations
 
 from bisect import bisect_left
 
+from data_analysis.analysis.research import (
+    build_consolidated_lab_payload,
+    build_labs_meta_payload,
+)
 from data_analysis.analysis.plot import (
     _build_non_timeseries_tick_labels,
     _resolve_plot_display_axis,
     build_distribution_axis_spec,
 )
+from data_analysis.core.cache import TinyLRU
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
 from data_analysis.runtime_app import (
@@ -26,18 +31,283 @@ _LOCAL_SYMBOLS = {
     "handle_health",
     "handle_api_ai_summary",
     "handle_api_interactive_data",
+    "handle_api_labs_meta",
+    "handle_api_labs_data",
     "handle_full_history_json",
     "health",
     "api_ai_summary",
     "api_interactive_data",
+    "api_labs_meta",
+    "api_labs_data",
     "full_history_json",
     "__all__",
 }
 
 
+_LAB_SCHEMA_VERSION = 1
+_SUPPORTED_LABS = frozenset(
+    {
+        "forecast",
+        "anomaly",
+        "quality",
+        "change-points",
+        "conformal",
+        "shap",
+        "multivariate",
+    }
+)
+_LABS_CACHE: TinyLRU | None = None
+
+
 
 def _bind_runtime_globals():
     return bind_runtime_globals(globals(), _LOCAL_SYMBOLS)
+
+
+def _get_labs_cache() -> TinyLRU:
+    global _LABS_CACHE
+    _bind_runtime_globals()
+    max_items = int(app.config.get("LAB_CACHE_MAX_ITEMS", 32))
+    max_mb = float(app.config.get("LAB_CACHE_MAX_MB", 64))
+
+    needs_reset = False
+    if _LABS_CACHE is None:
+        needs_reset = True
+    else:
+        try:
+            if int(_LABS_CACHE.max_items) != max_items:
+                needs_reset = True
+            if float(_LABS_CACHE.max_size_mb or 0.0) != max_mb:
+                needs_reset = True
+        except Exception:
+            needs_reset = True
+
+    if needs_reset:
+        _LABS_CACHE = TinyLRU(max_items=max_items, max_size_mb=max_mb)
+    assert _LABS_CACHE is not None
+    return _LABS_CACHE
+
+
+def _labs_response(
+    *,
+    ok: bool,
+    filename: str,
+    lab: str,
+    data: dict[str, Any] | None,
+    selected_col: str | None,
+    selected_col_source: str | None,
+    warnings: list[str] | None = None,
+    cached: bool = False,
+    error: str | None = None,
+    status: int = 200,
+):
+    payload = {
+        "ok": bool(ok),
+        "schema_version": int(_LAB_SCHEMA_VERSION),
+        "filename": filename,
+        "lab": lab,
+        "selected_col": selected_col,
+        "selected_col_source": selected_col_source,
+        "cached": bool(cached),
+        "warnings": list(warnings or []),
+        "error": error,
+        "data": data or {},
+    }
+    return jsonify(payload), int(status)
+
+
+def _parse_labs_controls() -> dict[str, Any]:
+    _bind_runtime_globals()
+    selected_col = (request.args.get("column") or request.args.get("selected_col") or "").strip() or None
+
+    try:
+        forecast_pct = float(request.args.get("forecast_pct", "0.05"))
+    except Exception:
+        forecast_pct = 0.05
+    forecast_pct = max(0.0, min(0.5, forecast_pct))
+
+    try:
+        contamination = float(request.args.get("contamination", "0.02"))
+    except Exception:
+        contamination = 0.02
+    contamination = max(0.001, min(0.2, contamination))
+
+    try:
+        max_points = int(request.args.get("max_points", "450"))
+    except Exception:
+        max_points = 450
+    max_points = max(80, min(2000, max_points))
+
+    return {
+        "selected_col": selected_col,
+        "forecast_pct": float(forecast_pct),
+        "contamination": float(contamination),
+        "max_points": int(max_points),
+    }
+
+
+def handle_api_labs_meta(filename):
+    _bind_runtime_globals()
+    if not HASHED_UPLOAD_RE.match(filename):
+        return _labs_response(
+            ok=False,
+            filename=filename,
+            lab="meta",
+            data=None,
+            selected_col=None,
+            selected_col_source="none",
+            error="Invalid filename.",
+            status=400,
+        )
+
+    controls = _parse_labs_controls()
+    cache_key = (
+        "meta",
+        str(filename),
+        str(controls["selected_col"] or ""),
+    )
+    labs_cache = _get_labs_cache()
+    cached_payload = labs_cache.get(cache_key)
+    if cached_payload is not None:
+        cached_copy = dict(cached_payload)
+        cached_copy["cached"] = True
+        return jsonify(cached_copy), 200
+
+    df = get_dataframe_for(filename)
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        return _labs_response(
+            ok=False,
+            filename=filename,
+            lab="meta",
+            data=None,
+            selected_col=controls["selected_col"],
+            selected_col_source="none",
+            error="Dataset not found.",
+            status=404,
+        )
+
+    numeric_df = get_cached_numeric_df(filename, df)
+    data = build_labs_meta_payload(
+        df,
+        numeric_df,
+        requested_column=controls["selected_col"],
+    )
+    payload = {
+        "ok": True,
+        "schema_version": int(_LAB_SCHEMA_VERSION),
+        "filename": filename,
+        "lab": "meta",
+        "selected_col": data.get("selected_col"),
+        "selected_col_source": data.get("selected_col_source"),
+        "cached": False,
+        "warnings": [],
+        "error": None,
+        "data": data,
+    }
+    labs_cache.set(cache_key, payload)
+    return jsonify(payload), 200
+
+
+def handle_api_labs_data(filename, lab_key):
+    _bind_runtime_globals()
+    if not HASHED_UPLOAD_RE.match(filename):
+        return _labs_response(
+            ok=False,
+            filename=filename,
+            lab=str(lab_key),
+            data=None,
+            selected_col=None,
+            selected_col_source="none",
+            error="Invalid filename.",
+            status=400,
+        )
+
+    normalized_lab = (str(lab_key or "").strip().lower() or "")
+    if normalized_lab not in _SUPPORTED_LABS:
+        return _labs_response(
+            ok=False,
+            filename=filename,
+            lab=normalized_lab,
+            data=None,
+            selected_col=None,
+            selected_col_source="none",
+            error="Unsupported lab key.",
+            status=404,
+        )
+
+    controls = _parse_labs_controls()
+    df = get_dataframe_for(filename)
+    if df is None or (isinstance(df, pd.DataFrame) and df.empty):
+        return _labs_response(
+            ok=False,
+            filename=filename,
+            lab=normalized_lab,
+            data=None,
+            selected_col=controls["selected_col"],
+            selected_col_source="none",
+            error="Dataset not found.",
+            status=404,
+        )
+
+    numeric_df = get_cached_numeric_df(filename, df)
+
+    cache_key = (
+        "lab",
+        str(filename),
+        normalized_lab,
+        str(controls["selected_col"] or ""),
+        round(float(controls["forecast_pct"]), 6),
+        round(float(controls["contamination"]), 6),
+        int(controls["max_points"]),
+    )
+    labs_cache = _get_labs_cache()
+    cached_payload = labs_cache.get(cache_key)
+    if cached_payload is not None:
+        cached_copy = dict(cached_payload)
+        cached_copy["cached"] = True
+        return jsonify(cached_copy), 200
+
+    try:
+        data, warnings, selected_col, selected_col_source = build_consolidated_lab_payload(
+            lab_key=normalized_lab,
+            filename=filename,
+            df=df,
+            numeric_df=numeric_df,
+            requested_column=controls["selected_col"],
+            forecast_pct=controls["forecast_pct"],
+            contamination=controls["contamination"],
+            max_points=controls["max_points"],
+            get_cached_column_forecast_fn=get_cached_column_forecast,
+            get_cached_anomalies_fn=get_cached_anomalies,
+            compute_forecast_fn=_compute_forecast,
+        )
+    except Exception as e:
+        app.logger.exception("Labs API failure lab=%s file=%s: %s", normalized_lab, filename, e)
+        return _labs_response(
+            ok=False,
+            filename=filename,
+            lab=normalized_lab,
+            data=None,
+            selected_col=controls["selected_col"],
+            selected_col_source="none",
+            error="Failed to compute lab payload.",
+            status=500,
+        )
+
+    payload = {
+        "ok": True,
+        "schema_version": int(_LAB_SCHEMA_VERSION),
+        "filename": filename,
+        "lab": normalized_lab,
+        "selected_col": selected_col,
+        "selected_col_source": selected_col_source,
+        "cached": False,
+        "warnings": list(warnings or []),
+        "error": None,
+        "data": data,
+    }
+    labs_cache.set(cache_key, payload)
+    return jsonify(payload), 200
 
 
 def handle_health():
@@ -755,15 +1025,21 @@ def handle_full_history_json():
 health = handle_health
 api_ai_summary = handle_api_ai_summary
 api_interactive_data = handle_api_interactive_data
+api_labs_meta = handle_api_labs_meta
+api_labs_data = handle_api_labs_data
 full_history_json = handle_full_history_json
 
 __all__ = [
     "handle_health",
     "handle_api_ai_summary",
     "handle_api_interactive_data",
+    "handle_api_labs_meta",
+    "handle_api_labs_data",
     "handle_full_history_json",
     "health",
     "api_ai_summary",
     "api_interactive_data",
+    "api_labs_meta",
+    "api_labs_data",
     "full_history_json",
 ]
