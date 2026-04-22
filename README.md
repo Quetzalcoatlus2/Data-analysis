@@ -60,15 +60,6 @@ All screenshots below were captured from the current app using datasets in `data
 | Correlation (AMOLED) | ![Weather Correlation AMOLED](screenshots/weather_correlation_amoled.png) |
 | Categories (AMOLED) | ![Weather Categories AMOLED](screenshots/weather_categories_amoled.png) |
 
-### Requested page refresh (latest capture)
-
-| Page | Screenshot |
-|---|---|
-| Analysis Overview — `Project 1 - Weather Dataset.csv` | ![Weather Overview AMOLED](screenshots/weather_overview_amoled.png) |
-| Labs Multivariate — `Project 1 - Weather Dataset.csv` | ![Weather Labs Multivariate AMOLED](screenshots/weather_labs_multivariate_amoled.png) |
-
-> ✅ Categories behavior update: the active temporal-axis column is now filtered out of category charts to avoid self-count temporal noise.
-
 ### Research Labs pages (Weather dataset)
 
 | Page | Screenshot |
