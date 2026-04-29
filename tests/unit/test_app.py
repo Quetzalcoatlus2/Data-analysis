@@ -49,6 +49,7 @@ def test_allowed_file():
     assert allowed_file("data.txt") is True
     assert allowed_file("data.xlsx") is True
     assert allowed_file("data.json") is True
+    assert allowed_file("legacy.xls") is False
     assert allowed_file("image.png") is False
     assert allowed_file("script.py") is False
     assert allowed_file("data") is False
@@ -2585,6 +2586,42 @@ def test_analyze_forecast_zero_pct_renders_history_only_forecast(monkeypatch):
     grouped = captured.get("analysis", {}).get("forecast_plots_by_column", {})
     grouped_types = [p.get("type") for plots in grouped.values() for p in plots if isinstance(p, dict)]
     assert "forecast" in grouped_types
+
+
+def test_analyze_forecast_view_uses_shared_distribution_plot(monkeypatch):
+    """Detailed Analysis should use the shared static distribution renderer."""
+    import data_analysis.routes.analyze as analyze_mod
+
+    filename = "1" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.arange(1, 31, dtype=float)})
+    DATAFRAME_CACHE.set(filename, df)
+
+    captured = {}
+    calls: list[tuple[str, str | None]] = []
+
+    def fake_render_template(_template, **kwargs):
+        captured["analysis"] = kwargs.get("analysis", {})
+        return "ok"
+
+    def fake_distribution(_values, column, **kwargs):
+        calls.append((str(column), kwargs.get("spacing_profile")))
+        return "distribution-image"
+
+    monkeypatch.setattr(app_module, "render_template", fake_render_template)
+    monkeypatch.setattr(app_module, "ensure_ai_ready", lambda: False)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(app_module, "get_cached_stl_plot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "generate_forecast_plot", lambda *_args, **_kwargs: "forecast-image")
+    monkeypatch.setattr(analyze_mod, "generate_static_distribution_plot", fake_distribution)
+
+    with app.test_client() as client:
+        response = client.get(f"/analyze/{filename}?view=forecast&forecast_pct=0")
+
+    assert response.status_code == 200
+    assert calls == [("value", "detailed")]
+    grouped = captured.get("analysis", {}).get("forecast_plots_by_column", {})
+    grouped_types = [p.get("type") for plots in grouped.values() for p in plots if isinstance(p, dict)]
+    assert "distribution" in grouped_types
 
 
 def test_download_full_report_pdf_categories_not_capped_to_top_50(monkeypatch):
