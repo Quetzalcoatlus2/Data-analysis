@@ -9,8 +9,12 @@ import pandas as pd
 from matplotlib.axes import Axes
 
 import data_analysis.runtime_app as app_module
+import data_analysis.reports.pdf_report as pdf_report_mod
+import data_analysis.routes.downloads as downloads_mod
 from app import app
 from data_analysis.analysis import anomaly as anomaly_module
+
+ONE_PIXEL_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5gYb8AAAAASUVORK5CYII="
 
 
 def test_anomaly_positions_support_positional_indices():
@@ -183,6 +187,83 @@ def test_static_plots_zip_uses_request_contamination(monkeypatch):
     assert response.status_code == 200
     assert seen
     assert all(abs(v - 0.075) < 1e-9 for v in seen)
+
+
+def test_static_plots_zip_uses_shared_distribution_plot(monkeypatch):
+    filename = "e" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.linspace(1.0, 10.0, 12)})
+    calls: list[tuple[str, tuple[float, float] | None]] = []
+
+    def fake_distribution(values, column, **kwargs):
+        assert len(pd.Series(values).dropna()) == 12
+        calls.append((str(column), kwargs.get("figsize")))
+        return ONE_PIXEL_PNG
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(app_module, "generate_forecast_plot", lambda *_args, **_kwargs: ONE_PIXEL_PNG)
+    monkeypatch.setattr(downloads_mod, "generate_static_distribution_plot", fake_distribution)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/static_plots.zip?forecast_pct=0")
+
+    assert response.status_code == 200
+    assert calls == [("value", (8.0, 8.2))]
+    with zipfile.ZipFile(io.BytesIO(response.data), "r") as zf:
+        names = set(zf.namelist())
+    assert "value_distribution.png" in names
+    assert "value_trend.png" in names
+
+
+def test_full_html_report_uses_shared_distribution_plot(monkeypatch):
+    filename = "b" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.linspace(1.0, 10.0, 12)})
+    calls: list[str] = []
+
+    def fake_distribution(_values, column, **_kwargs):
+        calls.append(str(column))
+        return ONE_PIXEL_PNG
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "_get_clean_ai_summary_from_cache", lambda *_args, **_kwargs: "<p>cached</p>")
+    monkeypatch.setattr(app_module, "generate_correlation_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(downloads_mod, "generate_static_distribution_plot", fake_distribution)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.html?forecast_pct=0")
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert calls == ["value"]
+    assert "Value Distributions" in html
+    assert ONE_PIXEL_PNG in html
+
+
+def test_full_pdf_report_uses_shared_distribution_plot(monkeypatch):
+    filename = "d" * 40 + ".csv"
+    df = pd.DataFrame({"value": np.linspace(1.0, 10.0, 12)})
+    calls: list[tuple[str, tuple[float, float] | None]] = []
+
+    def fake_distribution(_values, column, **kwargs):
+        calls.append((str(column), kwargs.get("figsize")))
+        return ONE_PIXEL_PNG
+
+    monkeypatch.setattr(app_module, "get_dataframe_for", lambda _name: df)
+    monkeypatch.setattr(app_module, "_get_clean_ai_summary_from_cache", lambda *_args, **_kwargs: "<p>cached</p>")
+    monkeypatch.setattr(app_module, "get_cached_heatmap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(app_module, "get_cached_anomalies", lambda *_args, **_kwargs: (pd.Index([]), pd.Series(dtype=float)))
+    monkeypatch.setattr(app_module, "generate_forecast_plot", lambda *_args, **_kwargs: ONE_PIXEL_PNG)
+    monkeypatch.setattr(pdf_report_mod, "generate_static_distribution_plot", fake_distribution)
+
+    with app.test_client() as client:
+        response = client.get(f"/download/{filename}/report.pdf?display=test&forecast_pct=0")
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "application/pdf"
+    assert calls == [("value", (10.0, 8.2))]
+    assert response.data.startswith(b"%PDF")
 
 
 def test_analyze_interactive_includes_positional_anomalies(monkeypatch):
