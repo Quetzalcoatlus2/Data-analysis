@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import importlib
 import importlib.util
 import math
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 
+from data_analysis.analysis.controls import forecast_steps_for_history
 from data_analysis.core.lazy_imports import get_shap
 
 
@@ -27,6 +29,30 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except Exception:
         return int(default)
+
+
+def _safe_index_position(index: pd.Index, label: Any) -> int | None:
+    """Resolve a safe integer position for a label in an index."""
+    try:
+        if label not in index:
+            return None
+    except Exception:
+        return None
+
+    try:
+        positions = index.get_indexer_for([label])
+    except Exception:
+        return None
+
+    if positions.size == 0:
+        return None
+
+    try:
+        pos = int(positions[0])
+    except Exception:
+        return None
+
+    return pos if pos >= 0 else None
 
 
 def _sample_positions(length: int, max_points: int) -> list[int]:
@@ -200,10 +226,7 @@ def _compute_recent_trend(series: pd.Series) -> dict[str, Any]:
 
 
 def _compute_forecast_steps(history_len: int, forecast_pct: float) -> int:
-    if forecast_pct <= 0 or history_len <= 0:
-        return 0
-    pct_den = max(1e-9, 1.0 - float(forecast_pct))
-    return max(1, int(math.floor(float(history_len) * float(forecast_pct) / pct_den)))
+    return forecast_steps_for_history(history_len, forecast_pct)
 
 
 def _backtest_forecast(
@@ -296,10 +319,7 @@ def build_forecast_lab_payload(
     anomaly_rows: list[dict[str, Any]] = []
     if anomaly_idx is not None and len(anomaly_idx):
         for idx in anomaly_idx[:25]:
-            try:
-                pos = int(series.index.get_loc(idx)) if idx in series.index else None
-            except Exception:
-                pos = None
+            pos = _safe_index_position(series.index, idx)
             try:
                 val = _safe_float(series.loc[idx]) if idx in series.index else None
             except Exception:
@@ -620,7 +640,7 @@ def _detect_change_points_ruptures(series: pd.Series) -> list[int]:
     if not _optional_dependency_available("ruptures"):
         return []
     try:
-        import ruptures as rpt
+        rpt = cast(Any, importlib.import_module("ruptures"))
     except Exception:
         return []
 
@@ -891,8 +911,10 @@ def build_shap_lab_payload(
     )
     model.fit(X, y)
 
-    perm = permutation_importance(model, X, y, n_repeats=4, random_state=42)
-    perm_map = {f: _safe_float(v) for f, v in zip(use_features, perm.importances_mean, strict=False)}
+    perm_result = cast(Any, permutation_importance(model, X, y, n_repeats=4, random_state=42))
+    perm_importances = getattr(perm_result, "importances_mean", None)
+    perm_values = perm_importances if perm_importances is not None else []
+    perm_map = {f: _safe_float(v) for f, v in zip(use_features, perm_values, strict=False)}
 
     mode = "surrogate"
     shap_map: dict[str, float | None] = {}
