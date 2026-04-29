@@ -1,22 +1,21 @@
 # ruff: noqa: F401,F403,F405
 from __future__ import annotations
 
-import math
 import textwrap
 
+from data_analysis.analysis.controls import (
+    forecast_steps_for_history,
+    parse_contamination,
+    parse_forecast_pct,
+)
 from data_analysis.analysis.dataframe_ops import (
     _is_active_temporal_axis_column as _is_active_temporal_axis_column_df,
 )
 from data_analysis.analysis.plot import (
-    _add_static_distribution_overlays,
-    _apply_dense_non_overlapping_y_ticks,
-    _apply_sci_formatter,
     _build_static_category_chart,
     _format_stat_value,
     _resolve_plot_display_axis,
-    apply_distribution_axis_spec,
-    apply_static_distribution_compact_layout,
-    build_distribution_axis_spec,
+    generate_static_distribution_plot,
     get_export_chart_figsize,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
@@ -183,24 +182,15 @@ def handle_download_static_plots_zip(filename):
     if df is None or df.empty:
         return ("Not found", 404)
 
-    try:
-        user_contam = float(request.args.get('contamination', app.config.get('DEFAULT_CONTAMINATION', 0.02)))
-    except Exception:
-        user_contam = float(app.config.get('DEFAULT_CONTAMINATION', 0.02))
-    user_contam = max(0.001, min(0.2, user_contam))
+    user_contam = parse_contamination(
+        request.args.get('contamination'),
+        default=float(app.config.get('DEFAULT_CONTAMINATION', 0.02)),
+    )
 
-    raw_pct = request.args.get('forecast_pct', '0.05')
-    try:
-        forecast_pct = float(raw_pct) if raw_pct not in (None, "") else 0.05
-        forecast_pct = max(0.0, min(0.5, forecast_pct))
-    except Exception:
-        forecast_pct = 0.05
+    forecast_pct = parse_forecast_pct(request.args.get('forecast_pct', '0.05'))
 
     def _steps_for_history_rows(history_rows: int) -> int:
-        if forecast_pct <= 0 or history_rows <= 0:
-            return 0
-        pct_den = max(1e-9, 1.0 - float(forecast_pct))
-        return max(1, int(math.floor(float(history_rows) * float(forecast_pct) / pct_den)))
+        return forecast_steps_for_history(history_rows, forecast_pct)
 
 
     is_timeseries = _is_reliable_timeseries_index(df.index)
@@ -294,72 +284,17 @@ def handle_download_static_plots_zip(filename):
             except Exception as trend_err:
                 app.logger.debug("ZIP trend plot skipped for %s/%s: %s", filename, col, trend_err)
             
-            # Distribution histogram - HIGH QUALITY: Larger figure and more bins
+            # Distribution histogram.
             try:
-                from matplotlib.figure import Figure
-                fig = Figure(figsize=get_export_chart_figsize("distribution", context="zip"))
-                ax = fig.subplots()
-                s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
-                axis_spec = build_distribution_axis_spec(
-                    s_arr.tolist(),
-                    min_bins=max(8, min(12, len(s_arr) // 5)) if len(s_arr) >= 20 else 8,
-                    max_bins=52,
-                    integer_span_threshold=260,
+                dist_img = generate_static_distribution_plot(
+                    s,
+                    col,
+                    figsize=get_export_chart_figsize("distribution", context="zip"),
+                    value_formatter=_format_stat_value,
                 )
-                hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
-                if not hist_bins:
-                    hist_bins = max(8, min(52, int(len(s_arr) // 10) if len(s_arr) >= 20 else 8))
-                _hist_counts, hist_edges, _hist_patches = ax.hist(
-                    s_arr,
-                    bins=hist_bins,
-                    color='#5d84d8',
-                    alpha=0.74,
-                    edgecolor='#1f2937',
-                    linewidth=0.45,
-                    label=col,
-                )
-                ax.set_title(f"Distribution: {col}", fontsize=10, pad=16)
-                ax.set_xlabel(col, fontsize=9, labelpad=0)
-                ax.set_ylabel("Frequency", fontsize=9, labelpad=8)
-                ax.grid(True, alpha=0.3)
-                _apply_dense_non_overlapping_y_ticks(
-                    ax,
-                    integer=True,
-                    label_fontsize=8.0,
-                    min_ticks=6,
-                    max_ticks=18,
-                )
-                if isinstance(axis_spec, dict) and axis_spec:
-                    apply_distribution_axis_spec(ax, axis_spec)
-                elif len(hist_edges) >= 2:
-                    ax.set_xlim(float(hist_edges[0]), float(hist_edges[-1]))
-                
-                # Add vertical stat lines on the histogram
-                try:
-                    _add_static_distribution_overlays(
-                        ax,
-                        s_arr,
-                        value_formatter=_format_stat_value,
-                        legend_fontsize=6,
-                        legend_columns=6,
-                        legend_y=-0.12,
-                        expand_xlim=False,
-                        right_pad_ratio=0.015,
-                        top_lane=1.005,
-                        line_tag_offset_ratio=0.006,
-                    )
-                    apply_static_distribution_compact_layout(fig, ax)
-                    
-                    # Apply compact K/M/B/T axis labels for large values.
-                    _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
-                except Exception as stats_err:
-                    app.logger.debug("ZIP distribution stats overlay skipped for %s/%s: %s", filename, col, stats_err)
-                
-                buf = io.BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight', dpi=150, pad_inches=0.02)
-                plt.close(fig)
-                buf.seek(0)
-                zf.writestr(f"{secure_filename(str(col))}_distribution.png", buf.read())
+                if dist_img:
+                    raw = base64.b64decode(dist_img.encode('utf-8'))
+                    zf.writestr(f"{secure_filename(str(col))}_distribution.png", raw)
             except Exception as dist_err:
                 app.logger.debug("ZIP distribution plot skipped for %s/%s: %s", filename, col, dist_err)
             
@@ -512,24 +447,15 @@ def handle_download_full_report_html(filename):
 
     # Generate plots for each numeric column
     is_ts = _is_reliable_timeseries_index(df.index)
-    try:
-        user_contam = float(request.args.get('contamination', app.config.get('DEFAULT_CONTAMINATION', 0.02)))
-    except Exception:
-        user_contam = float(app.config.get('DEFAULT_CONTAMINATION', 0.02))
-    user_contam = max(0.001, min(0.2, user_contam))
+    user_contam = parse_contamination(
+        request.args.get('contamination'),
+        default=float(app.config.get('DEFAULT_CONTAMINATION', 0.02)),
+    )
 
-    raw_pct = request.args.get('forecast_pct', '0.05')
-    try:
-        forecast_pct = float(raw_pct) if raw_pct not in (None, "") else 0.05
-    except Exception:
-        forecast_pct = 0.05
-    forecast_pct = max(0.0, min(0.5, forecast_pct))
+    forecast_pct = parse_forecast_pct(request.args.get('forecast_pct', '0.05'))
 
     def _steps_for_history_rows(history_rows: int) -> int:
-        if forecast_pct <= 0 or history_rows <= 0:
-            return 0
-        pct_den = max(1e-9, 1.0 - float(forecast_pct))
-        return max(1, int(math.floor(float(history_rows) * float(forecast_pct) / pct_den)))
+        return forecast_steps_for_history(history_rows, forecast_pct)
 
     distribution_sections = []
     stl_sections = []
@@ -559,33 +485,16 @@ def handle_download_full_report_html(filename):
         
         # Generate distribution histogram for this column
         try:
-            from matplotlib.figure import Figure
-            fig = Figure(figsize=(10, 4))
-            ax = fig.subplots()
-            s_arr = np.asarray(pd.to_numeric(s, errors='coerce').dropna().to_numpy(dtype=float), dtype=float)
-            ax.hist(s_arr, bins=50, color='tab:blue', alpha=0.7, edgecolor='black')
-            ax.set_title(f"Distribution: {col}", pad=16)
-            ax.set_xlabel(col)
-            ax.set_ylabel("Frequency", labelpad=8)
-            ax.grid(True, alpha=0.3)
-            _apply_dense_non_overlapping_y_ticks(
-                ax,
-                integer=True,
-                label_fontsize=8.0,
-                min_ticks=6,
-                max_ticks=18,
+            dist_img = generate_static_distribution_plot(
+                s,
+                col,
+                figsize=(10, 4),
+                value_formatter=_format_stat_value,
             )
-            buf = io.BytesIO()
-            fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.02)
-            buf.seek(0)
-            dist_img = base64.b64encode(buf.read()).decode('utf-8')
-            plt.close(fig)
-            distribution_sections.append(f'<figure><figcaption><strong>Distribution: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{dist_img}" /></figure>')
-        except Exception:
-            try:
-                plt.close(fig)
-            except Exception as fig_close_err:
-                app.logger.debug("HTML report figure cleanup skipped for %s/%s: %s", filename, col, fig_close_err)
+            if dist_img:
+                distribution_sections.append(f'<figure><figcaption><strong>Distribution: {col}</strong></figcaption><img style="max-width:100%" src="data:image/png;base64,{dist_img}" /></figure>')
+        except Exception as dist_err:
+            app.logger.debug("HTML report distribution section skipped for %s/%s: %s", filename, col, dist_err)
         
         # STL decomposition (for timeseries with sufficient data)
         if is_ts and len(s) >= 28:
