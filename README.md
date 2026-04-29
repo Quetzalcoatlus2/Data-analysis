@@ -90,7 +90,7 @@ All screenshots below were captured from the current app using datasets in `data
 
 ### Data ingestion and preparation
 - Upload pipeline with hashed filenames and session-aware caching.
-- Supported extensions: `.csv`, `.xlsx`, `.xls`, `.json`, `.txt`.
+- Supported extensions: `.csv`, `.xlsx`, `.json`, `.txt`.
 - Numeric coercion and missing-value profiling.
 - Datetime inference for temporal plotting.
 
