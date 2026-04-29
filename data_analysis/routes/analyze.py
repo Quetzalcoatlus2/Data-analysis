@@ -3,19 +3,21 @@ from __future__ import annotations
 
 from typing import Any
 
+from data_analysis.analysis.controls import (
+    forecast_steps_for_history,
+    parse_contamination,
+    parse_forecast_pct,
+    resolve_data_range_selection,
+)
 from data_analysis.analysis.dataframe_ops import (
     _is_active_temporal_axis_column as _is_active_temporal_axis_column_df,
 )
 from data_analysis.analysis.plot import (
-    _add_static_distribution_overlays,
-    _apply_dense_non_overlapping_y_ticks,
-    _apply_sci_formatter,
     _build_non_timeseries_tick_labels,
     _build_static_category_chart,
     _resolve_plot_display_axis,
-    apply_distribution_axis_spec,
-    apply_static_distribution_compact_layout,
     build_distribution_axis_spec,
+    generate_static_distribution_plot,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
 from data_analysis.runtime_app import *
@@ -26,7 +28,6 @@ from data_analysis.runtime_app import (
     _cleanup_uploads_if_configured,
     _compute_basic_stats,
     _ensure_plot_dicts,
-    _get_arg_float,
     _get_arg_int,
     _get_clean_ai_summary_from_cache,
     _infer_seasonal_period,
@@ -89,31 +90,13 @@ def handle_analyze_file(filename):
     default_contam = float(app.config.get('DEFAULT_CONTAMINATION', 0.02))
     # New percentage-based horizon; fallback to numeric steps if pct absent.
     raw_pct = request.args.get('forecast_pct') or request.form.get('forecast_pct')
-    pct = None
-    try:
-        if raw_pct not in (None, ""):
-            pct = float(raw_pct)
-            # Validate percentage - allow 0 for no-forecast mode, max 0.5
-            if pct < 0:
-                pct = 0
-            elif pct > 0.5:
-                app.logger.warning("forecast_pct out of range (%.4f), clamping to 0.5", pct)
-                pct = 0.5
-        else:
-            # Default to 5% if not specified
-            pct = 0.05
-    except Exception:
-        pct = 0.05  # Default to 5%
+    pct = parse_forecast_pct(raw_pct, default=0.05)
     raw_data_range = request.args.get("data_range") or request.form.get("data_range")
     user_steps = _get_arg_int("forecast_horizon", default_steps)  # legacy param support
-    user_contam = _get_arg_float("contamination", default_contam)
-    # Validate contamination is in valid range for IsolationForest
-    try:
-        if user_contam < 0.001 or user_contam > 0.2:
-            app.logger.warning("contamination out of range (%.4f), clamping to [0.001, 0.2]", user_contam)
-            user_contam = max(0.001, min(0.2, user_contam))
-    except Exception:
-        user_contam = default_contam
+    user_contam = parse_contamination(
+        request.args.get("contamination") or request.form.get("contamination"),
+        default=default_contam,
+    )
 
     if not os.path.exists(filepath) and filename not in DATAFRAME_CACHE:
         flash("The uploaded file is no longer available. Please re-upload it.")
@@ -205,50 +188,15 @@ def handle_analyze_file(filename):
 
     # Apply percentage-based forecast horizon early (if provided) so all downstream forecast logic uses updated user_steps.
     total_rows = int(getattr(df, 'shape', (0,))[0]) if hasattr(df, 'shape') else 0
-    data_range_ratio = 1.0
-    data_range_rows = 0
-    try:
-        if raw_data_range not in (None, ""):
-            dr = float(raw_data_range)
-            if dr <= 0:
-                data_range_ratio = 1.0
-                data_range_rows = 0
-            elif dr <= 1.0:
-                data_range_ratio = dr
-                if total_rows > 0:
-                    rows = int(math.ceil(total_rows * dr))
-                    data_range_rows = max(1, min(rows, total_rows))
-                    if data_range_rows >= total_rows:
-                        data_range_rows = 0
-                        data_range_ratio = 1.0
-            else:
-                rows = int(dr)
-                if rows <= 0:
-                    data_range_ratio = 1.0
-                    data_range_rows = 0
-                elif total_rows > 0:
-                    rows = min(rows, total_rows)
-                    if rows >= total_rows:
-                        data_range_ratio = 1.0
-                        data_range_rows = 0
-                    else:
-                        data_range_rows = rows
-                        data_range_ratio = rows / total_rows
-                else:
-                    data_range_ratio = 1.0
-                    data_range_rows = 0
-    except Exception:
-        data_range_ratio = 1.0
-        data_range_rows = 0
+    data_range = resolve_data_range_selection(raw_data_range, total_rows)
+    data_range_ratio = data_range.ratio
+    data_range_rows = data_range.rows
     
     # pct is always defined now (defaulting to 0.05).
     # Use pct as a VISUAL x-axis share target:
     # forecast_share = steps / (history + steps) ~= pct
     def _steps_for_history_rows(history_rows: int) -> int:
-        if pct <= 0 or history_rows <= 0:
-            return 0
-        pct_den = max(1e-9, 1.0 - float(pct))
-        return max(1, int(math.floor(float(history_rows) * float(pct) / pct_den)))
+        return forecast_steps_for_history(history_rows, pct)
 
     if pct == 0:
         user_steps = 0
@@ -581,64 +529,14 @@ def handle_analyze_file(filename):
                 
                 # Generate distribution histogram for this column
                 try:
-                    fig, ax = plt.subplots(figsize=(7.2, 4.2))
-                    series_arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
-                    axis_spec = build_distribution_axis_spec(
-                        series_arr.tolist(),
-                        min_bins=max(8, min(12, len(series_arr) // 5)) if len(series_arr) >= 20 else 8,
-                        max_bins=52,
-                        integer_span_threshold=260,
+                    dist_img = generate_static_distribution_plot(
+                        series,
+                        column,
+                        figsize=(7.2, 4.2),
                         spacing_profile='detailed',
                     )
-                    hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
-                    if not hist_bins:
-                        hist_bins = max(8, min(52, int(len(series_arr) // 10) if len(series_arr) >= 20 else 8))
-                    _hist_counts, hist_edges, _hist_patches = ax.hist(
-                        series_arr,
-                        bins=hist_bins,
-                        color='#5d84d8',
-                        alpha=0.74,
-                        edgecolor='#1f2937',
-                        linewidth=0.45,
-                        label=column,
-                    )
-                    ax.set_title(f"Distribution: {column}", fontsize=10, pad=16)
-                    ax.set_xlabel(column, fontsize=9, labelpad=0)
-                    ax.set_ylabel("Frequency", fontsize=9, labelpad=8)
-                    ax.grid(True, alpha=0.3)
-                    _apply_dense_non_overlapping_y_ticks(
-                        ax,
-                        integer=True,
-                        label_fontsize=8.0,
-                        min_ticks=6,
-                        max_ticks=18,
-                    )
-                    if isinstance(axis_spec, dict) and axis_spec:
-                        apply_distribution_axis_spec(ax, axis_spec)
-                    elif len(hist_edges) >= 2:
-                        ax.set_xlim(float(hist_edges[0]), float(hist_edges[-1]))
-
-                    _add_static_distribution_overlays(
-                        ax,
-                        series_arr,
-                        legend_fontsize=6,
-                        legend_columns=6,
-                        legend_y=-0.12,
-                        expand_xlim=False,
-                        right_pad_ratio=0.015,
-                        top_lane=1.006,
-                        line_tag_offset_ratio=0.006,
-                    )
-                    _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
-                    apply_static_distribution_compact_layout(fig, ax)
-                    
-                    
-                    buf = io.BytesIO()
-                    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.02, dpi=150)
-                    plt.close(fig)
-                    buf.seek(0)
-                    dist_img = base64.b64encode(buf.read()).decode('utf-8')
-                    forecast_plots.append({"img": dist_img, "title": f"Distribution: {column}", "column": column, "type": "distribution"})
+                    if dist_img:
+                        forecast_plots.append({"img": dist_img, "title": f"Distribution: {column}", "column": column, "type": "distribution"})
                 except Exception as dist_e:
                     app.logger.warning("Distribution plot failed for %s: %s", column, dist_e)
 
