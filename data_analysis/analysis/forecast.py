@@ -278,7 +278,11 @@ def _match_amplitude(
             return forecast_series, conf_df
         # If forecast is perfectly flat, synthesize deviations from historical increments
         if std_fc <= 1e-12:
-            rng = np.random.default_rng()
+            seed_digest = hashlib.blake2b(digest_size=8)
+            seed_digest.update(np.ascontiguousarray(y_win_arr, dtype=np.float64).tobytes())
+            seed_digest.update(np.ascontiguousarray(fc_arr, dtype=np.float64).tobytes())
+            seed = int.from_bytes(seed_digest.digest(), "little", signed=False) % (2**32)
+            rng = np.random.default_rng(seed)
             incs = rng.choice(hist_diffs, size=len(fc), replace=True).astype(float)
             incs = incs - np.median(hist_diffs)
             dev = np.cumsum(incs)
