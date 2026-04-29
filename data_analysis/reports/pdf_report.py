@@ -12,16 +12,16 @@ from typing import Any, cast
 import emoji
 from fpdf import FPDF
 
+from data_analysis.analysis.controls import (
+    forecast_steps_for_history,
+    parse_contamination,
+    parse_forecast_pct,
+)
 from data_analysis.analysis.plot import (
-    _add_static_distribution_overlays,
-    _apply_dense_non_overlapping_y_ticks,
-    _apply_sci_formatter,
     _build_static_category_chart,
     _format_stat_value,
     _resolve_plot_display_axis,
-    apply_distribution_axis_spec,
-    apply_static_distribution_compact_layout,
-    build_distribution_axis_spec,
+    generate_static_distribution_plot,
     get_export_chart_figsize,
 )
 from data_analysis.core.runtime_bind import bind_runtime_globals
@@ -255,17 +255,12 @@ def handle_download_full_report_pdf(filename):
 
     display = request.args.get('display') or filename
     
-    # Get forecast percentage from request (default 5%)
-    try:
-        forecast_pct = float(request.args.get('forecast_pct', 0.05))
-    except (TypeError, ValueError):
-        forecast_pct = 0.05
+    forecast_pct = parse_forecast_pct(request.args.get('forecast_pct', 0.05))
 
-    try:
-        user_contam = float(request.args.get('contamination', app.config.get('DEFAULT_CONTAMINATION', 0.02)))
-    except Exception:
-        user_contam = float(app.config.get('DEFAULT_CONTAMINATION', 0.02))
-    user_contam = max(0.001, min(0.2, user_contam))
+    user_contam = parse_contamination(
+        request.args.get('contamination'),
+        default=float(app.config.get('DEFAULT_CONTAMINATION', 0.02)),
+    )
     
     # Ensure AI summary is generated if not already cached
     if _get_clean_ai_summary_from_cache(filename) is None:
@@ -1032,10 +1027,7 @@ def handle_download_full_report_pdf(filename):
         add_section_title("4. Column Analysis", new_page=True)
 
         def _steps_for_history_rows(history_rows: int) -> int:
-            if forecast_pct <= 0 or history_rows <= 0:
-                return 0
-            pct_den = max(1e-9, 1.0 - float(forecast_pct))
-            return max(1, int(math.floor(float(history_rows) * float(forecast_pct) / pct_den)))
+            return forecast_steps_for_history(history_rows, forecast_pct)
         
         # Show forecast setting used (Moved here)
         font_family = default_font
@@ -1250,77 +1242,30 @@ def handle_download_full_report_pdf(filename):
 
             # 3. DISTRIBUTION chart
             try:
-                fig, ax = plt.subplots(figsize=get_export_chart_figsize("distribution", context="pdf"))
                 if is_numeric:
-                    s_num = numeric_series
-                    s_arr = np.asarray(s_num.to_numpy(dtype=float), dtype=float)
-                    axis_spec = build_distribution_axis_spec(
-                        s_arr.tolist(),
-                        min_bins=max(8, min(12, len(s_arr) // 5)) if len(s_arr) >= 20 else 8,
-                        max_bins=52,
-                        integer_span_threshold=260,
-                    )
-                    hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
-                    if not hist_bins:
-                        hist_bins = max(8, min(52, int(len(s_arr) // 10) if len(s_arr) >= 20 else 8))
-                    _hist_counts, hist_edges, _hist_patches = ax.hist(
-                        s_arr,
-                        bins=hist_bins,
-                        color='#5d84d8',
-                        alpha=0.74,
-                        edgecolor='#1f2937',
-                        linewidth=0.45,
+                    distribution_b64 = generate_static_distribution_plot(
+                        numeric_series,
+                        col,
+                        figsize=get_export_chart_figsize("distribution", context="pdf"),
+                        value_formatter=_format_stat_value,
                         label='Distribution',
                     )
-                    ax.set_title(f"Distribution: {col}", pad=16)
-                    ax.set_xlabel(col, fontsize=9, labelpad=0)
-                    ax.set_ylabel("Frequency", labelpad=8)
-                    ax.grid(True, alpha=0.3)
-                    _apply_dense_non_overlapping_y_ticks(
-                        ax,
-                        integer=True,
-                        label_fontsize=8.0,
-                        min_ticks=6,
-                        max_ticks=18,
-                    )
-                    if isinstance(axis_spec, dict) and axis_spec:
-                        apply_distribution_axis_spec(ax, axis_spec)
-                    elif len(hist_edges) >= 2:
-                        ax.set_xlim(float(hist_edges[0]), float(hist_edges[-1]))
-
-                    _add_static_distribution_overlays(
-                        ax,
-                        s_arr,
-                        value_formatter=_format_stat_value,
-                        legend_fontsize=6,
-                        legend_columns=6,
-                        legend_y=-0.12,
-                        expand_xlim=False,
-                        right_pad_ratio=0.015,
-                        top_lane=1.005,
-                        line_tag_offset_ratio=0.006,
-                    )
-                    _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
-                    apply_static_distribution_compact_layout(fig, ax)
+                    if not distribution_b64:
+                        raise ValueError(f"Could not build distribution chart for {col}")
                 else:
                     # Categorical bar chart (all categories)
                     all_counts = series.value_counts()
                     built_chart = _build_static_category_chart(all_counts, col)
                     if built_chart is None:
                         raise ValueError(f"Could not build categories chart for {col}")
-                    plt.close(fig)
                     fig, ax = built_chart
-                
-                buf = io.BytesIO()
-                savefig_kwargs = {"format": "png", "bbox_inches": "tight", "dpi": 150}
-                savefig_kwargs["pad_inches"] = 0.02
-                if not is_numeric:
-                    savefig_kwargs["dpi"] = 120
-                    savefig_kwargs["pad_inches"] = 0.02
-                fig.savefig(buf, **savefig_kwargs)
-                plt.close(fig)
-                buf.seek(0)
-                distribution_b64 = base64.b64encode(buf.read()).decode('utf-8')
+                    buf = io.BytesIO()
+                    try:
+                        fig.savefig(buf, format="png", bbox_inches="tight", dpi=120, pad_inches=0.02)
+                    finally:
+                        plt.close(fig)
+                    buf.seek(0)
+                    distribution_b64 = base64.b64encode(buf.read()).decode('utf-8')
 
                 if pair_with_stl and is_numeric:
                     dist_figsize = get_export_chart_figsize("distribution", context="pdf")
