@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from bisect import bisect_left
 
+from data_analysis.analysis.controls import (
+    forecast_steps_for_history,
+    parse_contamination,
+    parse_forecast_pct,
+    resolve_data_range_selection,
+)
 from data_analysis.analysis.research import (
     build_consolidated_lab_payload,
     build_labs_meta_payload,
@@ -120,17 +126,9 @@ def _parse_labs_controls() -> dict[str, Any]:
     _bind_runtime_globals()
     selected_col = (request.args.get("column") or request.args.get("selected_col") or "").strip() or None
 
-    try:
-        forecast_pct = float(request.args.get("forecast_pct", "0.05"))
-    except Exception:
-        forecast_pct = 0.05
-    forecast_pct = max(0.0, min(0.5, forecast_pct))
+    forecast_pct = parse_forecast_pct(request.args.get("forecast_pct", "0.05"))
 
-    try:
-        contamination = float(request.args.get("contamination", "0.02"))
-    except Exception:
-        contamination = 0.02
-    contamination = max(0.001, min(0.2, contamination))
+    contamination = parse_contamination(request.args.get("contamination", "0.02"))
 
     try:
         max_points = int(request.args.get("max_points", "450"))
@@ -401,14 +399,7 @@ def handle_api_interactive_data(filename):
         return jsonify({"ok": False, "error": "Invalid filename"}), 400
     request_start = time.perf_counter()
 
-    # Get parameters - default to 5%
-    raw_pct = request.args.get('forecast_pct', '0.05')
-    try:
-        user_contam = float(request.args.get('contamination', '0.02'))
-    except Exception as e:
-        app.logger.debug("Interactive API contamination parse fallback used for %s: %s", filename, e)
-        user_contam = 0.02
-    user_contam = max(0.001, min(0.2, user_contam))
+    user_contam = parse_contamination(request.args.get('contamination', '0.02'))
 
     def _safe_number(value):
         try:
@@ -417,21 +408,11 @@ def handle_api_interactive_data(filename):
         except Exception:
             return None
     
-    try:
-        pct = float(raw_pct) if raw_pct else 0.05
-        # Allow 0 for no-forecast mode, clamp max to 0.5
-        pct = max(0, min(0.5, pct))
-    except Exception as e:
-        app.logger.debug("Interactive API forecast_pct parse fallback used for %s: %s", filename, e)
-        pct = 0.05
-
-    raw_data_range = request.args.get('data_range', '1.0')
-    try:
-        parsed_data_range = float(raw_data_range)
-        if not math.isfinite(parsed_data_range) or parsed_data_range <= 0:
-            parsed_data_range = 1.0
-    except Exception:
-        parsed_data_range = 1.0
+    pct = parse_forecast_pct(request.args.get('forecast_pct', '0.05'))
+    parsed_data_range = resolve_data_range_selection(
+        request.args.get('data_range', '1.0'),
+        0,
+    ).requested
 
     # Check cache first for instant response (keyed by request parameters)
     cache_key = _build_interactive_cache_key(filename, pct, user_contam, parsed_data_range)
@@ -480,31 +461,13 @@ def handle_api_interactive_data(filename):
         return jsonify({"ok": False, "error": "Dataset not found"}), 404
 
     total_rows = int(getattr(df, 'shape', (0,))[0]) if hasattr(df, 'shape') else 0
-    data_range_rows = 0
-    try:
-        if parsed_data_range <= 0:
-            parsed_data_range = 1.0
-        elif parsed_data_range <= 1.0:
-            if total_rows > 0:
-                rows = int(math.ceil(total_rows * parsed_data_range))
-                data_range_rows = max(1, min(rows, total_rows))
-                if data_range_rows >= total_rows:
-                    data_range_rows = 0
-        else:
-            rows = int(parsed_data_range)
-            if rows > 0 and total_rows > 0:
-                rows = min(rows, total_rows)
-                if rows < total_rows:
-                    data_range_rows = rows
-    except Exception:
-        data_range_rows = 0
+    data_range = resolve_data_range_selection(request.args.get('data_range', '1.0'), total_rows)
+    parsed_data_range = data_range.requested
+    data_range_rows = data_range.rows
     
     def _steps_for_history_length(history_len: int) -> int:
         """Map forecast_pct to steps for a concrete visible history length."""
-        if pct <= 0 or history_len <= 0:
-            return 0
-        pct_den = max(1e-9, 1.0 - float(pct))
-        return max(1, int(math.floor(float(history_len) * float(pct) / pct_den)))
+        return forecast_steps_for_history(history_len, pct)
     is_timeseries = _is_reliable_timeseries_index(df.index)
     numeric_df_cached = get_cached_numeric_df(filename, df)
     
