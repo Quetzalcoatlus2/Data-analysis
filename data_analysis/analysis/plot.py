@@ -919,6 +919,94 @@ def get_export_chart_figsize(
     return size_map.get((str(context), str(chart_kind)), (10.0, 7.2))
 
 
+def generate_static_distribution_plot(
+    values: Sequence[Any] | np.ndarray | pd.Series,
+    column: object,
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (7.2, 4.2),
+    dpi: int = 150,
+    pad_inches: float = 0.02,
+    spacing_profile: Literal["default", "detailed"] = "default",
+    value_formatter: Callable[[float], str] | None = None,
+    label: str | None = None,
+) -> str | None:
+    """Render the shared static distribution chart used by pages and exports."""
+    fig = None
+    try:
+        series = pd.to_numeric(pd.Series(values), errors='coerce').dropna()
+        if series.empty:
+            return None
+        arr = np.asarray(series.to_numpy(dtype=float), dtype=float)
+        if arr.size == 0:
+            return None
+
+        fig, ax = plt.subplots(figsize=figsize)
+        axis_spec = build_distribution_axis_spec(
+            arr.tolist(),
+            min_bins=max(8, min(12, len(arr) // 5)) if len(arr) >= 20 else 8,
+            max_bins=52,
+            integer_span_threshold=260,
+            spacing_profile=spacing_profile,
+        )
+        hist_bins = axis_spec.get('hist_bins') if isinstance(axis_spec, dict) else None
+        if not hist_bins:
+            hist_bins = max(8, min(52, int(len(arr) // 10) if len(arr) >= 20 else 8))
+
+        _hist_counts, hist_edges, _hist_patches = ax.hist(
+            arr,
+            bins=hist_bins,
+            color='#5d84d8',
+            alpha=0.74,
+            edgecolor='#1f2937',
+            linewidth=0.45,
+            label=str(label if label is not None else column),
+        )
+        ax.set_title(title or f"Distribution: {column}", fontsize=10, pad=16)
+        ax.set_xlabel(str(column), fontsize=9, labelpad=0)
+        ax.set_ylabel("Frequency", fontsize=9, labelpad=8)
+        ax.grid(True, alpha=0.3)
+        _apply_dense_non_overlapping_y_ticks(
+            ax,
+            integer=True,
+            label_fontsize=8.0,
+            min_ticks=6,
+            max_ticks=18,
+        )
+        if isinstance(axis_spec, dict) and axis_spec:
+            apply_distribution_axis_spec(ax, axis_spec)
+        elif len(hist_edges) >= 2:
+            ax.set_xlim(float(hist_edges[0]), float(hist_edges[-1]))
+
+        _add_static_distribution_overlays(
+            ax,
+            arr,
+            value_formatter=value_formatter or _format_stat_value,
+            legend_fontsize=6,
+            legend_columns=6,
+            legend_y=-0.12,
+            expand_xlim=False,
+            right_pad_ratio=0.015,
+            top_lane=1.005 if spacing_profile == "default" else 1.006,
+            line_tag_offset_ratio=0.006,
+        )
+        _apply_sci_formatter(ax, y_threshold=1e3, x_threshold=1e6)
+        apply_static_distribution_compact_layout(fig, ax)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=pad_inches, dpi=dpi)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode('utf-8')
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            app.logger.debug("Static distribution plot failed for %s: %s", column, exc)
+        return None
+    finally:
+        if fig is not None:
+            with contextlib.suppress(Exception):
+                plt.close(fig)
+
+
 def _build_static_category_chart(all_counts: pd.Series, col: str) -> tuple[Any, Any] | None:
     """Build a shared Matplotlib category chart used by PDF and ZIP exports."""
     if all_counts.empty or len(all_counts) < 2:
@@ -1748,18 +1836,18 @@ def generate_plot(
 
 
 def generate_forecast_plot(
-    history,
-    forecast_series,
-    title,
-    xlabel,
-    ylabel,
-    conf_int=None,
-    history_tail=None,
-    anomalies_idx=None,
-    anomalies_score=None,
-    stats=None,
-    legend_y=None,
-    xlabel_labelpad=None,
+    history: pd.Series,
+    forecast_series: pd.Series | None,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    conf_int: pd.DataFrame | None = None,
+    history_tail: int | None = None,
+    anomalies_idx: pd.Index | None = None,
+    anomalies_score: pd.Series | None = None,
+    stats: dict[str, float] | None = None,
+    legend_y: float | None = None,
+    xlabel_labelpad: float | None = None,
     x_tick_angle_override: int | None = None,
     figsize: tuple[float, float] | None = None,
     display_index: pd.Index | list[object] | tuple[object, ...] | None = None,
@@ -1795,8 +1883,15 @@ def generate_forecast_plot(
         except Exception:
             display_history_index = history_tail_series.index
     
+    forecast: pd.Series | None = None
+    if isinstance(forecast_series, pd.Series) and not forecast_series.empty:
+        forecast = forecast_series
+
+    forecast_index = forecast.index if forecast is not None else pd.Index([])
+    anomalies_index = pd.Index(anomalies_idx) if anomalies_idx is not None else pd.Index([])
+
     # Check if we have a valid forecast
-    has_forecast = forecast_series is not None and len(forecast_series) > 0
+    has_forecast = forecast is not None
     
     # For non-datetime indices, use numeric positions to ensure proper alignment
     has_reliable_index = _is_reliable_timeseries_index(history_tail_series.index)
@@ -1806,16 +1901,16 @@ def generate_forecast_plot(
         # Use numeric x positions (0, 1, 2...) for plotting
         n_hist = len(history_tail_series)
         hist_x = list(range(n_hist))
-        hist_y = history_tail_series.values.astype(float)
+        hist_y = history_tail_series.to_numpy(dtype=float, na_value=np.nan)
         
         # Plot history
         ax.plot(hist_x, hist_y, linestyle='-', color='tab:blue', linewidth=1.2, label='History', zorder=2)
         
         # Only plot forecast elements if we have a forecast
-        if has_forecast:
-            n_fc = len(forecast_series)
+        if forecast is not None:
+            n_fc = len(forecast)
             fc_x = list(range(n_hist, n_hist + n_fc))  # Continue from where history ends
-            fc_y = forecast_series.values.astype(float)
+            fc_y = forecast.to_numpy(dtype=float, na_value=np.nan)
             
             # Plot forecast - prepend last history point for continuity
             ax.plot([n_hist - 1] + fc_x, [float(hist_y[-1])] + list(fc_y),
@@ -1824,8 +1919,8 @@ def generate_forecast_plot(
             # Confidence interval
             if conf_int is not None:
                 try:
-                    lower = conf_int.iloc[:, 0].values.astype(float)
-                    upper = conf_int.iloc[:, 1].values.astype(float)
+                    lower = conf_int.iloc[:, 0].to_numpy(dtype=float, na_value=np.nan)
+                    upper = conf_int.iloc[:, 1].to_numpy(dtype=float, na_value=np.nan)
                     ax.fill_between(fc_x, lower, upper, color='orangered', alpha=0.22, label='95% CI', zorder=2)
                 except Exception as e:
                     app.logger.debug("generate_forecast_plot numeric CI skipped for '%s': %s", title, e)
@@ -1835,14 +1930,15 @@ def generate_forecast_plot(
             ax.axvspan(n_hist - 0.5, n_hist + n_fc - 0.5, color='orange', alpha=0.08, zorder=0)
         
         # Anomaly markers (shown regardless of forecast)
-        if anomalies_idx is not None and len(anomalies_idx):
+        if not anomalies_index.empty:
             try:
                 # Anomalies are already capped by the caller — use as-is
-                an_display = pd.Index(anomalies_idx)
+                an_display = anomalies_index
                 an_positions = _anomaly_positions_for_index(history_tail_series.index, an_display)
                 if an_positions:
-                    an_values = history_tail_series.iloc[an_positions].astype(float).values
-                    ax.scatter(an_positions, an_values, color='red', s=4, zorder=5,
+                    an_pos_arr = np.asarray(an_positions, dtype=np.int64)
+                    an_values = history_tail_series.iloc[an_pos_arr].to_numpy(dtype=float, na_value=np.nan)
+                    ax.scatter(an_pos_arr, an_values, color='red', s=4, zorder=5,
                               label='Anomaly', marker='o', edgecolors='darkred', linewidths=0.6)
             except Exception as e:
                 app.logger.warning(f"Could not plot anomalies: {e}")
@@ -1878,7 +1974,7 @@ def generate_forecast_plot(
             
         # Set x-ticks to match the original index labels (history + forecast)
         forecast_tick_policy = _resolve_static_tick_policy(
-            list(display_history_index) + (list(forecast_series.index) if has_forecast else []),
+            list(display_history_index) + list(forecast_index),
             chart_type='forecast',
         )
 
@@ -1886,7 +1982,7 @@ def generate_forecast_plot(
             # Combine history and forecast indices
             tick_positions, tick_labels = _build_non_timeseries_tick_labels(
                 display_history_index,
-                forecast_series.index if has_forecast else None,
+                forecast_index,
                 max_tick_labels=int(forecast_tick_policy['max_tick_labels']),
             )
 
@@ -1903,20 +1999,20 @@ def generate_forecast_plot(
         
     else:
         # Original datetime-based plotting
-        ax.plot(history_tail_series.index, history_tail_series.values,
+        ax.plot(history_tail_series.index, history_tail_series.to_numpy(dtype=float, na_value=np.nan),
                 linestyle='-', color='tab:blue', linewidth=1.2, label='History', zorder=2)
         
         # Only plot forecast elements if we have a forecast
-        if has_forecast:
+        if forecast is not None:
             # Forecast with continuity
             try:
                 last_x = history_tail_series.index[-1]
                 last_y = float(history_tail_series.iloc[-1])
-                x_plot = [last_x] + list(forecast_series.index)
-                y_plot = [last_y] + list(forecast_series.values.astype(float))
+                x_plot = [last_x] + list(forecast_index)
+                y_plot = [last_y] + list(forecast.to_numpy(dtype=float, na_value=np.nan))
             except Exception:
-                x_plot = list(forecast_series.index)
-                y_plot = list(forecast_series.values)
+                x_plot = list(forecast_index)
+                y_plot = list(forecast.to_numpy(dtype=float, na_value=np.nan))
             
             ax.plot(x_plot, y_plot, linestyle='-', color='orangered', linewidth=1.2, alpha=0.9, label='Forecast', zorder=3)
             
@@ -1924,39 +2020,46 @@ def generate_forecast_plot(
                 try:
                     lower = conf_int.iloc[:, 0]
                     upper = conf_int.iloc[:, 1]
-                    lower.index = forecast_series.index
-                    upper.index = forecast_series.index
-                    ax.fill_between(forecast_series.index, lower, upper, color='orangered', alpha=0.22, label='95% CI', zorder=2)
+                    lower.index = forecast_index
+                    upper.index = forecast_index
+                    ax.fill_between(forecast_index, lower, upper, color='orangered', alpha=0.22, label='95% CI', zorder=2)
                 except Exception as e:
                     app.logger.debug("generate_forecast_plot datetime CI skipped for '%s': %s", title, e)
             
             try:
                 split_x = history.index[-1]
                 ax.axvline(split_x, color='gray', linestyle=':', linewidth=1.5, label='Forecast start', zorder=1)
-                ax.axvspan(split_x, forecast_series.index[-1], color='orange', alpha=0.08, zorder=0)
+                ax.axvspan(split_x, forecast_index[-1], color='orange', alpha=0.08, zorder=0)
             except Exception as e:
                 app.logger.debug("generate_forecast_plot split marker skipped for '%s': %s", title, e)
         
         # Add anomaly markers if provided (shown regardless of forecast)
-        if anomalies_idx is not None and len(anomalies_idx):
+        if not anomalies_index.empty:
             try:
                 # Anomalies are already capped by the caller — use as-is
-                an_display = pd.Index(anomalies_idx)
+                an_display = anomalies_index
                 an_positions = _anomaly_positions_for_index(history_tail_series.index, an_display)
                 if an_positions:
-                    aligned_anomalies = history_tail_series.iloc[an_positions]
-                    ax.scatter(aligned_anomalies.index, aligned_anomalies.values, color='red', s=4, zorder=5,
-                              label='Anomaly', marker='o', edgecolors='darkred', linewidths=0.6)
+                    an_pos_arr = np.asarray(an_positions, dtype=np.int64)
+                    aligned_anomalies = history_tail_series.iloc[an_pos_arr]
+                    ax.scatter(
+                        aligned_anomalies.index,
+                        aligned_anomalies.to_numpy(dtype=float, na_value=np.nan),
+                        color='red',
+                        s=4,
+                        zorder=5,
+                        label='Anomaly', marker='o', edgecolors='darkred', linewidths=0.6)
             except Exception as e:
                 app.logger.warning(f"Could not plot anomalies: {e}")
         
         try:
-            if has_forecast:
-                y_stack = pd.concat([history_tail_series, forecast_series]).astype(float)
+            if has_forecast and forecast is not None:
+                y_stack = pd.concat([history_tail_series, forecast]).astype(float)
             else:
                 y_stack = history_tail_series.astype(float)
-            y_min = float(np.nanmin(y_stack.values))
-            y_max = float(np.nanmax(y_stack.values))
+            y_stack_values = y_stack.to_numpy(dtype=float, na_value=np.nan)
+            y_min = float(np.nanmin(y_stack_values))
+            y_max = float(np.nanmax(y_stack_values))
 
             # Keep full-series extrema visible when stats are provided.
             if isinstance(stats, dict):
@@ -2098,11 +2201,12 @@ def generate_forecast_plot(
         # Add Min/Max markers - find positions in visible data closest to the global min/max
         # Use FULL HISTORY stats (hist_min, hist_max) for consistency with distribution
         tail_vals = history_tail_series.astype(float)
+        tail_values = tail_vals.to_numpy(dtype=float, na_value=np.nan)
         
         # Find positions in visible data where values are closest to global min/max
         if use_numeric_x:
-            tail_min_pos = int(tail_vals.values.argmin())
-            tail_max_pos = int(tail_vals.values.argmax())
+            tail_min_pos = int(np.nanargmin(tail_values))
+            tail_max_pos = int(np.nanargmax(tail_values))
         else:
             tail_min_pos = tail_vals.idxmin()
             tail_max_pos = tail_vals.idxmax()
@@ -2708,6 +2812,7 @@ __all__ = [
     "build_distribution_axis_spec",
     "apply_distribution_axis_spec",
     "apply_static_distribution_compact_layout",
+    "generate_static_distribution_plot",
     "generate_plot",
     "generate_forecast_plot",
     "_build_category_plotly_chart",
@@ -2716,4 +2821,3 @@ __all__ = [
     "generate_stl_plot",
     "get_cached_stl_plot",
 ]
-
