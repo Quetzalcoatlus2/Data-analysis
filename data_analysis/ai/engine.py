@@ -118,9 +118,20 @@ def _normalize_model_aliases(name: str) -> list[str]:
     else:
         candidates.append("models/" + n)
 
+    base_name = n.replace("models/", "", 1) if n.startswith("models/") else n
+    preview_aliases = {
+        "gemini-3.1-flash-lite-preview": "gemini-3.1-flash-lite",
+    }
+    stable_name = preview_aliases.get(base_name)
+    if stable_name:
+        stable_variants = [stable_name, "models/" + stable_name]
+        for variant in reversed(stable_variants):
+            if variant not in candidates:
+                candidates.insert(0, variant)
+
     preferred_fallbacks = [
         "gemini-3-flash-preview",
-        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite",
         "gemini-2.5-flash-lite",
         "gemini-2.5-flash",
         "gemini-2.0-flash-exp",

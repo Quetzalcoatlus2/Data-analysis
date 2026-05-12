@@ -37,7 +37,7 @@ MODEL_STRENGTH_ORDER = [
     "gemini-3.1-pro-preview",
     "gemini-3-pro-preview",
     "gemini-3-flash-preview",
-    "gemini-3.1-flash-lite-preview",
+    "gemini-3.1-flash-lite",
     "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
@@ -98,8 +98,8 @@ def main():
             name_l = m.name.lower()
             # Filter: plausible free-tier text models (exclude preview/vision/ultra/native audio/live etc.)
             exclude_tokens = ["vision", "ultra", "live", "audio", "imagen", "video", "tts"]
-            # Allow preview models that we actively use (e.g., 3.1-flash-lite-preview)
-            is_known_preview = "flash-lite-preview" in name_l
+            # Allow preview models that we actively use (e.g., 3-flash-preview)
+            is_known_preview = "flash-preview" in name_l
             if any(tok in name_l for tok in exclude_tokens):
                 continue
             if "preview" in name_l and not is_known_preview:
