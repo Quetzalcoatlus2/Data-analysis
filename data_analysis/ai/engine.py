@@ -7,13 +7,13 @@ throughout the ``data_analysis.analysis`` sub-package.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import re
 import threading
 import time
-import contextlib
 from typing import Any
 
 from flask import current_app
