@@ -29,3 +29,5 @@ tmp_*.json
 diff_ops.txt
 git_status.txt
 test_output*.txt
+
+.antigravitycli
